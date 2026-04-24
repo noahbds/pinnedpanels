@@ -24,19 +24,19 @@ function PinnedPanels.CreateBrowser(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 2, 4, 4)
 
-	local oldInvalidate     = scroll.InvalidateLayout
-	scroll.NextLayout       = 0
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout   = 0
 	scroll.InvalidateLayout = function(self, layoutNow)
 		if CurTime() < self.NextLayout then return end
 		self.NextLayout = CurTime() + 0.1
 		oldInvalidate(self, layoutNow)
 	end
 
-	local allTools          = {}
-	local rowCache          = {}
-	local hookNames         = {}
+	local allTools  = {}
+	local rowCache  = {}
+	local hookNames = {}
 
-	local noToolsLbl        = vgui.Create("DLabel", scroll)
+	local noToolsLbl = vgui.Create("DLabel", scroll)
 	noToolsLbl:SetText("No tools found.")
 	noToolsLbl:SetTextColor(Color(140, 150, 165))
 	noToolsLbl:Dock(TOP)

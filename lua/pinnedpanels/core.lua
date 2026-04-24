@@ -1,12 +1,12 @@
-PinnedPanels          = PinnedPanels or {}
-PinnedPanels.Pins     = PinnedPanels.Pins or {}
+PinnedPanels = PinnedPanels or {}
+PinnedPanels.Pins = PinnedPanels.Pins or {}
 
-local SAVEF           = "pinnedpanels_save.json"
-local SETTINGSF       = "pinnedpanels_settings.json"
+local SAVEF     = "pinnedpanels_save.json"
+local SETTINGSF = "pinnedpanels_settings.json"
 
 PinnedPanels.Settings = PinnedPanels.Settings or {
 	bg          = Color(235, 238, 242, 250),
-	header      = Color(32, 35, 42, 255),
+	header      = Color(32,  35,  42,  255),
 	text        = Color(240, 245, 255, 255),
 	autoRestore = true
 }
@@ -46,9 +46,9 @@ function PinnedPanels.LoadSettings()
 	if not raw or raw == "" then return end
 	local t = util.JSONToTable(raw)
 	if not istable(t) then return end
-	PinnedPanels.Settings.bg     = DeserializeColor(t.bg, PinnedPanels.Settings.bg)
+	PinnedPanels.Settings.bg     = DeserializeColor(t.bg,     PinnedPanels.Settings.bg)
 	PinnedPanels.Settings.header = DeserializeColor(t.header, PinnedPanels.Settings.header)
-	PinnedPanels.Settings.text   = DeserializeColor(t.text, PinnedPanels.Settings.text)
+	PinnedPanels.Settings.text   = DeserializeColor(t.text,   PinnedPanels.Settings.text)
 	if t.autoRestore ~= nil then PinnedPanels.Settings.autoRestore = tobool(t.autoRestore) end
 end
 
@@ -98,8 +98,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetMouseInputEnabled(isInteractActive and true or false)
 
 	frame:ShowCloseButton(true)
-	frame.OnClose      = function() frame:SetVisible(false) end
-	frame.Paint        = PinnedPanels.GetFramePaint(title)
+	frame.OnClose = function() frame:SetVisible(false) end
+	frame.Paint   = PinnedPanels.GetFramePaint(title)
 
 	local saveDebounce = 0
 	local function DebouncedSave()
@@ -112,8 +112,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame.OnMouseReleased = function() DebouncedSave() end
 	frame.OnSizeChanged   = function() DebouncedSave() end
 
-	frame.NextFocusCheck  = 0
-	frame.Think           = function(self)
+	frame.NextFocusCheck = 0
+	frame.Think = function(self)
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
 		local nx = math.Clamp(x, 0, ScrW() - w)
@@ -123,8 +123,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if CurTime() < self.NextFocusCheck then return end
 		self.NextFocusCheck = CurTime() + 0.1
 
-		local hovered       = vgui.GetHoveredPanel()
-		local focus         = vgui.GetKeyboardFocus()
+		local hovered = vgui.GetHoveredPanel()
+		local focus   = vgui.GetKeyboardFocus()
 		local function isTextPanel(p)
 			if not IsValid(p) then return false end
 			local c = p:GetClassName()
@@ -148,22 +148,22 @@ function PinnedPanels.Pin(id, title, cpFunc)
 	end
 	PinnedPanels.Pins[id] = nil
 
-	local saved           = PinnedPanels.Load()
-	local s               = saved[id] or {}
-	local sw, sh          = ScrW(), ScrH()
-	local fw              = math.Clamp(s.w or 280, 150, sw)
-	local fh              = math.Clamp(s.h or 400, 100, sh)
-	local fx              = math.Clamp(s.x or 120, 0, sw - fw)
-	local fy              = math.Clamp(s.y or 120, 0, sh - fh)
+	local saved  = PinnedPanels.Load()
+	local s      = saved[id] or {}
+	local sw, sh = ScrW(), ScrH()
+	local fw = math.Clamp(s.w or 280, 150, sw)
+	local fh = math.Clamp(s.h or 400, 100, sh)
+	local fx = math.Clamp(s.x or 120, 0, sw - fw)
+	local fy = math.Clamp(s.y or 120, 0, sh - fh)
 
-	local frame           = BuildWrapperFrame(title, id, fw, fh, fx, fy)
+	local frame = BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
-	local scroll          = vgui.Create("DScrollPanel", frame)
+	local scroll = vgui.Create("DScrollPanel", frame)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 6, 4, 4)
 
-	local oldInvalidate     = scroll.InvalidateLayout
-	scroll.NextLayout       = 0
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout   = 0
 	scroll.InvalidateLayout = function(self, layoutNow)
 		if CurTime() < self.NextLayout then return end
 		self.NextLayout = CurTime() + 0.1
@@ -211,24 +211,24 @@ function PinnedPanels.PinFrame(livePanel, title)
 	end
 	PinnedPanels.Pins[id] = nil
 
-	local saved           = PinnedPanels.Load()
-	local s               = saved[id] or {}
-	local sw, sh          = ScrW(), ScrH()
+	local saved  = PinnedPanels.Load()
+	local s      = saved[id] or {}
+	local sw, sh = ScrW(), ScrH()
 
-	local ox, oy          = livePanel:GetPos()
-	local ow, oh          = livePanel:GetSize()
-	local fw              = math.Clamp(s.w or (ow + 8), 150, sw)
-	local fh              = math.Clamp(s.h or (oh + 28), 100, sh)
-	local fx              = math.Clamp(s.x or ox, 0, sw - fw)
-	local fy              = math.Clamp(s.y or oy, 0, sh - fh)
+	local ox, oy = livePanel:GetPos()
+	local ow, oh = livePanel:GetSize()
+	local fw = math.Clamp(s.w or (ow + 8),  150, sw)
+	local fh = math.Clamp(s.h or (oh + 28), 100, sh)
+	local fx = math.Clamp(s.x or ox,         0,   sw - fw)
+	local fy = math.Clamp(s.y or oy,         0,   sh - fh)
 
-	local origParent      = livePanel:GetParent()
-	local origPos         = { livePanel:GetPos() }
-	local origSize        = { livePanel:GetSize() }
-	local origVisible     = livePanel:IsVisible()
-	local origDock        = livePanel:GetDock()
+	local origParent  = livePanel:GetParent()
+	local origPos     = { livePanel:GetPos() }
+	local origSize    = { livePanel:GetSize() }
+	local origVisible = livePanel:IsVisible()
+	local origDock    = livePanel:GetDock()
 
-	local frame           = BuildWrapperFrame(title, id, fw, fh, fx, fy)
+	local frame = BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
 	livePanel:SetParent(frame)
 	livePanel:SetDock(FILL)
@@ -239,8 +239,8 @@ function PinnedPanels.PinFrame(livePanel, title)
 	livePanel.OnRemove = function(self)
 		if PinnedPanels.Pins[id] then
 			PinnedPanels.Pins[id] = nil
-			local d               = PinnedPanels.Load()
-			d[id]                 = nil
+			local d = PinnedPanels.Load()
+			d[id]   = nil
 			file.Write(SAVEF, util.TableToJSON(d, true))
 			hook.Run("PinnedPanels_StateChanged")
 		end
@@ -306,8 +306,8 @@ function PinnedPanels.Unpin(id)
 	end
 	PinnedPanels.Pins[id] = nil
 
-	local d               = PinnedPanels.Load()
-	d[id]                 = nil
+	local d = PinnedPanels.Load()
+	d[id]   = nil
 	file.Write(SAVEF, util.TableToJSON(d, true))
 	hook.Run("PinnedPanels_StateChanged")
 end
@@ -319,16 +319,16 @@ function PinnedPanels.UnpinAll()
 end
 
 local FRAME_IGNORE_NAMES = {
-	SpawnmenuTabs         = true,
+	SpawnmenuTabs        = true,
 	SpawnMenuContentPanel = true,
-	DMenu                 = true,
-	ContextMenu           = true,
+	DMenu                = true,
+	ContextMenu          = true,
 }
 
 function PinnedPanels.ScanFrames()
 	local ownedPanels = {}
 	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then ownedPanels[pin.frame] = true end
+		if IsValid(pin.frame)     then ownedPanels[pin.frame]     = true end
 		if IsValid(pin.livePanel) then ownedPanels[pin.livePanel] = true end
 	end
 
@@ -353,10 +353,10 @@ function PinnedPanels.ScanFrames()
 
 		local alreadyPinned = PinnedPanels.IsPinnedFrame(p)
 		table.insert(results, {
-			panel  = p,
-			title  = title,
-			id     = "PPF_" .. tostring(p),
-			pinned = alreadyPinned
+			panel   = p,
+			title   = title,
+			id      = "PPF_" .. tostring(p),
+			pinned  = alreadyPinned
 		})
 	end
 
@@ -367,7 +367,7 @@ end
 function PinnedPanels.GetAllTools()
 	local list = {}
 	local seen = {}
-	local tabs = spawnmenu.GetTools()
+	local tabs  = spawnmenu.GetTools()
 	if not tabs then return list end
 	for _, tab in SortedPairs(tabs) do
 		if tab.Items then

@@ -29,9 +29,7 @@ local function SetInteractMode(on)
 end
 
 function PinnedPanels.InteractMode.Enable() SetInteractMode(true) end
-
 function PinnedPanels.InteractMode.Disable() SetInteractMode(false) end
-
 function PinnedPanels.InteractMode.Toggle() SetInteractMode(not IM.Active) end
 
 local _keyWasDown = false

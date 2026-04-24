@@ -8,15 +8,15 @@ function PinnedPanels.CreatePinnedList(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(16, 16, 16, 16)
 
-	local oldInvalidate     = scroll.InvalidateLayout
-	scroll.NextLayout       = 0
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout   = 0
 	scroll.InvalidateLayout = function(self, layoutNow)
 		if CurTime() < self.NextLayout then return end
 		self.NextLayout = CurTime() + 0.1
 		oldInvalidate(self, layoutNow)
 	end
 
-	local isRebuilding      = false
+	local isRebuilding = false
 
 	local function Rebuild()
 		if isRebuilding then return end
@@ -99,12 +99,12 @@ function PinnedPanels.CreatePinnedList(parent)
 		end
 
 		for _, entry in ipairs(sorted) do
-			local id         = entry.id
-			local pin        = entry.pin
+			local id  = entry.id
+			local pin = entry.pin
 
 			local isFramePin = pin.kind == "frame"
 
-			local row        = vgui.Create("DPanel", scroll)
+			local row = vgui.Create("DPanel", scroll)
 			row:Dock(TOP)
 			row:SetTall(40)
 			row:DockMargin(0, 0, 0, 6)
@@ -183,9 +183,7 @@ function PinnedPanels.CreatePinnedList(parent)
 	end
 
 	hook.Add("PinnedPanels_StateChanged", root, function()
-		if IsValid(root) then
-			Rebuild()
-		else
+		if IsValid(root) then Rebuild() else
 			hook.Remove("PinnedPanels_StateChanged", root)
 		end
 	end)

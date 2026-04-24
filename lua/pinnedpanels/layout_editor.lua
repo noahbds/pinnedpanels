@@ -244,14 +244,11 @@ function EDITOR:Rebuild()
 			id = entry.id,
 			label = entry.pin.title,
 			color = GetColor(i),
-			px = x,
-			py = y,
-			pw = w,
-			ph = h,
+			px = x, py = y,
+			pw = w, ph = h,
 			dragging = false,
 			resizing = false,
-			ox = 0,
-			oy = 0,
+			ox = 0, oy = 0,
 		})
 	end
 end

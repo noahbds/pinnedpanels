@@ -1,7 +1,3 @@
--- ============================================================
---  PinnedPanels / browser.lua
--- ============================================================
-
 function PinnedPanels.CreateBrowser(parent)
 	local root = vgui.Create("DPanel", parent)
 	root:Dock(FILL)

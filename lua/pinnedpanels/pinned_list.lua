@@ -1,67 +1,78 @@
--- ============================================================
---  PinnedPanels / pinned_list.lua
--- ============================================================
-
 function PinnedPanels.CreatePinnedList(parent)
 	local root = vgui.Create("DPanel", parent)
 	root:Dock(FILL)
-	root.Paint = function() end
+	root.Paint = function(self, w, h)
+		draw.RoundedBox(0, 0, 0, w, h, Color(30, 32, 40, 255))
+	end
 
 	local scroll = vgui.Create("DScrollPanel", root)
 	scroll:Dock(FILL)
-	scroll:DockMargin(4, 4, 4, 4)
+	scroll:DockMargin(16, 16, 16, 16)
 
 	local function Rebuild()
 		scroll:Clear()
 		local count = 0
 		for id, pin in pairs(PinnedPanels.Pins) do
-			if not IsValid(pin.frame) then PinnedPanels.Pins[id] = nil
-			else count = count + 1 end
+			if not IsValid(pin.frame) then
+				PinnedPanels.Pins[id] = nil
+			else
+				count = count + 1
+			end
 		end
-
 		if count == 0 then
-			local lbl = vgui.Create("DLabel", scroll)
-			lbl:SetText("No panels pinned yet.\nGo to the Tools tab and click Pin.")
-			lbl:SetWrap(true)
-			lbl:SetAutoStretchVertical(true)
-			lbl:Dock(TOP)
-			lbl:DockMargin(10, 20, 10, 0)
-			lbl:SetTextColor(Color(140, 150, 170))
+			local emptyCard = vgui.Create("DPanel", scroll)
+			emptyCard:Dock(TOP)
+			emptyCard:SetTall(110)
+			emptyCard.Paint = function(self, w, h)
+				draw.RoundedBox(6, 0, 0, w, h, Color(40, 44, 52, 255))
+				draw.RoundedBoxEx(6, 0, 0, w, 30, Color(25, 28, 34, 255), true, true, false, false)
+				draw.SimpleText("No Pinned Panels", "DermaDefaultBold", 12, 15, Color(200, 210, 225), TEXT_ALIGN_LEFT,
+					TEXT_ALIGN_CENTER)
+				draw.SimpleText("You have no valid pinned panels right now.", "DermaDefault", w / 2, h / 2 + 5,
+					Color(150, 160, 175), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+				draw.SimpleText("Go to the 'Tools' tab and click 'Pin' on any tool.", "DermaDefault", w / 2, h / 2 + 25,
+					Color(110, 120, 135), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
 			return
 		end
-
 		for id, pin in pairs(PinnedPanels.Pins) do
 			if not IsValid(pin.frame) then break end
 
 			local row = vgui.Create("DPanel", scroll)
 			row:Dock(TOP)
-			row:SetTall(32)
-			row:DockMargin(2, 1, 2, 0)
+			row:SetTall(40)
+			row:DockMargin(0, 0, 0, 8)
 			row.Paint = function(self, w, h)
-				draw.RoundedBox(3, 0, 0, w, h, Color(18, 48, 18, 220))
-				surface.SetDrawColor(60, 200, 80)
-				surface.DrawRect(0, 0, 3, h)
+				local bg = self:IsHovered() and Color(50, 55, 65, 255) or Color(40, 44, 52, 255)
+				draw.RoundedBox(6, 0, 0, w, h, bg)
+				surface.SetDrawColor(60, 140, 255)
+				surface.DrawRect(0, 0, 4, h)
 			end
 
 			local lockIcon = vgui.Create("DImage", row)
 			lockIcon:SetImage("icon16/lock.png")
 			lockIcon:SetSize(14, 14)
 			lockIcon:Dock(LEFT)
-			lockIcon:DockMargin(6, 9, 4, 9)
+			lockIcon:DockMargin(12, 13, 8, 13)
 
 			local lbl = vgui.Create("DLabel", row)
 			lbl:SetText(pin.title)
-			lbl:SetTextColor(Color(220, 230, 245))
+			lbl:SetFont("DermaDefaultBold")
+			lbl:SetTextColor(Color(220, 225, 235))
 			lbl:Dock(FILL)
 			lbl:SetMouseInputEnabled(false)
 
 			local visBtn = vgui.Create("DButton", row)
 			visBtn:SetText("")
 			visBtn:SetIcon("icon16/eye.png")
-			visBtn:SetWide(26)
+			visBtn:SetWide(32)
 			visBtn:Dock(RIGHT)
-			visBtn:DockMargin(0, 4, 2, 4)
+			visBtn:DockMargin(0, 4, 4, 4)
 			visBtn:SetTooltip("Show / Hide")
+			visBtn.Paint = function(self, w, h)
+				local bg = self:IsHovered() and Color(70, 75, 85) or Color(55, 60, 70)
+				draw.RoundedBox(4, 0, 0, w, h, bg)
+			end
 			visBtn.DoClick = function()
 				if IsValid(pin.frame) then
 					pin.frame:SetVisible(not pin.frame:IsVisible())
@@ -71,10 +82,14 @@ function PinnedPanels.CreatePinnedList(parent)
 			local remBtn = vgui.Create("DButton", row)
 			remBtn:SetText("")
 			remBtn:SetIcon("icon16/cross.png")
-			remBtn:SetWide(26)
+			remBtn:SetWide(32)
 			remBtn:Dock(RIGHT)
-			remBtn:DockMargin(0, 4, 2, 4)
+			remBtn:DockMargin(0, 4, 4, 4)
 			remBtn:SetTooltip("Unpin")
+			remBtn.Paint = function(self, w, h)
+				local bg = self:IsHovered() and Color(200, 60, 60) or Color(160, 40, 40)
+				draw.RoundedBox(4, 0, 0, w, h, bg)
+			end
 			remBtn.DoClick = function()
 				PinnedPanels.Unpin(id)
 				Rebuild()

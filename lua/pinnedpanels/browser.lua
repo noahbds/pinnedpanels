@@ -36,18 +36,20 @@ function PinnedPanels.CreateBrowser(parent)
 	local rowCache  = {}
 	local hookNames = {}
 
-	local noToolsLbl = vgui.Create("DLabel", scroll)
+	local rowHolder = vgui.Create("DPanel", root)
+	rowHolder:SetSize(0, 0)
+	rowHolder:SetVisible(false)
+	rowHolder.Paint = function() end
+
+	local noToolsLbl = vgui.Create("DLabel", rowHolder)
 	noToolsLbl:SetText("No tools found.")
 	noToolsLbl:SetTextColor(Color(140, 150, 165))
-	noToolsLbl:Dock(TOP)
-	noToolsLbl:DockMargin(10, 10, 10, 0)
+	noToolsLbl:SetTall(30)
 	noToolsLbl:SetVisible(false)
 
 	local function MakeRow(t, id)
-		local row = vgui.Create("DPanel", scroll)
-		row:Dock(TOP)
+		local row = vgui.Create("DPanel", rowHolder)
 		row:SetTall(32)
-		row:DockMargin(2, 1, 2, 0)
 
 		row.Paint = function(self, w, h)
 			local pin    = PinnedPanels.Pins[id]
@@ -114,6 +116,8 @@ function PinnedPanels.CreateBrowser(parent)
 		return row
 	end
 
+	local inScroll = {}
+
 	local function FilterList(filter)
 		if #allTools == 0 then
 			allTools = PinnedPanels.GetAllTools()
@@ -125,32 +129,44 @@ function PinnedPanels.CreateBrowser(parent)
 			end
 		end
 
+		for id in pairs(inScroll) do
+			local data = rowCache[id]
+			if data and IsValid(data.panel) then
+				data.panel:SetParent(rowHolder)
+			end
+			inScroll[id] = nil
+		end
+		if IsValid(noToolsLbl) then
+			noToolsLbl:SetParent(rowHolder)
+		end
+
 		local lFilter = filter and filter:lower() or ""
 		local count   = 0
-		local total   = 0
+		local total   = #allTools
 
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
 			local data = rowCache[id]
-			if not data then continue end
-			total = total + 1
+			if not data or not IsValid(data.panel) then continue end
 			local visible = lFilter == "" or data.niceName:lower():find(lFilter, 1, true)
 			if visible then
-				data.panel:SetVisible(true)
+				data.panel:SetParent(scroll)
 				data.panel:Dock(TOP)
+				data.panel:DockMargin(2, 1, 2, 0)
+				inScroll[id] = true
 				count = count + 1
-			else
-				data.panel:SetVisible(false)
-				data.panel:SetParent(nil)
 			end
 		end
 
-		noToolsLbl:SetVisible(count == 0 and total > 0)
-		if lFilter == "" then
-			countLbl:SetText(total .. " tools")
-		else
-			countLbl:SetText(count .. " / " .. total)
+		if IsValid(noToolsLbl) then
+			noToolsLbl:SetVisible(count == 0 and total > 0)
+			if count == 0 and total > 0 then
+				noToolsLbl:SetParent(scroll)
+				noToolsLbl:Dock(TOP)
+				noToolsLbl:DockMargin(10, 10, 10, 0)
+			end
 		end
+		countLbl:SetText(lFilter == "" and (total .. " tools") or (count .. " / " .. total))
 	end
 
 	root.OnRemove = function()
@@ -167,3 +183,4 @@ function PinnedPanels.CreateBrowser(parent)
 
 	return root
 end
+

@@ -29,7 +29,7 @@ function EDITOR:Create(parent)
 	info:SetWrap(true)
 	info:Dock(TOP)
 	info:DockMargin(6, 6, 6, 6)
-	info:SetTextColor(Color(0, 0, 0))
+	info:SetTextColor(Color(255, 255, 255))
 
 	self.canvas = vgui.Create("DPanel", self.root)
 	self.canvas:Dock(FILL)

@@ -87,12 +87,16 @@ function PinnedPanels.Pin(id, title, cpFunc)
 
 	frame.Paint           = PinnedPanels.GetFramePaint(title)
 
+	frame.NextFocusCheck  = 0
 	frame.Think           = function(self)
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
 		local nx = math.Clamp(x, 0, ScrW() - w)
 		local ny = math.Clamp(y, 0, ScrH() - h)
 		if x ~= nx or y ~= ny then self:SetPos(nx, ny) end
+
+		if CurTime() < self.NextFocusCheck then return end
+		self.NextFocusCheck = CurTime() + 0.1
 
 		local hovered = vgui.GetHoveredPanel()
 		local focus = vgui.GetKeyboardFocus()
@@ -117,6 +121,14 @@ function PinnedPanels.Pin(id, title, cpFunc)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 6, 4, 4)
 
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout = 0
+	scroll.InvalidateLayout = function(self, layoutNow)
+		if CurTime() < self.NextLayout then return end
+		self.NextLayout = CurTime() + 0.1
+		oldInvalidate(self, layoutNow)
+	end
+
 	if isfunction(cpFunc) then
 		local ctrl = vgui.Create("ControlPanel", scroll)
 		ctrl:Dock(TOP)
@@ -133,6 +145,7 @@ function PinnedPanels.Pin(id, title, cpFunc)
 
 	PinnedPanels.Pins[id] = { frame = frame, title = title, cpFunc = cpFunc }
 	PinnedPanels.Save()
+	hook.Run("PinnedPanels_StateChanged")
 	return frame
 end
 
@@ -143,6 +156,8 @@ function PinnedPanels.Unpin(id)
 	local d = PinnedPanels.Load()
 	d[id] = nil
 	file.Write(SAVEF, util.TableToJSON(d, true))
+
+	hook.Run("PinnedPanels_StateChanged")
 end
 
 function PinnedPanels.GetAllTools()
@@ -166,12 +181,11 @@ function PinnedPanels.GetAllTools()
 	return list
 end
 
-local hasRestored = false
 hook.Add("Think", "PinnedPanels_AutoRestore", function()
-	if hasRestored then return end
 	local tabs = spawnmenu.GetTools()
 	if tabs then
-		hasRestored = true
+		hook.Remove("Think", "PinnedPanels_AutoRestore")
+
 		if not PinnedPanels.Settings.autoRestore then return end
 
 		timer.Simple(1, function()

@@ -163,7 +163,12 @@ function EDITOR:Create(parent)
 
 	local thinkPanel = vgui.Create("DPanel", parent)
 	thinkPanel:SetSize(0, 0)
+	thinkPanel.NextCheck = 0
+
 	thinkPanel.Think = function()
+		if CurTime() < thinkPanel.NextCheck then return end
+		thinkPanel.NextCheck = CurTime() + 0.05
+
 		local activeCount = 0
 		for _, box in ipairs(self.boxes) do
 			if not box.dragging and not box.resizing then

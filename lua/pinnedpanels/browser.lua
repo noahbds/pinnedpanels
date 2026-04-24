@@ -1,6 +1,5 @@
 function PinnedPanels.CreateBrowser(parent)
 	local root = vgui.Create("DPanel", parent)
-	root:Dock(FILL)
 	root.Paint = function() end
 
 	local searchPanel = vgui.Create("DPanel", root)
@@ -17,11 +16,24 @@ function PinnedPanels.CreateBrowser(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 2, 4, 4)
 
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout = 0
+	scroll.InvalidateLayout = function(self, layoutNow)
+		if CurTime() < self.NextLayout then return end
+		self.NextLayout = CurTime() + 0.1
+		oldInvalidate(self, layoutNow)
+	end
+
 	local allTools = {}
+	local rowCache = {}
 
-	local function MakeRow(t)
-		local id = "PP_" .. t.itemName
+	local noToolsLbl = vgui.Create("DLabel", scroll)
+	noToolsLbl:SetText("No tools found.")
+	noToolsLbl:Dock(TOP)
+	noToolsLbl:DockMargin(10, 10, 10, 0)
+	noToolsLbl:SetVisible(false)
 
+	local function MakeRow(t, id)
 		local row = vgui.Create("DPanel", scroll)
 		row:Dock(TOP)
 		row:SetTall(30)
@@ -60,39 +72,50 @@ function PinnedPanels.CreateBrowser(parent)
 			pinBtn:SetText(pinned and "Unpin" or "Pin")
 			pinBtn:SetIcon(pinned and "icon16/lock_open.png" or "icon16/lock_add.png")
 		end
-		Refresh()
+
+		hook.Add("PinnedPanels_StateChanged", row, function()
+			Refresh()
+		end)
 
 		pinBtn.DoClick = function()
 			local pinned = PinnedPanels.Pins[id] and IsValid(PinnedPanels.Pins[id].frame)
 			if pinned then PinnedPanels.Unpin(id) else PinnedPanels.Pin(id, t.niceName, t.cpFunc) end
 			Refresh()
 		end
+
+		return row
 	end
 
-	local function Rebuild(filter)
-		scroll:Clear()
-		if #allTools == 0 then allTools = PinnedPanels.GetAllTools() end
-		local lFilter = filter and filter:lower() or ""
-		local count = 0
-		for _, t in ipairs(allTools) do
-			if lFilter == "" or t.niceName:lower():find(lFilter, 1, true) then
-				MakeRow(t)
-				count = count + 1
+	local function FilterList(filter)
+		if #allTools == 0 then
+			allTools = PinnedPanels.GetAllTools()
+			for _, t in ipairs(allTools) do
+				local id = "PP_" .. t.itemName
+				rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName }
 			end
 		end
-		if count == 0 then
-			local lbl = vgui.Create("DLabel", scroll)
-			lbl:SetText("No tools found.")
-			lbl:Dock(TOP)
-			lbl:DockMargin(10, 10, 10, 0)
+
+		local lFilter = filter and filter:lower() or ""
+		local count = 0
+
+		for id, data in pairs(rowCache) do
+			if lFilter == "" or data.niceName:lower():find(lFilter, 1, true) then
+				data.panel:SetVisible(true)
+				data.panel:Dock(TOP)
+				count = count + 1
+			else
+				data.panel:SetVisible(false)
+			end
 		end
+
+		noToolsLbl:SetVisible(count == 0)
 	end
 
 	timer.Simple(0.5, function()
-		if IsValid(scroll) then Rebuild("") end
+		if IsValid(scroll) then FilterList("") end
 	end)
 
-	searchBox.OnChange = function(self) Rebuild(self:GetValue()) end
+	searchBox.OnChange = function(self) FilterList(self:GetValue()) end
 
 	return root
 end

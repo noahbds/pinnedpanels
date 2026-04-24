@@ -1,6 +1,5 @@
 function PinnedPanels.CreatePinnedList(parent)
 	local root = vgui.Create("DPanel", parent)
-	root:Dock(FILL)
 	root.Paint = function(self, w, h)
 		draw.RoundedBox(0, 0, 0, w, h, Color(30, 32, 40, 255))
 	end
@@ -9,12 +8,20 @@ function PinnedPanels.CreatePinnedList(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(16, 16, 16, 16)
 
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout = 0
+	scroll.InvalidateLayout = function(self, layoutNow)
+		if CurTime() < self.NextLayout then return end
+		self.NextLayout = CurTime() + 0.1
+		oldInvalidate(self, layoutNow)
+	end
+
 	local function Rebuild()
 		scroll:Clear()
 		local count = 0
 		for id, pin in pairs(PinnedPanels.Pins) do
 			if not IsValid(pin.frame) then
-				PinnedPanels.Pins[id] = nil
+				PinnedPanels.Unpin(id)
 			else
 				count = count + 1
 			end

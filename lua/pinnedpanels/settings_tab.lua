@@ -1,6 +1,5 @@
 function PinnedPanels.CreateSettingsTab(parent)
 	local root = vgui.Create("DPanel", parent)
-	root:Dock(FILL)
 	root.Paint = function(self, w, h)
 		draw.RoundedBox(0, 0, 0, w, h, Color(30, 32, 40, 255))
 	end
@@ -8,6 +7,14 @@ function PinnedPanels.CreateSettingsTab(parent)
 	local scroll = vgui.Create("DScrollPanel", root)
 	scroll:Dock(FILL)
 	scroll:DockMargin(16, 16, 16, 16)
+
+	local oldInvalidate = scroll.InvalidateLayout
+	scroll.NextLayout = 0
+	scroll.InvalidateLayout = function(self, layoutNow)
+		if CurTime() < self.NextLayout then return end
+		self.NextLayout = CurTime() + 0.1
+		oldInvalidate(self, layoutNow)
+	end
 
 	local function CreateSectionCard(title, height)
 		local card = vgui.Create("DPanel", scroll)
@@ -125,8 +132,8 @@ function PinnedPanels.CreateSettingsTab(parent)
 		lbl:DockMargin(0, 4, 0, 0)
 
 		local mixer = vgui.Create("DColorMixer", row)
-		mixer:Dock(LEFT)
-		mixer:SetWide(300)
+		mixer:SetPos(150, 4)
+		mixer:SetSize(300, 130)
 		mixer:SetPalette(false)
 		mixer:SetAlphaBar(true)
 		mixer:SetWangs(true)

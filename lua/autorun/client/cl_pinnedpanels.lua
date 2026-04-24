@@ -5,6 +5,7 @@
 if not CLIENT then return end
 
 include("pinnedpanels/core.lua")
+include("pinnedpanels/interact_mode.lua")
 include("pinnedpanels/layout_editor.lua")
 include("pinnedpanels/browser.lua")
 include("pinnedpanels/pinned_list.lua")
@@ -50,6 +51,9 @@ local function CreatePinnedPanelsTab()
 	editorHost.Paint = function() end
 	local editor = PinnedPanels.CreateLayoutEditor(editorHost)
 	sheet:AddSheet("Layout", editorHost, "icon16/application_view_columns.png")
+
+	local interactPanel = PinnedPanels.CreateInteractSettings(nil)
+	sheet:AddSheet("Interact Key", interactPanel, "icon16/keyboard.png")
 
 	sheet.OnActiveTabChanged = function(self, old, new)
 		if IsValid(pinnedPanel) and pinnedPanel.Rebuild then

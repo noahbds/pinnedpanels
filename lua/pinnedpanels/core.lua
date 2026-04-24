@@ -47,10 +47,10 @@ function PinnedPanels.Pin(id, title, cpFunc)
 
 	-- Custom close: hide instead of remove
 	frame:ShowCloseButton(true)
-	frame.OnClose = function() frame:SetVisible(false) end
+	frame.OnClose         = function() frame:SetVisible(false) end
 
 	-- Keep inside screen
-	frame.Think = function(self)
+	frame.Think           = function(self)
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
 		self:SetPos(math.Clamp(x, 0, ScrW() - w), math.Clamp(y, 0, ScrH() - h))
@@ -59,7 +59,7 @@ function PinnedPanels.Pin(id, title, cpFunc)
 	frame.OnMouseReleased = function() PinnedPanels.Save() end
 	frame.OnSizeChanged   = function() PinnedPanels.Save() end
 
-	local scroll = vgui.Create("DScrollPanel", frame)
+	local scroll          = vgui.Create("DScrollPanel", frame)
 	scroll:Dock(FILL)
 	scroll:DockMargin(2, 2, 2, 2)
 

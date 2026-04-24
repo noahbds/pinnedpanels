@@ -3,6 +3,7 @@ if not CLIENT then return end
 include("pinnedpanels/core.lua")
 include("pinnedpanels/layout_editor.lua")
 include("pinnedpanels/browser.lua")
+include("pinnedpanels/frame_browser.lua")
 include("pinnedpanels/pinned_list.lua")
 include("pinnedpanels/interact_mode.lua")
 include("pinnedpanels/settings_tab.lua")
@@ -18,7 +19,6 @@ local function CreatePinnedPanelsTab()
 	header:SetTall(56)
 	header.Paint = function(self, w, h)
 		draw.RoundedBox(0, 0, 0, w, h, Color(18, 20, 26, 255))
-
 		surface.SetDrawColor(35, 38, 46, 255)
 		surface.DrawRect(0, h - 2, w, 2)
 	end
@@ -53,14 +53,41 @@ local function CreatePinnedPanelsTab()
 	subtitle:SetContentAlignment(4)
 	subtitle:SizeToContentsX()
 
+	local pinCount = vgui.Create("DLabel", header)
+	pinCount:Dock(RIGHT)
+	pinCount:SetWide(130)
+	pinCount:DockMargin(0, 0, 12, 0)
+	pinCount:SetContentAlignment(6)
+	pinCount:SetFont("DermaDefault")
+	pinCount:SetTextColor(Color(100, 130, 180))
+
+	local function UpdatePinCount()
+		if not IsValid(pinCount) then return end
+		local n = 0
+		for _, pin in pairs(PinnedPanels.Pins) do
+			if IsValid(pin.frame) then n = n + 1 end
+		end
+		pinCount:SetText(n .. " panel" .. (n == 1 and "" or "s") .. " pinned")
+	end
+	UpdatePinCount()
+	hook.Add("PinnedPanels_StateChanged", pinCount, function()
+		if IsValid(pinCount) then
+			UpdatePinCount()
+		else
+			hook.Remove("PinnedPanels_StateChanged", pinCount)
+		end
+	end)
+
 	local sheet = vgui.Create("DPropertySheet", root)
 	sheet:Dock(FILL)
 	sheet:DockMargin(8, 8, 8, 8)
-
 	sheet.Paint = function() end
 
 	local browserPanel = PinnedPanels.CreateBrowser(nil)
 	sheet:AddSheet("Tools", browserPanel, "icon16/wrench.png")
+
+	local frameBrowserPanel = PinnedPanels.CreateFrameBrowser(nil)
+	sheet:AddSheet("Frames", frameBrowserPanel, "icon16/application_double.png")
 
 	local pinnedPanel = PinnedPanels.CreatePinnedList(nil)
 	sheet:AddSheet("Pinned", pinnedPanel, "icon16/lock.png")
@@ -74,12 +101,12 @@ local function CreatePinnedPanelsTab()
 
 	local settingsPanel = PinnedPanels.CreateSettingsTab(nil)
 	sheet:AddSheet("Settings", settingsPanel, "icon16/cog.png")
+
 	for _, item in ipairs(sheet:GetItems()) do
 		local tab = item.Tab
 		tab.Paint = function(self, w, h)
 			local isActive = sheet:GetActiveTab() == self
 			local bg = isActive and Color(30, 32, 40, 255) or Color(20, 22, 28, 255)
-
 			if self:IsHovered() and not isActive then
 				bg = Color(35, 38, 48, 255)
 			end
@@ -92,10 +119,15 @@ local function CreatePinnedPanelsTab()
 	end
 
 	sheet.OnActiveTabChanged = function(self, old, new)
-		if IsValid(pinnedPanel) and pinnedPanel.Rebuild then
+		if not IsValid(new) then return end
+		local newPanel = new:GetPanel()
+		if IsValid(pinnedPanel) and newPanel == pinnedPanel and pinnedPanel.Rebuild then
 			pinnedPanel:Rebuild()
 		end
-		if editor and new and IsValid(new.Panel) and new.Panel == editorHost then
+		if IsValid(frameBrowserPanel) and newPanel == frameBrowserPanel and frameBrowserPanel.Refresh then
+			frameBrowserPanel:Refresh()
+		end
+		if editor and IsValid(editorHost) and newPanel == editorHost then
 			editor:Rebuild()
 		end
 	end
@@ -106,14 +138,50 @@ end
 spawnmenu.AddCreationTab("Pinned Panels", CreatePinnedPanelsTab, "icon16/lock.png", 9999)
 
 concommand.Add("pp_clearall", function()
-	for id in pairs(PinnedPanels.Pins) do PinnedPanels.Unpin(id) end
+	PinnedPanels.UnpinAll()
 	print("[PinnedPanels] All pins cleared.")
 end, nil, "Remove all pinned panels")
 
 concommand.Add("pp_list", function()
+	local count = 0
 	for id, pin in pairs(PinnedPanels.Pins) do
-		print(string.format("  %s  title=%s  valid=%s", id, pin.title, tostring(IsValid(pin.frame))))
+		local x, y, w, h = 0, 0, 0, 0
+		if IsValid(pin.frame) then
+			x, y = pin.frame:GetPos()
+			w, h = pin.frame:GetSize()
+		end
+		print(string.format("  %-32s  kind=%-6s  title=%-25s  valid=%-5s  pos=%d,%d  size=%dx%d",
+			id, pin.kind or "tool", pin.title, tostring(IsValid(pin.frame)), x, y, w, h))
+		count = count + 1
 	end
+	print(string.format("[PinnedPanels] %d pin(s) total.", count))
 end, nil, "List pinned panels")
+
+concommand.Add("pp_reload", function()
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then pin.frame:Remove() end
+		PinnedPanels.Pins[id] = nil
+	end
+	PinnedPanels.LoadSettings()
+	local saved    = PinnedPanels.Load()
+	local allTools = PinnedPanels.GetAllTools()
+	local toolMap  = {}
+	for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
+	for id, s in pairs(saved) do
+		local kind = s.kind or "tool"
+		if kind == "tool" and toolMap[id] then
+			PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc)
+		end
+	end
+	print("[PinnedPanels] Reloaded.")
+end, nil, "Reload and restore all pinned panels from disk")
+
+concommand.Add("pp_scanframes", function()
+	local frames = PinnedPanels.ScanFrames()
+	print(string.format("[PinnedPanels] %d open frame(s):", #frames))
+	for _, e in ipairs(frames) do
+		print(string.format("  %-40s  pinned=%s", e.title, tostring(e.pinned)))
+	end
+end, nil, "List all currently open pinnable frames")
 
 print("[PinnedPanels] Loaded.")

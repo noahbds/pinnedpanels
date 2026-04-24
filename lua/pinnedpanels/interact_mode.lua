@@ -19,6 +19,13 @@ local function SetInteractMode(on)
 	if IM.Active == on then return end
 	IM.Active = on
 	gui.EnableScreenClicker(on)
+
+	-- FIX: Enable/Disable mouse input for all pinned panels when toggling mode
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then
+			pin.frame:SetMouseInputEnabled(on)
+		end
+	end
 end
 
 function PinnedPanels.InteractMode.Toggle()
@@ -37,8 +44,19 @@ hook.Add("Think", "PinnedPanels_InteractKey", function()
 	_keyWasDown = down
 end)
 
-hook.Add("SpawnMenuOpen", "PinnedPanels_InteractOff", function()
+-- Turn off interact mode when opening Q menu, but explicitly enable mouse on the panels
+hook.Add("OnSpawnMenuOpen", "PinnedPanels_SpawnMenuOpen", function()
 	SetInteractMode(false)
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then pin.frame:SetMouseInputEnabled(true) end
+	end
+end)
+
+-- Revert mouse input to match Interact Mode when Q menu closes
+hook.Add("OnSpawnMenuClose", "PinnedPanels_SpawnMenuClose", function()
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then pin.frame:SetMouseInputEnabled(IM.Active) end
+	end
 end)
 
 surface.CreateFont("PP_InteractFont", { font = "DefaultBold", size = 14, weight = 600 })
@@ -148,12 +166,11 @@ function PinnedPanels.CreateInteractSettings(parent)
 	statusLabel:SetWide(160)
 	statusLabel:SetFont("DermaDefaultBold")
 	statusGroup.Think = function()
-		if IM.Active then
-			statusLabel:SetText("Status: ACTIVE")
-			statusLabel:SetTextColor(Color(60, 220, 100))
-		else
-			statusLabel:SetText("Status: Inactive")
-			statusLabel:SetTextColor(Color(160, 170, 190))
+		local desiredText = IM.Active and "Status: ACTIVE" or "Status: Inactive"
+		-- Only update (and invalidate layout) if the text actually needs to change
+		if statusLabel:GetText() ~= desiredText then
+			statusLabel:SetText(desiredText)
+			statusLabel:SetTextColor(IM.Active and Color(60, 220, 100) or Color(160, 170, 190))
 		end
 	end
 
@@ -179,7 +196,7 @@ function PinnedPanels.CreateInteractSettings(parent)
 	bindTitle:SetTextColor(Color(180, 200, 255))
 	bindTitle:Dock(TOP)
 	bindTitle:DockMargin(10, 8, 0, 0)
-	bindTitle:SetAutoStretchVertical(true)
+	bindTitle:SizeToContentsY()
 
 	local keyDisplay = vgui.Create("DLabel", bindGroup)
 	keyDisplay:Dock(TOP)
@@ -239,7 +256,7 @@ function PinnedPanels.CreateInteractSettings(parent)
 	helpTitle:SetTextColor(Color(180, 200, 255))
 	helpTitle:Dock(TOP)
 	helpTitle:DockMargin(10, 8, 0, 4)
-	helpTitle:SetAutoStretchVertical(true)
+	helpTitle:SizeToContentsY()
 
 	local helpText = vgui.Create("DLabel", helpGroup)
 	helpText:SetText(

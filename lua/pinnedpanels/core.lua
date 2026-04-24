@@ -45,6 +45,14 @@ function PinnedPanels.Pin(id, title, cpFunc)
 	-- ParentToHUD: stays visible always, never captures game input
 	frame:ParentToHUD()
 
+	-- FIX: Make it a popup so sliders/buttons get VGUI focus, but disable keyboard so WASD still works
+	frame:MakePopup()
+	frame:SetKeyboardInputEnabled(false)
+
+	-- Initialize mouse state based on current interact mode
+	local isInteractActive = (PinnedPanels.InteractMode and PinnedPanels.InteractMode.Active)
+	frame:SetMouseInputEnabled(isInteractActive)
+
 	-- Custom close: hide instead of remove
 	frame:ShowCloseButton(true)
 	frame.OnClose         = function() frame:SetVisible(false) end
@@ -53,7 +61,13 @@ function PinnedPanels.Pin(id, title, cpFunc)
 	frame.Think           = function(self)
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
-		self:SetPos(math.Clamp(x, 0, ScrW() - w), math.Clamp(y, 0, ScrH() - h))
+		local nx = math.Clamp(x, 0, ScrW() - w)
+		local ny = math.Clamp(y, 0, ScrH() - h)
+
+		-- Only apply SetPos if the frame is actually outside the screen
+		if x ~= nx or y ~= ny then
+			self:SetPos(nx, ny)
+		end
 	end
 
 	frame.OnMouseReleased = function() PinnedPanels.Save() end

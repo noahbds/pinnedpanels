@@ -123,18 +123,20 @@ function EDITOR:Create(parent)
 				box.resizing = true
 				box.ox = (bx + bw) - mx
 				box.oy = (by + bh) - my
+				cv:MouseCapture(true)
 				break
 			elseif mx >= bx and mx <= bx + bw and my >= by and my <= by + bh then
 				self.dragging = box
 				box.dragging = true
 				box.ox = mx - bx
 				box.oy = my - by
+				cv:MouseCapture(true)
 				break
 			end
 		end
 	end
 
-	self.canvas.OnMouseReleased = function()
+	self.canvas.OnMouseReleased = function(cv, mc)
 		if self.dragging then
 			self.dragging.dragging = false
 			self.dragging = nil
@@ -143,6 +145,8 @@ function EDITOR:Create(parent)
 			self.resizing.resizing = false
 			self.resizing = nil
 		end
+
+		cv:MouseCapture(false)
 		PinnedPanels.Save()
 	end
 
@@ -244,11 +248,14 @@ function EDITOR:Rebuild()
 			id = entry.id,
 			label = entry.pin.title,
 			color = GetColor(i),
-			px = x, py = y,
-			pw = w, ph = h,
+			px = x,
+			py = y,
+			pw = w,
+			ph = h,
 			dragging = false,
 			resizing = false,
-			ox = 0, oy = 0,
+			ox = 0,
+			oy = 0,
 		})
 	end
 end

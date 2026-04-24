@@ -1,7 +1,0 @@
-{
-	"title": "Pinned Tool Panels",
-	"description": "Pin any tool menu panel to your screen persistently. Right-click any panel header in the spawn menu to pin it.",
-	"type": "serverside",
-	"tags": ["interface", "tool"],
-	"ignore": []
-}

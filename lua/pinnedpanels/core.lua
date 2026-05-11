@@ -33,11 +33,6 @@ function PinnedPanels.SaveSettings()
 		autoRestore = PinnedPanels.Settings.autoRestore
 	}
 	file.Write(SETTINGSF, util.TableToJSON(t, true))
-	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then
-			pin.frame.Paint = PinnedPanels.GetFramePaint(pin.title)
-		end
-	end
 end
 
 function PinnedPanels.LoadSettings()
@@ -109,8 +104,23 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 			PinnedPanels.Save()
 		end
 	end
-	frame.OnMouseReleased = function() DebouncedSave() end
-	frame.OnSizeChanged   = function() DebouncedSave() end
+	frame.OnMouseReleased = function(self, mc)
+		DebouncedSave()
+		if mc ~= MOUSE_RIGHT then return end
+		local _, my = self:CursorPos()
+		if my > 28 then return end
+		local menu = DermaMenu()
+		menu:AddOption("Bring to Front", function()
+			self:MoveToFront()
+			self:SetVisible(true)
+		end):SetIcon("icon16/arrow_refresh.png")
+		menu:AddSpacer()
+		menu:AddOption("Unpin", function()
+			PinnedPanels.Unpin(id)
+		end):SetIcon("icon16/lock_open.png")
+		menu:Open()
+	end
+	frame.OnSizeChanged = function() DebouncedSave() end
 
 	frame.NextFocusCheck  = 0
 	frame.Think           = function(self)
@@ -140,7 +150,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	return frame
 end
 
-function PinnedPanels.Pin(id, title, cpFunc, noSave)
+function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
+	opts = opts or {}
 	local existing = PinnedPanels.Pins[id]
 	if existing and IsValid(existing.frame) then
 		existing.frame:SetVisible(true)
@@ -151,49 +162,69 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave)
 	local saved           = PinnedPanels.Load()
 	local s               = saved[id] or {}
 	local sw, sh          = ScrW(), ScrH()
-	local fw              = math.Clamp(s.w or 280, 150, sw)
-	local fh              = math.Clamp(s.h or 400, 100, sh)
+	local fw              = math.Clamp(s.w or opts.defaultW or 280, 150, sw)
+	local fh              = math.Clamp(s.h or opts.defaultH or 400, 100, sh)
 	local fx              = math.Clamp(s.x or 120, 0, sw - fw)
 	local fy              = math.Clamp(s.y or 120, 0, sh - fh)
 
 	local frame           = BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
-	local scroll          = vgui.Create("DScrollPanel", frame)
-	scroll:Dock(FILL)
-	scroll:DockMargin(4, 6, 4, 4)
-
-	local oldInvalidate     = scroll.InvalidateLayout
-	scroll.NextLayout       = 0
-	scroll.InvalidateLayout = function(self, layoutNow)
-		if CurTime() < self.NextLayout then return end
-		self.NextLayout = CurTime() + 0.1
-		oldInvalidate(self, layoutNow)
-	end
-
-	if isfunction(cpFunc) then
-		local ctrl = vgui.Create("ControlPanel", scroll)
-		ctrl:Dock(TOP)
-		ctrl:SetAutoSize(true)
-		local ok, err = pcall(cpFunc, ctrl)
-		if not ok then
-			ctrl:Remove()
-			local lbl = vgui.Create("DLabel", scroll)
-			lbl:SetText("Error loading panel: " .. tostring(err))
+	if opts.fill then
+		-- Creation tab style: cpFunc() returns a panel, fill the frame directly.
+		local ok, result = pcall(cpFunc)
+		if ok and IsValid(result) then
+			result:SetParent(frame)
+			result:Dock(FILL)
+			result:DockMargin(0, 4, 0, 0)
+			result:SetMouseInputEnabled(true)
+			result:InvalidateLayout(true)
+		else
+			local lbl = vgui.Create("DLabel", frame)
+			lbl:SetText("Error loading panel" .. (not ok and (": " .. tostring(result)) or "."))
 			lbl:SetWrap(true)
-			lbl:Dock(TOP)
-			lbl:DockMargin(8, 8, 8, 8)
+			lbl:Dock(FILL)
+			lbl:DockMargin(8, 32, 8, 8)
 			lbl:SetTextColor(Color(220, 80, 80))
 		end
 	else
-		local lbl = vgui.Create("DLabel", scroll)
-		lbl:SetText("This tool has no control panel.")
-		lbl:SetWrap(true)
-		lbl:Dock(TOP)
-		lbl:DockMargin(8, 8, 8, 8)
-		lbl:SetTextColor(Color(120, 130, 145))
+		-- Tool style: cpFunc(ctrl) populates a ControlPanel inside a scroll.
+		local scroll = vgui.Create("DScrollPanel", frame)
+		scroll:Dock(FILL)
+		scroll:DockMargin(4, 6, 4, 4)
+
+		local oldInvalidate     = scroll.InvalidateLayout
+		scroll.NextLayout       = 0
+		scroll.InvalidateLayout = function(self, layoutNow)
+			if CurTime() < self.NextLayout then return end
+			self.NextLayout = CurTime() + 0.1
+			oldInvalidate(self, layoutNow)
+		end
+
+		if isfunction(cpFunc) then
+			local ctrl = vgui.Create("ControlPanel", scroll)
+			ctrl:Dock(TOP)
+			ctrl:SetAutoSize(true)
+			local ok, err = pcall(cpFunc, ctrl)
+			if not ok then
+				ctrl:Remove()
+				local lbl = vgui.Create("DLabel", scroll)
+				lbl:SetText("Error loading panel: " .. tostring(err))
+				lbl:SetWrap(true)
+				lbl:Dock(TOP)
+				lbl:DockMargin(8, 8, 8, 8)
+				lbl:SetTextColor(Color(220, 80, 80))
+			end
+		else
+			local lbl = vgui.Create("DLabel", scroll)
+			lbl:SetText("This tool has no control panel.")
+			lbl:SetWrap(true)
+			lbl:Dock(TOP)
+			lbl:DockMargin(8, 8, 8, 8)
+			lbl:SetTextColor(Color(120, 130, 145))
+		end
 	end
 
-	PinnedPanels.Pins[id] = { frame = frame, title = title, cpFunc = cpFunc, kind = "tool" }
+	PinnedPanels.Pins[id] = { frame = frame, title = title, cpFunc = cpFunc, kind = opts.kind or "tool" }
 
 	if not noSave then
 		PinnedPanels.Save()
@@ -230,6 +261,12 @@ function PinnedPanels.PinFrame(livePanel, title)
 	local origSize        = { livePanel:GetSize() }
 	local origVisible     = livePanel:IsVisible()
 	local origDock        = livePanel:GetDock()
+
+	livePanel._pp_origParent  = origParent
+	livePanel._pp_origPos     = origPos
+	livePanel._pp_origSize    = origSize
+	livePanel._pp_origVisible = origVisible
+	livePanel._pp_origDock    = origDock
 
 	local frame           = BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
@@ -286,24 +323,7 @@ function PinnedPanels.Unpin(id)
 	local pin = PinnedPanels.Pins[id]
 	if pin then
 		if pin.kind == "frame" and IsValid(pin.livePanel) then
-			local lp = pin.livePanel
-			lp.OnRemove = nil
-			if IsValid(pin.frame) then
-				local origParent  = lp._pp_origParent
-				local origPos     = lp._pp_origPos
-				local origSize    = lp._pp_origSize
-				local origVisible = lp._pp_origVisible
-				local origDock    = lp._pp_origDock
-				lp:SetDock(origDock or NODOCK)
-				if IsValid(origParent) then
-					lp:SetParent(origParent)
-					if (origDock or NODOCK) == NODOCK then
-						lp:SetPos(origPos and origPos[1] or 0, origPos and origPos[2] or 0)
-						lp:SetSize(origSize and origSize[1] or 200, origSize and origSize[2] or 200)
-					end
-				end
-				lp:SetVisible(origVisible ~= false)
-			end
+			pin.livePanel.OnRemove = nil
 		end
 		if IsValid(pin.frame) then pin.frame:Remove() end
 	end
@@ -372,29 +392,63 @@ function PinnedPanels.GetAllTools()
 	local seen = {}
 	local tabs = spawnmenu.GetTools()
 	if not tabs then return list end
-	for _, tab in SortedPairs(tabs) do
-		if tab.Items then
-			for _, category in ipairs(tab.Items) do
-				for _, item in ipairs(category) do
-					if istable(item) and item.ItemName and not seen[item.ItemName] then
-						seen[item.ItemName] = true
-						local nice = language.GetPhrase(item.Text or "")
-						if not nice or nice == "" or nice == item.Text then
-							nice = item.Text or item.ItemName
-						end
-						table.insert(list, {
-							itemName = item.ItemName,
-							niceName = nice,
-							cpFunc   = item.CPanelFunction
-						})
+	for tabKey, tab in SortedPairs(tabs) do
+		local tabName = isstring(tab.Name) and tab.Name or tabKey
+		if not istable(tab.Items) then continue end
+		for _, category in ipairs(tab.Items) do
+			local catRaw = isstring(category[1]) and category[1] or "Other"
+			local catName = language.GetPhrase(catRaw)
+			if not catName or catName == catRaw then
+				catName = catRaw:gsub("^#", "")
+			end
+			for _, item in ipairs(category) do
+				if istable(item) and item.ItemName and not seen[item.ItemName] then
+					seen[item.ItemName] = true
+					local nice = language.GetPhrase(item.Text or "")
+					if not nice or nice == "" or nice == item.Text then
+						nice = item.Text or item.ItemName
 					end
+					table.insert(list, {
+						itemName = item.ItemName,
+						niceName = nice,
+						cpFunc   = item.CPanelFunction,
+						category = catName,
+						tabName  = tabName,
+					})
 				end
 			end
 		end
 	end
-	table.sort(list, function(a, b) return a.niceName:lower() < b.niceName:lower() end)
+	table.sort(list, function(a, b)
+		if a.category ~= b.category then return a.category:lower() < b.category:lower() end
+		return a.niceName:lower() < b.niceName:lower()
+	end)
 	return list
 end
+
+function PinnedPanels.GetAllCreationTabs()
+	local raw = spawnmenu.GetCreationTabs and spawnmenu.GetCreationTabs()
+	if not istable(raw) then return {} end
+	local list = {}
+	for name, tab in pairs(raw) do
+		if not isstring(name) or not isfunction(tab.Function) then continue end
+		local label = language.GetPhrase(name)
+		if not label or label == name then label = name:gsub("^#", "") end
+		list[#list + 1] = {
+			id      = "PPC_" .. name,
+			name    = name,
+			label   = label,
+			icon    = tab.Icon,
+			order   = tab.Order or 1000,
+			tooltip = tab.Tooltip,
+			func    = tab.Function,
+		}
+	end
+	table.sort(list, function(a, b) return a.order < b.order end)
+	return list
+end
+
+local CREATION_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
 
 hook.Add("Think", "PinnedPanels_AutoRestore", function()
 	local tabs = spawnmenu.GetTools()
@@ -411,10 +465,17 @@ hook.Add("Think", "PinnedPanels_AutoRestore", function()
 		local toolMap  = {}
 		for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
 
+		local allCreation = PinnedPanels.GetAllCreationTabs()
+		local creationMap = {}
+		for _, t in ipairs(allCreation) do creationMap[t.id] = t end
+
 		for id, s in pairs(saved) do
 			local kind = s.kind or "tool"
 			if kind == "tool" and toolMap[id] then
 				PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc, true)
+			elseif kind == "creation" and creationMap[id] then
+				local t = creationMap[id]
+				PinnedPanels.Pin(id, s.title or t.label, t.func, true, CREATION_OPTS)
 			end
 		end
 	end)

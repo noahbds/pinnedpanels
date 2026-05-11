@@ -28,7 +28,8 @@ function PinnedPanels.CreatePinnedList(parent)
 		for id, pin in pairs(PinnedPanels.Pins) do
 			if not IsValid(pin.frame) then stale[#stale + 1] = id end
 		end
-		for _, id in ipairs(stale) do PinnedPanels.Unpin(id) end
+		for _, id in ipairs(stale) do PinnedPanels.Pins[id] = nil end
+		if #stale > 0 then PinnedPanels.Save() end
 
 		local count = 0
 		for _ in pairs(PinnedPanels.Pins) do count = count + 1 end

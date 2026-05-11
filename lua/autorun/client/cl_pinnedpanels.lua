@@ -3,6 +3,7 @@ if not CLIENT then return end
 include("pinnedpanels/core.lua")
 include("pinnedpanels/layout_editor.lua")
 include("pinnedpanels/browser.lua")
+include("pinnedpanels/creation_browser.lua")
 include("pinnedpanels/pinned_list.lua")
 include("pinnedpanels/interact_mode.lua")
 include("pinnedpanels/settings_tab.lua")
@@ -83,6 +84,9 @@ local function CreatePinnedPanelsTab()
 	local browserPanel = PinnedPanels.CreateBrowser(nil)
 	sheet:AddSheet("Tools", browserPanel, "icon16/wrench.png")
 
+	local contentPanel = PinnedPanels.CreateCreationBrowser(nil)
+	sheet:AddSheet("Content", contentPanel, "icon16/application_view_list.png")
+
 	local pinnedPanel = PinnedPanels.CreatePinnedList(nil)
 	sheet:AddSheet("Pinned", pinnedPanel, "icon16/lock.png")
 
@@ -107,7 +111,7 @@ local function CreatePinnedPanelsTab()
 			draw.RoundedBoxEx(6, 0, 0, w, h, bg, true, true, false, false)
 			if isActive then
 				surface.SetDrawColor(60, 140, 255)
-				surface.DrawRect(0, 0, w, 2)
+				surface.DrawRect(0, h - 2, w, 2)
 			end
 		end
 	end
@@ -155,12 +159,23 @@ concommand.Add("pp_reload", function()
 	end
 	PinnedPanels.LoadSettings()
 	local saved = PinnedPanels.Load()
+
 	local allTools = PinnedPanels.GetAllTools()
-	local toolMap = {}
+	local toolMap  = {}
 	for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
+
+	local allCreation = PinnedPanels.GetAllCreationTabs()
+	local creationMap = {}
+	for _, t in ipairs(allCreation) do creationMap[t.id] = t end
+
 	for id, s in pairs(saved) do
-		if toolMap[id] then
+		local kind = s.kind or "tool"
+		if kind == "tool" and toolMap[id] then
 			PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc)
+		elseif kind == "creation" and creationMap[id] then
+			local t = creationMap[id]
+			PinnedPanels.Pin(id, s.title or t.label, t.func, false,
+				{ kind = "creation", fill = true, defaultW = 350, defaultH = 560 })
 		end
 	end
 	print("[PinnedPanels] Reloaded.")

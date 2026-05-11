@@ -116,7 +116,8 @@ function PinnedPanels.CreateBrowser(parent)
 		return row
 	end
 
-	local inScroll = {}
+	local inScroll       = {}
+	local catHeaders     = {}
 
 	local function FilterList(filter)
 		if #allTools == 0 then
@@ -124,7 +125,7 @@ function PinnedPanels.CreateBrowser(parent)
 			for _, t in ipairs(allTools) do
 				local id = "PP_" .. t.itemName
 				if not rowCache[id] then
-					rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName }
+					rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName, category = t.category }
 				end
 			end
 		end
@@ -136,20 +137,42 @@ function PinnedPanels.CreateBrowser(parent)
 			end
 			inScroll[id] = nil
 		end
-		if IsValid(noToolsLbl) then
-			noToolsLbl:SetParent(rowHolder)
+		for _, hdr in ipairs(catHeaders) do
+			if IsValid(hdr) then hdr:Remove() end
 		end
+		catHeaders = {}
+		if IsValid(noToolsLbl) then noToolsLbl:SetParent(rowHolder) end
 
-		local lFilter = filter and filter:lower() or ""
-		local count   = 0
-		local total   = #allTools
+		local lFilter     = filter and filter:lower() or ""
+		local isFiltering = lFilter ~= ""
+		local count       = 0
+		local total       = #allTools
+		local lastCat     = nil
 
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
 			local data = rowCache[id]
 			if not data or not IsValid(data.panel) then continue end
-			local visible = lFilter == "" or data.niceName:lower():find(lFilter, 1, true)
+			local visible = isFiltering and data.niceName:lower():find(lFilter, 1, true)
+				or not isFiltering
+
 			if visible then
+				if not isFiltering and t.category ~= lastCat then
+					lastCat = t.category
+					local hdr = vgui.Create("DPanel", scroll)
+					hdr:Dock(TOP)
+					hdr:SetTall(22)
+					hdr:DockMargin(0, count > 0 and 4 or 0, 0, 1)
+					hdr.Paint = function(self, w, h)
+						draw.RoundedBox(3, 0, 0, w, h, Color(28, 32, 44, 255))
+						surface.SetDrawColor(45, 55, 80)
+						surface.DrawRect(0, h - 1, w, 1)
+						draw.SimpleText(lastCat, "DermaDefaultBold", 8, h / 2,
+							Color(90, 130, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+					end
+					catHeaders[#catHeaders + 1] = hdr
+				end
+
 				data.panel:SetParent(scroll)
 				data.panel:Dock(TOP)
 				data.panel:DockMargin(2, 1, 2, 0)
@@ -166,7 +189,7 @@ function PinnedPanels.CreateBrowser(parent)
 				noToolsLbl:DockMargin(10, 10, 10, 0)
 			end
 		end
-		countLbl:SetText(lFilter == "" and (total .. " tools") or (count .. " / " .. total))
+		countLbl:SetText(isFiltering and (count .. " / " .. total) or (total .. " tools"))
 	end
 
 	root.OnRemove = function()
@@ -183,4 +206,3 @@ function PinnedPanels.CreateBrowser(parent)
 
 	return root
 end
-

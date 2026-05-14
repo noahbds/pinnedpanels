@@ -1,4 +1,4 @@
-local CREATION_PIN_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
+local CREATION_PIN_OPTS = PinnedPanels.CREATION_OPTS
 
 function PinnedPanels.CreateCreationBrowser(parent)
 	local root = vgui.Create("DPanel", parent)
@@ -20,13 +20,7 @@ function PinnedPanels.CreateCreationBrowser(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 4, 4, 4)
 
-	local oldInvalidate = scroll.InvalidateLayout
-	scroll.NextLayout   = 0
-	scroll.InvalidateLayout = function(self, layoutNow)
-		if CurTime() < self.NextLayout then return end
-		self.NextLayout = CurTime() + 0.1
-		oldInvalidate(self, layoutNow)
-	end
+	PinnedPanels.ThrottleScroll(scroll)
 
 	local allTabs   = {}
 	local hookNames = {}
@@ -60,19 +54,7 @@ function PinnedPanels.CreateCreationBrowser(parent)
 			row:SetTall(40)
 			row:DockMargin(2, 1, 2, 1)
 
-			row.Paint = function(self, w, h)
-				local pin    = PinnedPanels.Pins[id]
-				local pinned = pin and IsValid(pin.frame)
-				local bg     = pinned and Color(18, 48, 18, 220) or Color(26, 26, 40, 200)
-				if self:IsHovered() then
-					bg = pinned and Color(25, 65, 25) or Color(38, 38, 58)
-				end
-				draw.RoundedBox(4, 0, 0, w, h, bg)
-				if pinned then
-					surface.SetDrawColor(60, 200, 80)
-					surface.DrawRect(0, 0, 3, h)
-				end
-			end
+			row.Paint = PinnedPanels.MakePinRowPaint(id, 4)
 
 			if isstring(tab.icon) and tab.icon ~= "" then
 				local img = vgui.Create("DImage", row)
@@ -133,7 +115,6 @@ function PinnedPanels.CreateCreationBrowser(parent)
 				else
 					PinnedPanels.Pin(id, capturedTab.label, capturedTab.func, false, CREATION_PIN_OPTS)
 				end
-				Refresh()
 			end
 		end
 	end

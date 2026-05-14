@@ -71,9 +71,10 @@ surface.CreateFont("PP_InteractFont", { font = "DefaultBold", size = 14, weight 
 hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
 	if not IM.Active then return end
 	local keyName = (IM.KeyCode and IM.KeyCode ~= KEY_NONE) and input.GetKeyName(IM.KeyCode) or "?"
-	local text = "INTERACT MODE  |  Press [" .. string.upper(keyName) .. "] to exit"
+	local text = "INTERACT MODE  |  Drag title bar to move, drag bottom-right corner to resize  |  Press ["
+		.. string.upper(keyName) .. "] to exit"
 	local sw = ScrW()
-	local bw = 400
+	local bw = math.max(220, math.min(760, sw - 20))
 	local bx = math.floor((sw - bw) / 2)
 	draw.RoundedBox(6, bx, 6, bw, 24, Color(0, 0, 0, 190))
 	surface.SetDrawColor(60, 200, 120)

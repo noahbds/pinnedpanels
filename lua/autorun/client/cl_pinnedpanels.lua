@@ -158,26 +158,7 @@ concommand.Add("pp_reload", function()
 		PinnedPanels.Pins[id] = nil
 	end
 	PinnedPanels.LoadSettings()
-	local saved = PinnedPanels.Load()
-
-	local allTools = PinnedPanels.GetAllTools()
-	local toolMap  = {}
-	for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
-
-	local allCreation = PinnedPanels.GetAllCreationTabs()
-	local creationMap = {}
-	for _, t in ipairs(allCreation) do creationMap[t.id] = t end
-
-	for id, s in pairs(saved) do
-		local kind = s.kind or "tool"
-		if kind == "tool" and toolMap[id] then
-			PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc)
-		elseif kind == "creation" and creationMap[id] then
-			local t = creationMap[id]
-			PinnedPanels.Pin(id, s.title or t.label, t.func, false,
-				{ kind = "creation", fill = true, defaultW = 350, defaultH = 560 })
-		end
-	end
+	PinnedPanels.RestoreAll(true)
 	print("[PinnedPanels] Reloaded.")
 end, nil, "Reload and restore all pinned panels from disk")
 

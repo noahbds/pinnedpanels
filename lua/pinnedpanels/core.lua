@@ -70,10 +70,30 @@ end
 
 function PinnedPanels.GetFramePaint(title)
 	return function(self, w, h)
-		local th = PinnedPanels.Settings
+		local th      = PinnedPanels.Settings
+		local inIM    = PinnedPanels.InteractMode and PinnedPanels.InteractMode.Active
+		local hdrCol  = inIM and Color(
+			math.min(th.header.r + 12, 255),
+			math.min(th.header.g + 20, 255),
+			math.min(th.header.b + 35, 255),
+			th.header.a
+		) or th.header
 		draw.RoundedBox(6, 0, 0, w, h, th.bg)
-		draw.RoundedBoxEx(6, 0, 0, w, 24, th.header, true, true, false, false)
+		draw.RoundedBoxEx(6, 0, 0, w, 24, hdrCol, true, true, false, false)
 		draw.SimpleText(title, "DermaDefaultBold", 10, 12, th.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		if inIM then
+			-- drag grip dots
+			surface.SetDrawColor(th.text.r, th.text.g, th.text.b, 60)
+			for dx = 0, 4, 2 do
+				for dy = 0, 4, 2 do
+					surface.DrawRect(w - 22 + dx, 10 + dy, 1, 1)
+				end
+			end
+			-- resize corner indicator
+			surface.SetDrawColor(60, 200, 120, 120)
+			surface.DrawRect(w - 6, h - 6, 4, 1)
+			surface.DrawRect(w - 6, h - 4, 1, 2)
+		end
 	end
 end
 
@@ -89,8 +109,26 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
 
+	local function ApplyInteractState(on)
+		frame:SetMouseInputEnabled(on and true or false)
+		frame:SetDraggable(on and true or false)
+		frame:SetSizable(on and true or false)
+	end
+
 	local isInteractActive = PinnedPanels.InteractMode and PinnedPanels.InteractMode.Active
-	frame:SetMouseInputEnabled(isInteractActive and true or false)
+	ApplyInteractState(isInteractActive)
+
+	local interactHook = "PinnedPanels_InteractFrame_" .. id .. "_" .. tostring(frame)
+	hook.Add("PinnedPanels_InteractModeChanged", interactHook, function(on)
+		if not IsValid(frame) then
+			hook.Remove("PinnedPanels_InteractModeChanged", interactHook)
+			return
+		end
+		ApplyInteractState(on)
+	end)
+	frame:CallOnRemove("PinnedPanels_InteractFrameCleanup", function()
+		hook.Remove("PinnedPanels_InteractModeChanged", interactHook)
+	end)
 
 	frame:ShowCloseButton(true)
 	frame.OnClose      = function() frame:SetVisible(false) end
@@ -229,6 +267,7 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	if not noSave then
 		PinnedPanels.Save()
 	end
+	hook.Run("PinnedPanels_StateChanged")
 
 	return frame
 end
@@ -387,40 +426,75 @@ function PinnedPanels.ScanFrames()
 	return results
 end
 
+function PinnedPanels.ThrottleScroll(scroll)
+	local orig = scroll.InvalidateLayout
+	scroll.NextLayout = 0
+	scroll.InvalidateLayout = function(self, layoutNow)
+		if CurTime() < self.NextLayout then return end
+		self.NextLayout = CurTime() + 0.1
+		orig(self, layoutNow)
+	end
+end
+
+function PinnedPanels.MakePinRowPaint(id, radius)
+	radius = radius or 3
+	return function(self, w, h)
+		local pin    = PinnedPanels.Pins[id]
+		local pinned = pin and IsValid(pin.frame)
+		local bg     = pinned and Color(18, 48, 18, 220) or Color(26, 26, 40, 200)
+		if self:IsHovered() then
+			bg = pinned and Color(25, 65, 25) or Color(38, 38, 58)
+		end
+		draw.RoundedBox(radius, 0, 0, w, h, bg)
+		if pinned then
+			surface.SetDrawColor(60, 200, 80)
+			surface.DrawRect(0, 0, 3, h)
+		end
+	end
+end
+
 function PinnedPanels.GetAllTools()
 	local list = {}
 	local seen = {}
 	local tabs = spawnmenu.GetTools()
 	if not tabs then return list end
+
+	-- GMod structure: tabs[tabKey] = { Label=..., Items={...} }
+	-- Items[k] = { ItemName="cat_key", Text="#cat.label", [1]=tool1, [2]=tool2, ... }
 	for tabKey, tab in SortedPairs(tabs) do
-		local tabName = isstring(tab.Name) and tab.Name or tabKey
+		local tabName = isstring(tab.Label) and tab.Label or tabKey
 		if not istable(tab.Items) then continue end
-		for _, category in ipairs(tab.Items) do
-			local catRaw = isstring(category[1]) and category[1] or "Other"
+
+		for _, cat in pairs(tab.Items) do
+			if not istable(cat) then continue end
+
+			local catRaw = isstring(cat.Text) and cat.Text or "Other"
 			local catName = language.GetPhrase(catRaw)
 			if not catName or catName == catRaw then
 				catName = catRaw:gsub("^#", "")
 			end
-			for _, item in ipairs(category) do
-				if istable(item) and item.ItemName and not seen[item.ItemName] then
-					seen[item.ItemName] = true
-					local nice = language.GetPhrase(item.Text or "")
-					if not nice or nice == "" or nice == item.Text then
-						nice = item.Text or item.ItemName
-					end
-					table.insert(list, {
-						itemName = item.ItemName,
-						niceName = nice,
-						cpFunc   = item.CPanelFunction,
-						category = catName,
-						tabName  = tabName,
-					})
+
+			for _, item in ipairs(cat) do
+				if not istable(item) or not item.ItemName then continue end
+				if seen[item.ItemName] then continue end
+				seen[item.ItemName] = true
+
+				local nice = item.Text and language.GetPhrase(item.Text) or ""
+				if nice == "" or nice == item.Text then
+					nice = item.Text or item.ItemName
 				end
+				table.insert(list, {
+					itemName = item.ItemName,
+					niceName = nice,
+					cpFunc   = item.CPanelFunction,
+					category = catName,
+					tabName  = tabName,
+				})
 			end
 		end
 	end
+
 	table.sort(list, function(a, b)
-		if a.category ~= b.category then return a.category:lower() < b.category:lower() end
 		return a.niceName:lower() < b.niceName:lower()
 	end)
 	return list
@@ -448,7 +522,30 @@ function PinnedPanels.GetAllCreationTabs()
 	return list
 end
 
-local CREATION_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
+PinnedPanels.CREATION_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
+
+function PinnedPanels.RestoreAll(noSave)
+	local saved = PinnedPanels.Load()
+	if not next(saved) then return end
+
+	local allTools = PinnedPanels.GetAllTools()
+	local toolMap  = {}
+	for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
+
+	local allCreation = PinnedPanels.GetAllCreationTabs()
+	local creationMap = {}
+	for _, t in ipairs(allCreation) do creationMap[t.id] = t end
+
+	for id, s in pairs(saved) do
+		local kind = s.kind or "tool"
+		if kind == "tool" and toolMap[id] then
+			PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc, noSave)
+		elseif kind == "creation" and creationMap[id] then
+			local t = creationMap[id]
+			PinnedPanels.Pin(id, s.title or t.label, t.func, noSave, PinnedPanels.CREATION_OPTS)
+		end
+	end
+end
 
 hook.Add("Think", "PinnedPanels_AutoRestore", function()
 	local tabs = spawnmenu.GetTools()
@@ -458,26 +555,7 @@ hook.Add("Think", "PinnedPanels_AutoRestore", function()
 	if not PinnedPanels.Settings.autoRestore then return end
 
 	timer.Simple(1, function()
-		local saved = PinnedPanels.Load()
-		if not next(saved) then return end
-
-		local allTools = PinnedPanels.GetAllTools()
-		local toolMap  = {}
-		for _, t in ipairs(allTools) do toolMap["PP_" .. t.itemName] = t end
-
-		local allCreation = PinnedPanels.GetAllCreationTabs()
-		local creationMap = {}
-		for _, t in ipairs(allCreation) do creationMap[t.id] = t end
-
-		for id, s in pairs(saved) do
-			local kind = s.kind or "tool"
-			if kind == "tool" and toolMap[id] then
-				PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc, true)
-			elseif kind == "creation" and creationMap[id] then
-				local t = creationMap[id]
-				PinnedPanels.Pin(id, s.title or t.label, t.func, true, CREATION_OPTS)
-			end
-		end
+		PinnedPanels.RestoreAll(true)
 	end)
 end)
 

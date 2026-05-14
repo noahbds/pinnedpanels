@@ -8,13 +8,7 @@ function PinnedPanels.CreatePinnedList(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(16, 16, 16, 16)
 
-	local oldInvalidate = scroll.InvalidateLayout
-	scroll.NextLayout   = 0
-	scroll.InvalidateLayout = function(self, layoutNow)
-		if CurTime() < self.NextLayout then return end
-		self.NextLayout = CurTime() + 0.1
-		oldInvalidate(self, layoutNow)
-	end
+	PinnedPanels.ThrottleScroll(scroll)
 
 	local isRebuilding = false
 
@@ -58,23 +52,20 @@ function PinnedPanels.CreatePinnedList(parent)
 		end
 		table.sort(sorted, function(a, b) return a.pin.title < b.pin.title end)
 
-		local function MakeIconBtn(parent, iconPath, bgNorm, bgHover, ttText)
+		local function MakeActionBtn(parent, text, iconPath, width, bgNorm, bgHover, txtCol, ttText)
 			local btn = vgui.Create("DButton", parent)
-			btn:SetText("")
-			btn:SetWide(28)
+			btn:SetText(text)
+			btn:SetWide(width)
 			btn:Dock(RIGHT)
 			btn:DockMargin(0, 5, 4, 5)
-
-			local img = vgui.Create("DImage", btn)
-			img:SetImage(iconPath)
-			img:SetSize(14, 14)
-			img:SetPos(7, 0)
-			img:SetMouseInputEnabled(false)
+			btn:SetTextColor(txtCol)
+			btn:SetIcon(iconPath)
 
 			btn.Paint = function(self, w, h)
-				img:SetPos(7, math.floor((h - 14) / 2))
 				local bg = self:IsHovered() and bgHover or bgNorm
 				draw.RoundedBox(4, 0, 0, w, h, bg)
+				surface.SetDrawColor(22, 24, 32)
+				surface.DrawOutlinedRect(0, 0, w, h, 1)
 			end
 
 			btn._ttText = ttText
@@ -96,14 +87,19 @@ function PinnedPanels.CreatePinnedList(parent)
 				if IsValid(self._tt) then self._tt:Remove() end
 			end
 
-			return btn, img
+			return btn
 		end
 
 		for _, entry in ipairs(sorted) do
 			local id  = entry.id
 			local pin = entry.pin
 
-			local isFramePin = pin.kind == "frame"
+			local isFramePin   = pin.kind == "frame"
+			local isCreation   = pin.kind == "creation"
+			local kindLabel    = isFramePin and "Frame" or isCreation and "Content" or "Tool"
+			local kindColor    = isFramePin and Color(160, 110, 220) or isCreation and Color(70, 185, 100) or Color(80, 140, 200)
+			local accentColor  = isFramePin and Color(130, 80, 220) or isCreation and Color(60, 200, 80) or Color(60, 140, 255)
+			local kindIcon     = isFramePin and "icon16/application.png" or isCreation and "icon16/application_view_list.png" or "icon16/wrench.png"
 
 			local row = vgui.Create("DPanel", scroll)
 			row:Dock(TOP)
@@ -112,13 +108,12 @@ function PinnedPanels.CreatePinnedList(parent)
 			row.Paint = function(self, w, h)
 				local bg = self:IsHovered() and Color(50, 55, 65, 255) or Color(40, 44, 52, 255)
 				draw.RoundedBox(6, 0, 0, w, h, bg)
-				local accentCol = isFramePin and Color(130, 80, 220) or Color(60, 140, 255)
-				surface.SetDrawColor(accentCol)
+				surface.SetDrawColor(accentColor)
 				surface.DrawRect(0, 0, 4, h)
 			end
 
 			local typeIcon = vgui.Create("DImage", row)
-			typeIcon:SetImage(isFramePin and "icon16/application.png" or "icon16/wrench.png")
+			typeIcon:SetImage(kindIcon)
 			typeIcon:SetSize(14, 14)
 			typeIcon:Dock(LEFT)
 			typeIcon:DockMargin(10, 13, 6, 13)
@@ -131,24 +126,28 @@ function PinnedPanels.CreatePinnedList(parent)
 			lbl:SetMouseInputEnabled(false)
 
 			local kindLbl = vgui.Create("DLabel", row)
-			kindLbl:SetText(isFramePin and "Frame" or "Tool")
+			kindLbl:SetText(kindLabel)
 			kindLbl:SetFont("DermaDefault")
-			kindLbl:SetTextColor(isFramePin and Color(160, 110, 220) or Color(80, 140, 200))
-			kindLbl:SetWide(38)
+			kindLbl:SetTextColor(kindColor)
+			kindLbl:SetWide(46)
 			kindLbl:Dock(RIGHT)
 			kindLbl:DockMargin(0, 0, 4, 0)
 			kindLbl:SetContentAlignment(6)
 			kindLbl:SetMouseInputEnabled(false)
 
-			local visBtn, visIcon = MakeIconBtn(row,
+			local visBtn = MakeActionBtn(row,
+				"Hide",
 				"icon16/eye.png",
+				72,
 				Color(55, 60, 70), Color(70, 75, 85),
+				Color(210, 220, 235),
 				"Hide panel")
 
 			local function UpdateVisBtn()
 				if not IsValid(visBtn) or not IsValid(pin.frame) then return end
 				local visible = pin.frame:IsVisible()
-				visIcon:SetImage(visible and "icon16/eye.png" or "icon16/cancel.png")
+				visBtn:SetText(visible and "Hide" or "Show")
+				visBtn:SetIcon(visible and "icon16/eye.png" or "icon16/cancel.png")
 				visBtn._ttText = visible and "Hide panel" or "Show panel"
 			end
 			UpdateVisBtn()
@@ -160,9 +159,12 @@ function PinnedPanels.CreatePinnedList(parent)
 				end
 			end
 
-			local focusBtn = MakeIconBtn(row,
+			local focusBtn = MakeActionBtn(row,
+				"Front",
 				"icon16/arrow_refresh.png",
+				74,
 				Color(55, 75, 100), Color(70, 100, 130),
+				Color(200, 220, 245),
 				"Bring to front")
 			focusBtn.DoClick = function()
 				if IsValid(pin.frame) then
@@ -171,9 +173,12 @@ function PinnedPanels.CreatePinnedList(parent)
 				end
 			end
 
-			local remBtn = MakeIconBtn(row,
+			local remBtn = MakeActionBtn(row,
+				"Unpin",
 				"icon16/cross.png",
+				74,
 				Color(160, 40, 40), Color(200, 60, 60),
+				Color(255, 220, 220),
 				"Unpin")
 			remBtn.DoClick = function()
 				PinnedPanels.Unpin(id)

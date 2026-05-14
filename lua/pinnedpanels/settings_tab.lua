@@ -8,13 +8,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(16, 16, 16, 16)
 
-	local oldInvalidate = scroll.InvalidateLayout
-	scroll.NextLayout = 0
-	scroll.InvalidateLayout = function(self, layoutNow)
-		if CurTime() < self.NextLayout then return end
-		self.NextLayout = CurTime() + 0.1
-		oldInvalidate(self, layoutNow)
-	end
+	PinnedPanels.ThrottleScroll(scroll)
 
 	local function CreateSectionCard(title, height)
 		local card = vgui.Create("DPanel", scroll)

@@ -11,6 +11,12 @@ function PinnedPanels.CreateBrowser(parent)
 	local searchBox = vgui.Create("DTextEntry", searchPanel)
 	searchBox:Dock(FILL)
 	searchBox:SetPlaceholderText("Search tools...")
+	searchBox.Paint = function(self, w, h)
+		draw.RoundedBox(4, 0, 0, w, h, Color(18, 20, 28, 255))
+		surface.SetDrawColor(50, 55, 75)
+		surface.DrawOutlinedRect(0, 0, w, h, 1)
+		self:DrawTextEntryText(Color(210, 215, 230), Color(50, 100, 200, 150), Color(210, 215, 230))
+	end
 
 	local countLbl = vgui.Create("DLabel", searchPanel)
 	countLbl:Dock(RIGHT)
@@ -24,13 +30,7 @@ function PinnedPanels.CreateBrowser(parent)
 	scroll:Dock(FILL)
 	scroll:DockMargin(4, 2, 4, 4)
 
-	local oldInvalidate = scroll.InvalidateLayout
-	scroll.NextLayout   = 0
-	scroll.InvalidateLayout = function(self, layoutNow)
-		if CurTime() < self.NextLayout then return end
-		self.NextLayout = CurTime() + 0.1
-		oldInvalidate(self, layoutNow)
-	end
+	PinnedPanels.ThrottleScroll(scroll)
 
 	local allTools  = {}
 	local rowCache  = {}
@@ -51,43 +51,48 @@ function PinnedPanels.CreateBrowser(parent)
 		local row = vgui.Create("DPanel", rowHolder)
 		row:SetTall(32)
 
-		row.Paint = function(self, w, h)
+		row.Paint = PinnedPanels.MakePinRowPaint(id, 3)
+
+		local statusDot = vgui.Create("DPanel", row)
+		statusDot:SetSize(6, 6)
+		statusDot:SetPos(8, 13)
+		statusDot:SetMouseInputEnabled(false)
+		statusDot.Paint = function(self, w, h)
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			local bg     = pinned and Color(18, 48, 18, 220) or Color(26, 26, 40, 200)
-			if self:IsHovered() then
-				bg = pinned and Color(25, 65, 25) or Color(38, 38, 58)
-			end
-			draw.RoundedBox(3, 0, 0, w, h, bg)
-			if pinned then
-				surface.SetDrawColor(60, 200, 80)
-				surface.DrawRect(0, 0, 3, h)
-			end
+			draw.RoundedBox(3, 0, 0, w, h, pinned and Color(60, 200, 80) or Color(70, 75, 90))
 		end
-
-		local statusIcon = vgui.Create("DImage", row)
-		statusIcon:SetSize(14, 14)
-		statusIcon:Dock(LEFT)
-		statusIcon:DockMargin(6, 9, 4, 9)
 
 		local lbl = vgui.Create("DLabel", row)
 		lbl:SetText(t.niceName)
 		lbl:SetTextColor(Color(220, 225, 240))
 		lbl:Dock(FILL)
+		lbl:DockMargin(18, 0, 0, 0)
 		lbl:SetMouseInputEnabled(false)
 
 		local pinBtn = vgui.Create("DButton", row)
-		pinBtn:SetWide(64)
+		pinBtn:SetWide(68)
 		pinBtn:Dock(RIGHT)
 		pinBtn:DockMargin(0, 4, 4, 4)
+		pinBtn:SetText("")
 
 		local function Refresh()
 			if not IsValid(row) then return end
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			statusIcon:SetImage(pinned and "icon16/tick.png" or "icon16/cross.png")
-			pinBtn:SetText(pinned and "Unpin" or "Pin")
-			pinBtn:SetIcon(pinned and "icon16/lock_open.png" or "icon16/lock_add.png")
+			local btnText = pinned and "Unpin" or "Pin"
+			local btnIcon = pinned and "icon16/lock_open.png" or "icon16/lock_add.png"
+			local bgNorm  = pinned and Color(30, 80, 30) or Color(35, 40, 55)
+			local bgHov   = pinned and Color(50, 110, 50) or Color(55, 65, 90)
+			local txtCol  = pinned and Color(100, 230, 110) or Color(160, 175, 210)
+			pinBtn.Paint = function(self, w, h)
+				local bg = self:IsHovered() and bgHov or bgNorm
+				draw.RoundedBox(4, 0, 0, w, h, bg)
+				surface.SetDrawColor(pinned and Color(40, 120, 40) or Color(50, 55, 80))
+				surface.DrawOutlinedRect(0, 0, w, h, 1)
+				draw.SimpleText(btnText, "DermaDefault", w / 2, h / 2, txtCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
+			pinBtn:SetTooltip(pinned and "Remove this tool from screen" or "Pin this tool to screen")
 		end
 
 		local hookName = "PinnedPanels_Browser_" .. id
@@ -110,14 +115,12 @@ function PinnedPanels.CreateBrowser(parent)
 			else
 				PinnedPanels.Pin(id, t.niceName, t.cpFunc)
 			end
-			Refresh()
 		end
 
 		return row
 	end
 
 	local inScroll       = {}
-	local catHeaders     = {}
 
 	local function FilterList(filter)
 		if #allTools == 0 then
@@ -125,7 +128,7 @@ function PinnedPanels.CreateBrowser(parent)
 			for _, t in ipairs(allTools) do
 				local id = "PP_" .. t.itemName
 				if not rowCache[id] then
-					rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName, category = t.category }
+					rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName }
 				end
 			end
 		end
@@ -137,17 +140,12 @@ function PinnedPanels.CreateBrowser(parent)
 			end
 			inScroll[id] = nil
 		end
-		for _, hdr in ipairs(catHeaders) do
-			if IsValid(hdr) then hdr:Remove() end
-		end
-		catHeaders = {}
 		if IsValid(noToolsLbl) then noToolsLbl:SetParent(rowHolder) end
 
 		local lFilter     = filter and filter:lower() or ""
 		local isFiltering = lFilter ~= ""
 		local count       = 0
 		local total       = #allTools
-		local lastCat     = nil
 
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
@@ -157,22 +155,6 @@ function PinnedPanels.CreateBrowser(parent)
 				or not isFiltering
 
 			if visible then
-				if not isFiltering and t.category ~= lastCat then
-					lastCat = t.category
-					local hdr = vgui.Create("DPanel", scroll)
-					hdr:Dock(TOP)
-					hdr:SetTall(22)
-					hdr:DockMargin(0, count > 0 and 4 or 0, 0, 1)
-					hdr.Paint = function(self, w, h)
-						draw.RoundedBox(3, 0, 0, w, h, Color(28, 32, 44, 255))
-						surface.SetDrawColor(45, 55, 80)
-						surface.DrawRect(0, h - 1, w, 1)
-						draw.SimpleText(lastCat, "DermaDefaultBold", 8, h / 2,
-							Color(90, 130, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-					end
-					catHeaders[#catHeaders + 1] = hdr
-				end
-
 				data.panel:SetParent(scroll)
 				data.panel:Dock(TOP)
 				data.panel:DockMargin(2, 1, 2, 0)

@@ -212,7 +212,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 			TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
 	end
 
-	local dangerCard = CreateSectionCard("Danger Zone", 78)
+	local dangerCard = CreateSectionCard("Danger Zone", 85)
 
 	local unpinAllBtn = vgui.Create("DButton", dangerCard)
 	unpinAllBtn:SetText("Unpin All Panels")
@@ -226,6 +226,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
 		draw.SimpleText(self:GetText(), "DermaDefaultBold", w / 2, h / 2,
 			Color(240, 200, 200), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		return true
 	end
 	unpinAllBtn.DoClick = function()
 		PinnedPanels.UnpinAll()

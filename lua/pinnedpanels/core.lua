@@ -82,14 +82,12 @@ function PinnedPanels.GetFramePaint(title)
 		draw.RoundedBoxEx(6, 0, 0, w, 24, hdrCol, true, true, false, false)
 		draw.SimpleText(title, "DermaDefaultBold", 10, 12, th.text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 		if inIM then
-			-- drag grip dots
 			surface.SetDrawColor(th.text.r, th.text.g, th.text.b, 60)
 			for dx = 0, 4, 2 do
 				for dy = 0, 4, 2 do
 					surface.DrawRect(w - 22 + dx, 10 + dy, 1, 1)
 				end
 			end
-			-- resize corner indicator
 			surface.SetDrawColor(60, 200, 120, 120)
 			surface.DrawRect(w - 6, h - 6, 4, 1)
 			surface.DrawRect(w - 6, h - 4, 1, 2)
@@ -102,26 +100,25 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetTitle("")
 	frame:SetSize(fw, fh)
 	frame:SetPos(fx, fy)
-	frame:SetDraggable(true)
-	frame:SetSizable(true)
+	frame:SetDraggable(false)
+	frame:SetSizable(false)
 	frame:SetDeleteOnClose(false)
 	frame:ParentToHUD()
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
 
-	local overlay  -- forward-declared; assigned below after frame setup
-	local titleOverlay  -- forward-declared
-	local resizeOverlay  -- forward-declared
+	local titleOverlay
+	local resizeOverlay
 
 	local function ApplyInteractState(on)
-		frame:SetMouseInputEnabled(on and true or false)
+		frame:SetMouseInputEnabled(on)
 		frame:SetDraggable(false)
 		frame:SetSizable(false)
 		if IsValid(titleOverlay) then
-			titleOverlay:SetMouseInputEnabled(on and true or false)
+			titleOverlay:SetMouseInputEnabled(on)
 		end
 		if IsValid(resizeOverlay) then
-			resizeOverlay:SetMouseInputEnabled(on and true or false)
+			resizeOverlay:SetMouseInputEnabled(on)
 		end
 	end
 
@@ -152,23 +149,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 			PinnedPanels.Save()
 		end
 	end
-	frame.OnMouseReleased = function(self, mc)
-		DebouncedSave()
-		if mc ~= MOUSE_RIGHT then return end
-		local _, my = self:CursorPos()
-		if my > 28 then return end
-		local menu = DermaMenu()
-		menu:AddOption("Bring to Front", function()
-			self:MoveToFront()
-			self:SetVisible(true)
-		end):SetIcon("icon16/arrow_refresh.png")
-		menu:AddSpacer()
-		menu:AddOption("Unpin", function()
-			PinnedPanels.Unpin(id)
-		end):SetIcon("icon16/lock_open.png")
-		menu:Open()
-	end
-	frame.OnSizeChanged = function() DebouncedSave() end
 
 	frame.NextFocusCheck  = 0
 	frame.Think           = function(self)
@@ -195,64 +175,62 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 	end
 
-	-- Overlay panels for interact mode - only cover interactive zones
 	local GRID          = 8
+	local TITLE_HEIGHT  = 24
+	local CORNER_SIZE   = 16
+	local CLOSE_BTN_WIDTH = 30
+	
 	local imDrag        = false
 	local imDragOffX, imDragOffY = 0, 0
 	local imResize      = false
 	local imResizeSX, imResizeSY = 0, 0
 	local imResizeW, imResizeH   = 0, 0
 
-	-- Title bar overlay (for dragging) - excludes right side for close button
 	titleOverlay = vgui.Create("DPanel", frame)
 	titleOverlay:SetPos(0, 0)
-	titleOverlay:SetSize(frame:GetWide() - 30, 24)
+	titleOverlay:SetSize(frame:GetWide() - CLOSE_BTN_WIDTH, TITLE_HEIGHT)
 	titleOverlay.Paint = function() end
 	titleOverlay:SetMouseInputEnabled(false)
 	
-	-- Resize corner overlay
 	resizeOverlay = vgui.Create("DPanel", frame)
-	resizeOverlay:SetPos(frame:GetWide() - 16, frame:GetTall() - 16)
-	resizeOverlay:SetSize(16, 16)
+	resizeOverlay:SetPos(frame:GetWide() - CORNER_SIZE, frame:GetTall() - CORNER_SIZE)
+	resizeOverlay:SetSize(CORNER_SIZE, CORNER_SIZE)
 	resizeOverlay.Paint = function() end
 	resizeOverlay:SetMouseInputEnabled(false)
 
-	overlay = vgui.Create("DPanel", frame)
-	overlay:SetSize(0, 0)
-	overlay.Paint = function() end
-	overlay:SetMouseInputEnabled(false)
+	ApplyInteractState(isInteractActive)
 
 	local function UpdateOverlayPositions()
 		local fw, fh = frame:GetSize()
-		titleOverlay:SetSize(fw - 30, 24)
-		resizeOverlay:SetPos(fw - 16, fh - 16)
+		titleOverlay:SetSize(fw - CLOSE_BTN_WIDTH, TITLE_HEIGHT)
+		resizeOverlay:SetPos(fw - CORNER_SIZE, fh - CORNER_SIZE)
 	end
 
 	titleOverlay.Think = function(self)
-		if imDrag then
-			local mx, my = gui.MouseX(), gui.MouseY()
-			local w, h = frame:GetSize()
-			local nx = math.floor(math.Clamp(mx - imDragOffX, 0, ScrW() - w) / GRID + 0.5) * GRID
-			local ny = math.floor(math.Clamp(my - imDragOffY, 0, ScrH() - h) / GRID + 0.5) * GRID
-			frame:SetPos(nx, ny)
-		else
+		if not imDrag then
 			self:SetCursor("sizeall")
+			return
 		end
+		local mx, my = gui.MouseX(), gui.MouseY()
+		local w, h = frame:GetSize()
+		local nx = math.floor(math.Clamp(mx - imDragOffX, 0, ScrW() - w) / GRID + 0.5) * GRID
+		local ny = math.floor(math.Clamp(my - imDragOffY, 0, ScrH() - h) / GRID + 0.5) * GRID
+		frame:SetPos(nx, ny)
 	end
 
 	resizeOverlay.Think = function(self)
-		if imResize then
-			local fpx, fpy = frame:GetPos()
-			local mx, my   = gui.MouseX(), gui.MouseY()
-			local nw = math.floor(math.max(150, imResizeW + mx - imResizeSX) / GRID + 0.5) * GRID
-			local nh = math.floor(math.max(100, imResizeH + my - imResizeSY) / GRID + 0.5) * GRID
-			nw = math.min(nw, ScrW() - fpx)
-			nh = math.min(nh, ScrH() - fpy)
-			frame:SetSize(nw, nh)
-			UpdateOverlayPositions()
-		else
+		if not imResize then
 			self:SetCursor("sizenwse")
+			return
 		end
+		local fpx, fpy = frame:GetPos()
+		local mx, my   = gui.MouseX(), gui.MouseY()
+		local nw = math.floor(math.max(150, imResizeW + mx - imResizeSX) / GRID + 0.5) * GRID
+		local nh = math.floor(math.max(100, imResizeH + my - imResizeSY) / GRID + 0.5) * GRID
+		nw = math.min(nw, ScrW() - fpx)
+		nh = math.min(nh, ScrH() - fpy)
+		frame:SetSize(nw, nh)
+		UpdateOverlayPositions()
 	end
 
 	titleOverlay.OnMousePressed = function(self, mc)
@@ -307,6 +285,50 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	return frame
 end
 
+local function RectsOverlap(ax, ay, aw, ah, bx, by, bw, bh, pad)
+	pad = pad or 0
+	return ax < (bx + bw + pad)
+		and bx < (ax + aw + pad)
+		and ay < (by + bh + pad)
+		and by < (ay + ah + pad)
+end
+
+local function IsSpawnOccupied(x, y, w, h, ignoreId)
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if id ~= ignoreId and IsValid(pin.frame) and pin.frame:IsVisible() then
+			local px, py = pin.frame:GetPos()
+			local pw, ph = pin.frame:GetSize()
+			if RectsOverlap(x, y, w, h, px, py, pw, ph, 20) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function FindFreeSpawnPosition(w, h, preferredX, preferredY, ignoreId)
+	local sw, sh = ScrW(), ScrH()
+	local maxX = math.max(0, sw - w)
+	local maxY = math.max(0, sh - h)
+	local baseX = math.Clamp(preferredX or 120, 0, maxX)
+	local baseY = math.Clamp(preferredY or 120, 0, maxY)
+
+	if not IsSpawnOccupied(baseX, baseY, w, h, ignoreId) then
+		return baseX, baseY
+	end
+
+	local STEP = 28
+	for y = 0, maxY, STEP do
+		for x = 0, maxX, STEP do
+			if not IsSpawnOccupied(x, y, w, h, ignoreId) then
+				return x, y
+			end
+		end
+	end
+
+	return baseX, baseY
+end
+
 function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	opts = opts or {}
 	local existing = PinnedPanels.Pins[id]
@@ -321,13 +343,18 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	local sw, sh          = ScrW(), ScrH()
 	local fw              = math.Clamp(s.w or opts.defaultW or 280, 150, sw)
 	local fh              = math.Clamp(s.h or opts.defaultH or 400, 100, sh)
-	local fx              = math.Clamp(s.x or 120, 0, sw - fw)
-	local fy              = math.Clamp(s.y or 120, 0, sh - fh)
+	local hasSavedPos     = s.x ~= nil and s.y ~= nil
+	local fx, fy
+	if hasSavedPos then
+		fx = math.Clamp(tonumber(s.x) or 120, 0, sw - fw)
+		fy = math.Clamp(tonumber(s.y) or 120, 0, sh - fh)
+	else
+		fx, fy = FindFreeSpawnPosition(fw, fh, 120, 120, id)
+	end
 
 	local frame           = BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
 	if opts.fill then
-		-- Creation tab style: cpFunc() returns a panel, fill the frame directly.
 		local ok, result = pcall(cpFunc)
 		if ok and IsValid(result) then
 			result:SetParent(frame)
@@ -344,18 +371,11 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 			lbl:SetTextColor(Color(220, 80, 80))
 		end
 	else
-		-- Tool style: cpFunc(ctrl) populates a ControlPanel inside a scroll.
 		local scroll = vgui.Create("DScrollPanel", frame)
 		scroll:Dock(FILL)
 		scroll:DockMargin(4, 6, 4, 4)
 
-		local oldInvalidate     = scroll.InvalidateLayout
-		scroll.NextLayout       = 0
-		scroll.InvalidateLayout = function(self, layoutNow)
-			if CurTime() < self.NextLayout then return end
-			self.NextLayout = CurTime() + 0.1
-			oldInvalidate(self, layoutNow)
-		end
+		PinnedPanels.ThrottleScroll(scroll)
 
 		if isfunction(cpFunc) then
 			local ctrl = vgui.Create("ControlPanel", scroll)
@@ -411,8 +431,14 @@ function PinnedPanels.PinFrame(livePanel, title)
 	local ow, oh          = livePanel:GetSize()
 	local fw              = math.Clamp(s.w or (ow + 8), 150, sw)
 	local fh              = math.Clamp(s.h or (oh + 28), 100, sh)
-	local fx              = math.Clamp(s.x or ox, 0, sw - fw)
-	local fy              = math.Clamp(s.y or oy, 0, sh - fh)
+	local hasSavedPos     = s.x ~= nil and s.y ~= nil
+	local fx, fy
+	if hasSavedPos then
+		fx = math.Clamp(tonumber(s.x) or ox, 0, sw - fw)
+		fy = math.Clamp(tonumber(s.y) or oy, 0, sh - fh)
+	else
+		fx, fy = FindFreeSpawnPosition(fw, fh, ox, oy, id)
+	end
 
 	local origParent      = livePanel:GetParent()
 	local origPos         = { livePanel:GetPos() }
@@ -445,7 +471,9 @@ function PinnedPanels.PinFrame(livePanel, title)
 		if isfunction(origOnRemove) then origOnRemove(self) end
 	end
 
+	local baseOnRemove = frame.OnRemove
 	frame.OnRemove = function()
+		baseOnRemove()
 		if IsValid(livePanel) then
 			livePanel:SetDock(origDock)
 			if IsValid(origParent) then
@@ -529,7 +557,7 @@ function PinnedPanels.ScanFrames()
 			title = p.lblTitle:GetText() or ""
 		end
 		if title == "" then
-			title = (name ~= "" and name) or ("Frame " .. tostring(p):match("%d+$") or tostring(p))
+			title = (name ~= "" and name) or ("Frame " .. (tostring(p):match("%d+$") or tostring(p)))
 		end
 
 		local alreadyPinned = PinnedPanels.IsPinnedFrame(p)
@@ -579,8 +607,6 @@ function PinnedPanels.GetAllTools()
 	local tabs = spawnmenu.GetTools()
 	if not tabs then return list end
 
-	-- GMod structure: tabs[tabKey] = { Label=..., Items={...} }
-	-- Items[k] = { ItemName="cat_key", Text="#cat.label", [1]=tool1, [2]=tool2, ... }
 	for tabKey, tab in SortedPairs(tabs) do
 		local tabName = isstring(tab.Label) and tab.Label or tabKey
 		if istable(tab.Items) then

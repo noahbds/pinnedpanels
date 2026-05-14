@@ -375,12 +375,11 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 		scroll:Dock(FILL)
 		scroll:DockMargin(4, 6, 4, 4)
 
-		PinnedPanels.ThrottleScroll(scroll)
-
 		if isfunction(cpFunc) then
 			local ctrl = vgui.Create("ControlPanel", scroll)
 			ctrl:Dock(TOP)
 			ctrl:SetAutoSize(true)
+			local beforeCount = #ctrl:GetChildren()
 			local ok, err = pcall(cpFunc, ctrl)
 			if not ok then
 				ctrl:Remove()
@@ -390,6 +389,18 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 				lbl:Dock(TOP)
 				lbl:DockMargin(8, 8, 8, 8)
 				lbl:SetTextColor(Color(220, 80, 80))
+			else
+				if #ctrl:GetChildren() <= beforeCount and controlpanel then
+					local cpName = id:sub(4)
+					local origGet = controlpanel.Get
+					controlpanel.Get = function(name)
+						if name == cpName then return ctrl end
+						return origGet(name)
+					end
+					hook.Run("PostReloadToolsMenu")
+					controlpanel.Get = origGet
+				end
+				ctrl:InvalidateLayout(true)
 			end
 		else
 			local lbl = vgui.Create("DLabel", scroll)
@@ -399,6 +410,10 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 			lbl:DockMargin(8, 8, 8, 8)
 			lbl:SetTextColor(Color(120, 130, 145))
 		end
+
+		timer.Simple(0.2, function()
+			if IsValid(scroll) then PinnedPanels.ThrottleScroll(scroll) end
+		end)
 	end
 
 	PinnedPanels.Pins[id] = { frame = frame, title = title, cpFunc = cpFunc, kind = opts.kind or "tool" }
@@ -458,6 +473,7 @@ function PinnedPanels.PinFrame(livePanel, title)
 	livePanel:SetDock(FILL)
 	livePanel:DockMargin(0, 4, 0, 0)
 	livePanel:SetVisible(true)
+	livePanel:InvalidateLayout(true)
 
 	local origOnRemove = livePanel.OnRemove
 	livePanel.OnRemove = function(self)

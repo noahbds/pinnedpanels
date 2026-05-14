@@ -80,12 +80,13 @@ function PinnedPanels.CreateBrowser(parent)
 			if not IsValid(row) then return end
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			local btnText = pinned and "Unpin" or "Pin"
-			local btnIcon = pinned and "icon16/lock_open.png" or "icon16/lock_add.png"
-			local bgNorm  = pinned and Color(30, 80, 30) or Color(35, 40, 55)
-			local bgHov   = pinned and Color(50, 110, 50) or Color(55, 65, 90)
-			local txtCol  = pinned and Color(100, 230, 110) or Color(160, 175, 210)
 			pinBtn.Paint = function(self, w, h)
+				local pin    = PinnedPanels.Pins[id]
+				local pinned = pin and IsValid(pin.frame)
+				local bgNorm  = pinned and Color(30, 80, 30) or Color(35, 40, 55)
+				local bgHov   = pinned and Color(50, 110, 50) or Color(55, 65, 90)
+				local txtCol  = pinned and Color(100, 230, 110) or Color(160, 175, 210)
+				local btnText = pinned and "Unpin" or "Pin"
 				local bg = self:IsHovered() and bgHov or bgNorm
 				draw.RoundedBox(4, 0, 0, w, h, bg)
 				surface.SetDrawColor(pinned and Color(40, 120, 40) or Color(50, 55, 80))

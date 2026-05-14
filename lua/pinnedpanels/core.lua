@@ -109,10 +109,20 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
 
+	local overlay  -- forward-declared; assigned below after frame setup
+	local titleOverlay  -- forward-declared
+	local resizeOverlay  -- forward-declared
+
 	local function ApplyInteractState(on)
 		frame:SetMouseInputEnabled(on and true or false)
-		frame:SetDraggable(on and true or false)
-		frame:SetSizable(on and true or false)
+		frame:SetDraggable(false)
+		frame:SetSizable(false)
+		if IsValid(titleOverlay) then
+			titleOverlay:SetMouseInputEnabled(on and true or false)
+		end
+		if IsValid(resizeOverlay) then
+			resizeOverlay:SetMouseInputEnabled(on and true or false)
+		end
 	end
 
 	local isInteractActive = PinnedPanels.InteractMode and PinnedPanels.InteractMode.Active
@@ -126,9 +136,9 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 		ApplyInteractState(on)
 	end)
-	frame:CallOnRemove("PinnedPanels_InteractFrameCleanup", function()
+	frame.OnRemove = function()
 		hook.Remove("PinnedPanels_InteractModeChanged", interactHook)
-	end)
+	end
 
 	frame:ShowCloseButton(true)
 	frame.OnClose      = function() frame:SetVisible(false) end
@@ -183,6 +193,115 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if self:IsKeyboardInputEnabled() ~= needsKeyboard then
 			self:SetKeyboardInputEnabled(needsKeyboard)
 		end
+	end
+
+	-- Overlay panels for interact mode - only cover interactive zones
+	local GRID          = 8
+	local imDrag        = false
+	local imDragOffX, imDragOffY = 0, 0
+	local imResize      = false
+	local imResizeSX, imResizeSY = 0, 0
+	local imResizeW, imResizeH   = 0, 0
+
+	-- Title bar overlay (for dragging) - excludes right side for close button
+	titleOverlay = vgui.Create("DPanel", frame)
+	titleOverlay:SetPos(0, 0)
+	titleOverlay:SetSize(frame:GetWide() - 30, 24)
+	titleOverlay.Paint = function() end
+	titleOverlay:SetMouseInputEnabled(false)
+	
+	-- Resize corner overlay
+	resizeOverlay = vgui.Create("DPanel", frame)
+	resizeOverlay:SetPos(frame:GetWide() - 16, frame:GetTall() - 16)
+	resizeOverlay:SetSize(16, 16)
+	resizeOverlay.Paint = function() end
+	resizeOverlay:SetMouseInputEnabled(false)
+
+	overlay = vgui.Create("DPanel", frame)
+	overlay:SetSize(0, 0)
+	overlay.Paint = function() end
+	overlay:SetMouseInputEnabled(false)
+
+	local function UpdateOverlayPositions()
+		local fw, fh = frame:GetSize()
+		titleOverlay:SetSize(fw - 30, 24)
+		resizeOverlay:SetPos(fw - 16, fh - 16)
+	end
+
+	titleOverlay.Think = function(self)
+		if imDrag then
+			local mx, my = gui.MouseX(), gui.MouseY()
+			local w, h = frame:GetSize()
+			local nx = math.floor(math.Clamp(mx - imDragOffX, 0, ScrW() - w) / GRID + 0.5) * GRID
+			local ny = math.floor(math.Clamp(my - imDragOffY, 0, ScrH() - h) / GRID + 0.5) * GRID
+			frame:SetPos(nx, ny)
+		else
+			self:SetCursor("sizeall")
+		end
+	end
+
+	resizeOverlay.Think = function(self)
+		if imResize then
+			local fpx, fpy = frame:GetPos()
+			local mx, my   = gui.MouseX(), gui.MouseY()
+			local nw = math.floor(math.max(150, imResizeW + mx - imResizeSX) / GRID + 0.5) * GRID
+			local nh = math.floor(math.max(100, imResizeH + my - imResizeSY) / GRID + 0.5) * GRID
+			nw = math.min(nw, ScrW() - fpx)
+			nh = math.min(nh, ScrH() - fpy)
+			frame:SetSize(nw, nh)
+			UpdateOverlayPositions()
+		else
+			self:SetCursor("sizenwse")
+		end
+	end
+
+	titleOverlay.OnMousePressed = function(self, mc)
+		if mc == MOUSE_LEFT then
+			imDrag = true
+			imDragOffX, imDragOffY = self:CursorPos()
+			self:MouseCapture(true)
+		elseif mc == MOUSE_RIGHT then
+			local menu = DermaMenu()
+			menu:AddOption("Bring to Front", function()
+				frame:MoveToFront()
+				frame:SetVisible(true)
+			end):SetIcon("icon16/arrow_refresh.png")
+			menu:AddSpacer()
+			menu:AddOption("Unpin", function()
+				PinnedPanels.Unpin(id)
+			end):SetIcon("icon16/lock_open.png")
+			menu:Open()
+		end
+	end
+
+	titleOverlay.OnMouseReleased = function(self, _)
+		if imDrag then
+			imDrag = false
+			self:MouseCapture(false)
+			PinnedPanels.Save()
+		end
+	end
+
+	resizeOverlay.OnMousePressed = function(self, mc)
+		if mc == MOUSE_LEFT then
+			imResize = true
+			imResizeSX, imResizeSY = gui.MouseX(), gui.MouseY()
+			imResizeW, imResizeH = frame:GetSize()
+			self:MouseCapture(true)
+		end
+	end
+
+	resizeOverlay.OnMouseReleased = function(self, _)
+		if imResize then
+			imResize = false
+			self:MouseCapture(false)
+			PinnedPanels.Save()
+		end
+	end
+
+	frame.OnSizeChanged = function()
+		UpdateOverlayPositions()
+		DebouncedSave()
 	end
 
 	return frame
@@ -396,14 +515,14 @@ function PinnedPanels.ScanFrames()
 
 	local results = {}
 	for _, p in ipairs(vgui.GetAll()) do
-		if not IsValid(p) then continue end
-		if ownedPanels[p] then continue end
-		if p:GetClassName() ~= "DFrame" then continue end
+		if not IsValid(p) then goto cont end
+		if ownedPanels[p] then goto cont end
+		if p:GetClassName() ~= "DFrame" then goto cont end
 
 		local name = p:GetName() or ""
-		if FRAME_IGNORE_NAMES[name] then continue end
-		if name:sub(1, 3) == "PP_" or name:sub(1, 4) == "PPF_" then continue end
-		if not p:IsVisible() then continue end
+		if FRAME_IGNORE_NAMES[name] then goto cont end
+		if name:sub(1, 3) == "PP_" or name:sub(1, 4) == "PPF_" then goto cont end
+		if not p:IsVisible() then goto cont end
 
 		local title = ""
 		if p.lblTitle and IsValid(p.lblTitle) then
@@ -420,6 +539,7 @@ function PinnedPanels.ScanFrames()
 			id     = "PPF_" .. tostring(p),
 			pinned = alreadyPinned
 		})
+		::cont::
 	end
 
 	table.sort(results, function(a, b) return a.title:lower() < b.title:lower() end)
@@ -463,33 +583,33 @@ function PinnedPanels.GetAllTools()
 	-- Items[k] = { ItemName="cat_key", Text="#cat.label", [1]=tool1, [2]=tool2, ... }
 	for tabKey, tab in SortedPairs(tabs) do
 		local tabName = isstring(tab.Label) and tab.Label or tabKey
-		if not istable(tab.Items) then continue end
+		if istable(tab.Items) then
+			for _, cat in pairs(tab.Items) do
+				if istable(cat) then
+					local catRaw = isstring(cat.Text) and cat.Text or "Other"
+					local catName = language.GetPhrase(catRaw)
+					if not catName or catName == catRaw then
+						catName = catRaw:gsub("^#", "")
+					end
 
-		for _, cat in pairs(tab.Items) do
-			if not istable(cat) then continue end
+					for _, item in ipairs(cat) do
+						if istable(item) and item.ItemName and not seen[item.ItemName] then
+							seen[item.ItemName] = true
 
-			local catRaw = isstring(cat.Text) and cat.Text or "Other"
-			local catName = language.GetPhrase(catRaw)
-			if not catName or catName == catRaw then
-				catName = catRaw:gsub("^#", "")
-			end
-
-			for _, item in ipairs(cat) do
-				if not istable(item) or not item.ItemName then continue end
-				if seen[item.ItemName] then continue end
-				seen[item.ItemName] = true
-
-				local nice = item.Text and language.GetPhrase(item.Text) or ""
-				if nice == "" or nice == item.Text then
-					nice = item.Text or item.ItemName
+							local nice = item.Text and language.GetPhrase(item.Text) or ""
+							if nice == "" or nice == item.Text then
+								nice = item.Text or item.ItemName
+							end
+							table.insert(list, {
+								itemName = item.ItemName,
+								niceName = nice,
+								cpFunc   = item.CPanelFunction,
+								category = catName,
+								tabName  = tabName,
+							})
+						end
+					end
 				end
-				table.insert(list, {
-					itemName = item.ItemName,
-					niceName = nice,
-					cpFunc   = item.CPanelFunction,
-					category = catName,
-					tabName  = tabName,
-				})
 			end
 		end
 	end
@@ -505,18 +625,19 @@ function PinnedPanels.GetAllCreationTabs()
 	if not istable(raw) then return {} end
 	local list = {}
 	for name, tab in pairs(raw) do
-		if not isstring(name) or not isfunction(tab.Function) then continue end
-		local label = language.GetPhrase(name)
-		if not label or label == name then label = name:gsub("^#", "") end
-		list[#list + 1] = {
-			id      = "PPC_" .. name,
-			name    = name,
-			label   = label,
-			icon    = tab.Icon,
-			order   = tab.Order or 1000,
-			tooltip = tab.Tooltip,
-			func    = tab.Function,
-		}
+		if isstring(name) and isfunction(tab.Function) then
+			local label = language.GetPhrase(name)
+			if not label or label == name then label = name:gsub("^#", "") end
+			list[#list + 1] = {
+				id      = "PPC_" .. name,
+				name    = name,
+				label   = label,
+				icon    = tab.Icon,
+				order   = tab.Order or 1000,
+				tooltip = tab.Tooltip,
+				func    = tab.Function,
+			}
+		end
 	end
 	table.sort(list, function(a, b) return a.order < b.order end)
 	return list

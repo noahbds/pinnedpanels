@@ -160,9 +160,9 @@ function PinnedPanels.CreatePinnedList(parent)
 			end
 
 			local focusBtn = MakeActionBtn(row,
-				"Front",
-				"icon16/arrow_refresh.png",
-				74,
+				"Move to Front",
+				"icon16/shape_move_front.png",
+				100,
 				Color(55, 75, 100), Color(70, 100, 130),
 				Color(200, 220, 245),
 				"Bring to front")

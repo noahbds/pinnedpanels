@@ -150,17 +150,18 @@ function PinnedPanels.CreateBrowser(parent)
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
 			local data = rowCache[id]
-			if not data or not IsValid(data.panel) then continue end
-			local visible = isFiltering and data.niceName:lower():find(lFilter, 1, true)
-				or not isFiltering
+				if data and IsValid(data.panel) then
+					local visible = isFiltering and data.niceName:lower():find(lFilter, 1, true)
+						or not isFiltering
 
-			if visible then
-				data.panel:SetParent(scroll)
-				data.panel:Dock(TOP)
-				data.panel:DockMargin(2, 1, 2, 0)
-				inScroll[id] = true
-				count = count + 1
-			end
+					if visible then
+						data.panel:SetParent(scroll)
+						data.panel:Dock(TOP)
+						data.panel:DockMargin(2, 1, 2, 0)
+						inScroll[id] = true
+						count = count + 1
+					end
+				end
 		end
 
 		if IsValid(noToolsLbl) then

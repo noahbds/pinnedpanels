@@ -1,6 +1,15 @@
 if not CLIENT then return end
 
+include("pinnedpanels/colors.lua")
 include("pinnedpanels/core.lua")
+include("pinnedpanels/persistence.lua")
+include("pinnedpanels/helpers.lua")
+include("pinnedpanels/frame.lua")
+include("pinnedpanels/popups.lua")
+include("pinnedpanels/context_menu.lua")
+include("pinnedpanels/pin.lua")
+include("pinnedpanels/groups.lua")
+include("pinnedpanels/autosize.lua")
 include("pinnedpanels/layout_editor.lua")
 include("pinnedpanels/browser.lua")
 include("pinnedpanels/creation_browser.lua")
@@ -8,18 +17,20 @@ include("pinnedpanels/pinned_list.lua")
 include("pinnedpanels/interact_mode.lua")
 include("pinnedpanels/settings_tab.lua")
 
+local C = PinnedPanels.C
+
 local function CreatePinnedPanelsTab()
 	local root = vgui.Create("DPanel")
 	root.Paint = function(self, w, h)
-		draw.RoundedBox(0, 0, 0, w, h, Color(24, 26, 32, 255))
+		draw.RoundedBox(0, 0, 0, w, h, C.bgDark)
 	end
 
 	local header = vgui.Create("DPanel", root)
 	header:Dock(TOP)
 	header:SetTall(56)
 	header.Paint = function(self, w, h)
-		draw.RoundedBox(0, 0, 0, w, h, Color(18, 20, 26, 255))
-		surface.SetDrawColor(35, 38, 46, 255)
+		draw.RoundedBox(0, 0, 0, w, h, C.bgHeader)
+		surface.SetDrawColor(C.bgHeaderLine)
 		surface.DrawRect(0, h - 2, w, 2)
 	end
 
@@ -27,7 +38,7 @@ local function CreatePinnedPanelsTab()
 	iconContainer:Dock(LEFT)
 	iconContainer:SetWide(56)
 	iconContainer.Paint = function(self, w, h)
-		draw.RoundedBox(8, 16, 16, 24, 24, Color(30, 34, 42, 255))
+		draw.RoundedBox(8, 16, 16, 24, 24, C.bgIcon)
 	end
 
 	local icon = vgui.Create("DImage", iconContainer)
@@ -38,7 +49,7 @@ local function CreatePinnedPanelsTab()
 	local title = vgui.Create("DLabel", header)
 	title:SetText("Pinned Tool Panels")
 	title:SetFont("DermaLarge")
-	title:SetTextColor(Color(240, 245, 255))
+	title:SetTextColor(C.textBright)
 	title:Dock(LEFT)
 	title:DockMargin(0, 0, 16, 0)
 	title:SetContentAlignment(4)
@@ -47,7 +58,7 @@ local function CreatePinnedPanelsTab()
 	local subtitle = vgui.Create("DLabel", header)
 	subtitle:SetText("Manage and customize your on-screen tool menus")
 	subtitle:SetFont("DermaDefault")
-	subtitle:SetTextColor(Color(140, 150, 165))
+	subtitle:SetTextColor(C.textSubtle)
 	subtitle:Dock(LEFT)
 	subtitle:DockMargin(0, 8, 0, 0)
 	subtitle:SetContentAlignment(4)
@@ -59,13 +70,15 @@ local function CreatePinnedPanelsTab()
 	pinCount:DockMargin(0, 0, 12, 0)
 	pinCount:SetContentAlignment(6)
 	pinCount:SetFont("DermaDefault")
-	pinCount:SetTextColor(Color(100, 130, 180))
+	pinCount:SetTextColor(C.textPin)
 
 	local function UpdatePinCount()
 		if not IsValid(pinCount) then return end
 		local n = 0
-		for _, pin in pairs(PinnedPanels.Pins) do
-			if IsValid(pin.frame) then n = n + 1 end
+		for id, pin in pairs(PinnedPanels.Pins or {}) do
+			if IsValid(pin.frame) and not (pin.kind ~= "group" and PinnedPanels.GetGroupForPanel(id)) then
+				n = n + 1
+			end
 		end
 		pinCount:SetText(n .. " panel" .. (n == 1 and "" or "s") .. " pinned")
 	end
@@ -92,7 +105,7 @@ local function CreatePinnedPanelsTab()
 
 	local editorHost = vgui.Create("DPanel")
 	editorHost.Paint = function(self, w, h)
-		draw.RoundedBox(0, 0, 0, w, h, Color(30, 32, 40, 255))
+		draw.RoundedBox(0, 0, 0, w, h, C.bg)
 	end
 	local editor = PinnedPanels.CreateLayoutEditor(editorHost)
 	sheet:AddSheet("Layout", editorHost, "icon16/application_view_columns.png")
@@ -104,13 +117,13 @@ local function CreatePinnedPanelsTab()
 		local tab = item.Tab
 		tab.Paint = function(self, w, h)
 			local isActive = sheet:GetActiveTab() == self
-			local bg = isActive and Color(30, 32, 40, 255) or Color(20, 22, 28, 255)
+			local bg = isActive and C.bg or C.bgDarker
 			if self:IsHovered() and not isActive then
-				bg = Color(35, 38, 48, 255)
+				bg = C.bgHover
 			end
 			draw.RoundedBoxEx(6, 0, 0, w, h, bg, true, true, false, false)
 			if isActive then
-				surface.SetDrawColor(60, 140, 255)
+				surface.SetDrawColor(C.accent)
 				surface.DrawRect(0, h - 2, w, 2)
 			end
 		end
@@ -145,16 +158,21 @@ concommand.Add("pp_list", function()
 			x, y = pin.frame:GetPos()
 			w, h = pin.frame:GetSize()
 		end
-		print(string.format("  %-30s  title=%-25s  valid=%-5s  pos=%d,%d  size=%dx%d",
-			id, pin.title, tostring(IsValid(pin.frame)), x, y, w, h))
+		local group = PinnedPanels.GetGroupForPanel(id)
+		local groupName = group and (" group=" .. group.name) or ""
+		print(string.format("  %-30s  title=%-25s  valid=%-5s  pos=%d,%d  size=%dx%d%s",
+			id, pin.title, tostring(IsValid(pin.frame)), x, y, w, h, groupName))
 		count = count + 1
 	end
 	print(string.format("[PinnedPanels] %d pin(s) total.", count))
 end, nil, "List pinned panels")
 
 concommand.Add("pp_reload", function()
-	for id, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then pin.frame:Remove() end
+	local ids = {}
+	for id in pairs(PinnedPanels.Pins) do ids[#ids + 1] = id end
+	for _, id in ipairs(ids) do
+		local pin = PinnedPanels.Pins[id]
+		if pin and IsValid(pin.frame) then pin.frame:Remove() end
 		PinnedPanels.Pins[id] = nil
 	end
 	PinnedPanels.LoadSettings()

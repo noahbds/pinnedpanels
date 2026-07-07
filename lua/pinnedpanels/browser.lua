@@ -1,3 +1,5 @@
+local C = PinnedPanels.C
+
 function PinnedPanels.CreateBrowser(parent)
 	local root = vgui.Create("DPanel", parent)
 	root.Paint = function() end
@@ -12,10 +14,10 @@ function PinnedPanels.CreateBrowser(parent)
 	searchBox:Dock(FILL)
 	searchBox:SetPlaceholderText("Search tools...")
 	searchBox.Paint = function(self, w, h)
-		draw.RoundedBox(4, 0, 0, w, h, Color(18, 20, 28, 255))
-		surface.SetDrawColor(50, 55, 75)
+		draw.RoundedBox(4, 0, 0, w, h, C.searchBg)
+		surface.SetDrawColor(C.searchBorder)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
-		self:DrawTextEntryText(Color(210, 215, 230), Color(50, 100, 200, 150), Color(210, 215, 230))
+		self:DrawTextEntryText(C.textSearch, C.searchCursor, C.textSearch)
 	end
 
 	local countLbl = vgui.Create("DLabel", searchPanel)
@@ -23,7 +25,7 @@ function PinnedPanels.CreateBrowser(parent)
 	countLbl:SetWide(80)
 	countLbl:DockMargin(4, 0, 0, 0)
 	countLbl:SetContentAlignment(6)
-	countLbl:SetTextColor(Color(120, 130, 145))
+	countLbl:SetTextColor(C.mutedGray)
 	countLbl:SetText("")
 
 	local scroll = vgui.Create("DScrollPanel", root)
@@ -42,8 +44,8 @@ function PinnedPanels.CreateBrowser(parent)
 	rowHolder.Paint = function() end
 
 	local noToolsLbl = vgui.Create("DLabel", rowHolder)
-	noToolsLbl:SetText("No tools found.")
-	noToolsLbl:SetTextColor(Color(140, 150, 165))
+	noToolsLbl:SetText(PinnedPanels.L("no_tools"))
+	noToolsLbl:SetTextColor(C.textSubtle)
 	noToolsLbl:SetTall(30)
 	noToolsLbl:SetVisible(false)
 
@@ -60,12 +62,12 @@ function PinnedPanels.CreateBrowser(parent)
 		statusDot.Paint = function(self, w, h)
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			draw.RoundedBox(3, 0, 0, w, h, pinned and Color(60, 200, 80) or Color(70, 75, 90))
+			draw.RoundedBox(3, 0, 0, w, h, pinned and C.accentGreen or C.dotOff)
 		end
 
 		local lbl = vgui.Create("DLabel", row)
 		lbl:SetText(t.niceName)
-		lbl:SetTextColor(Color(220, 225, 240))
+		lbl:SetTextColor(C.textLbl)
 		lbl:Dock(FILL)
 		lbl:DockMargin(18, 0, 0, 0)
 		lbl:SetMouseInputEnabled(false)
@@ -76,23 +78,24 @@ function PinnedPanels.CreateBrowser(parent)
 		pinBtn:DockMargin(0, 4, 4, 4)
 		pinBtn:SetText("")
 
+		pinBtn.Paint = function(self, w, h)
+			local pin    = PinnedPanels.Pins[id]
+			local pinned = pin and IsValid(pin.frame)
+			local bgNorm  = pinned and C.unpinBtnBg or C.pinBtnBg
+			local bgHov   = pinned and C.unpinBtnBgHov or C.pinBtnBgHov
+			local txtCol  = pinned and C.unpinBtnTxt or C.pinBtnTxt
+			local btnText = pinned and "Unpin" or "Pin"
+			local bg = self:IsHovered() and bgHov or bgNorm
+			draw.RoundedBox(4, 0, 0, w, h, bg)
+			surface.SetDrawColor(pinned and C.unpinBtnOut or C.pinBtnOut)
+			surface.DrawOutlinedRect(0, 0, w, h, 1)
+			draw.SimpleText(btnText, "DermaDefault", w / 2, h / 2, txtCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
+
 		local function Refresh()
 			if not IsValid(row) then return end
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			pinBtn.Paint = function(self, w, h)
-				local pin    = PinnedPanels.Pins[id]
-				local pinned = pin and IsValid(pin.frame)
-				local bgNorm  = pinned and Color(30, 80, 30) or Color(35, 40, 55)
-				local bgHov   = pinned and Color(50, 110, 50) or Color(55, 65, 90)
-				local txtCol  = pinned and Color(100, 230, 110) or Color(160, 175, 210)
-				local btnText = pinned and "Unpin" or "Pin"
-				local bg = self:IsHovered() and bgHov or bgNorm
-				draw.RoundedBox(4, 0, 0, w, h, bg)
-				surface.SetDrawColor(pinned and Color(40, 120, 40) or Color(50, 55, 80))
-				surface.DrawOutlinedRect(0, 0, w, h, 1)
-				draw.SimpleText(btnText, "DermaDefault", w / 2, h / 2, txtCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-			end
 			pinBtn:SetTooltip(pinned and "Remove this tool from screen" or "Pin this tool to screen")
 		end
 
@@ -121,7 +124,7 @@ function PinnedPanels.CreateBrowser(parent)
 		return row
 	end
 
-	local inScroll       = {}
+	local inScroll = {}
 
 	local function FilterList(filter)
 		if #allTools == 0 then
@@ -151,18 +154,17 @@ function PinnedPanels.CreateBrowser(parent)
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
 			local data = rowCache[id]
-				if data and IsValid(data.panel) then
-					local visible = isFiltering and data.niceName:lower():find(lFilter, 1, true)
-						or not isFiltering
+			if data and IsValid(data.panel) then
+				local visible = not isFiltering or data.niceName:lower():find(lFilter, 1, true)
 
-					if visible then
-						data.panel:SetParent(scroll)
-						data.panel:Dock(TOP)
-						data.panel:DockMargin(2, 1, 2, 0)
-						inScroll[id] = true
-						count = count + 1
-					end
+				if visible then
+					data.panel:SetParent(scroll)
+					data.panel:Dock(TOP)
+					data.panel:DockMargin(2, 1, 2, 0)
+					inScroll[id] = true
+					count = count + 1
 				end
+			end
 		end
 
 		if IsValid(noToolsLbl) then

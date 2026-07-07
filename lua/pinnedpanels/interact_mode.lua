@@ -2,6 +2,8 @@ PinnedPanels.InteractMode = PinnedPanels.InteractMode or {}
 local IM = PinnedPanels.InteractMode
 IM.Active = IM.Active or false
 
+local C = PinnedPanels.C
+
 local CVAR_KEY = "pp_interact_key"
 local DEFAULT_KEY = KEY_F4
 
@@ -16,16 +18,33 @@ cvars.AddChangeCallback(CVAR_KEY, function(_, _, new)
 	if code then IM.KeyCode = code end
 end, "PinnedPanels_KeyCVar")
 
+IM.SpawnMenuOpen = IsValid(g_SpawnMenu) and g_SpawnMenu:IsVisible() or false
+
+-- ── Panel Input / Idle Opacity ───────────────────────────────────────────────
+function PinnedPanels.UpdatePanelStates()
+	local interactive = PinnedPanels.PanelsInteractive()
+	for _, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then
+			if pin.frame:IsMouseInputEnabled() ~= interactive then
+				pin.frame:SetMouseInputEnabled(interactive)
+			end
+			local frac = interactive and 1
+				or (pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1)
+			local a = math.Round(math.Clamp(frac, 0.05, 1) * 255)
+			if pin.frame:GetAlpha() ~= a then pin.frame:SetAlpha(a) end
+		end
+	end
+	hook.Run("PinnedPanels_InteractModeChanged", interactive)
+end
+
 local function SetInteractMode(on)
 	if IM.Active == on then return end
 	IM.Active = on
 	gui.EnableScreenClicker(on)
-	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then
-			pin.frame:SetMouseInputEnabled(on)
-		end
+	if on and PinnedPanels.RefreshRestoredGroups then
+		PinnedPanels.RefreshRestoredGroups()
 	end
-	hook.Run("PinnedPanels_InteractModeChanged", on)
+	PinnedPanels.UpdatePanelStates()
 end
 
 function PinnedPanels.InteractMode.Enable() SetInteractMode(true) end
@@ -46,24 +65,18 @@ hook.Add("Think", "PinnedPanels_InteractKey", function()
 end)
 
 hook.Add("OnSpawnMenuOpen", "PinnedPanels_SpawnMenuOpen", function()
+	IM.SpawnMenuOpen = true
 	SetInteractMode(false)
-	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then pin.frame:SetMouseInputEnabled(true) end
-	end
+	PinnedPanels.UpdatePanelStates()
 end)
 
 hook.Add("OnSpawnMenuClose", "PinnedPanels_SpawnMenuClose", function()
-	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then pin.frame:SetMouseInputEnabled(IM.Active) end
-	end
+	IM.SpawnMenuOpen = false
+	PinnedPanels.UpdatePanelStates()
 end)
 
 hook.Add("PinnedPanels_StateChanged", "PinnedPanels_InteractSyncNew", function()
-	for _, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) and pin.frame:IsMouseInputEnabled() ~= IM.Active then
-			pin.frame:SetMouseInputEnabled(IM.Active)
-		end
-	end
+	PinnedPanels.UpdatePanelStates()
 end)
 
 surface.CreateFont("PP_InteractFont", { font = "DefaultBold", size = 14, weight = 600 })
@@ -76,10 +89,10 @@ hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
 	local sw = ScrW()
 	local bw = math.max(220, math.min(760, sw - 20))
 	local bx = math.floor((sw - bw) / 2)
-	draw.RoundedBox(6, bx, 6, bw, 24, Color(0, 0, 0, 190))
-	surface.SetDrawColor(60, 200, 120)
+	draw.RoundedBox(6, bx, 6, bw, 24, C.hudBg)
+	surface.SetDrawColor(C.hudBorder)
 	surface.DrawOutlinedRect(bx, 6, bw, 24, 1)
-	draw.SimpleText(text, "PP_InteractFont", sw / 2, 18, Color(60, 230, 130), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	draw.SimpleText(text, "PP_InteractFont", sw / 2, 18, C.hudText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end)
 
 function PinnedPanels.OpenKeyBindFrame(onSaved)
@@ -96,9 +109,9 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 	PinnedPanels._bindFrame = frame
 
 	frame.Paint = function(self, w, h)
-		draw.RoundedBox(6, 0, 0, w, h, Color(16, 16, 26, 255))
-		draw.RoundedBoxEx(6, 0, 0, w, 24, Color(22, 22, 36, 255), true, true, false, false)
-		surface.SetDrawColor(60, 140, 255)
+		draw.RoundedBox(6, 0, 0, w, h, C.bindBg)
+		draw.RoundedBoxEx(6, 0, 0, w, 24, C.bindHeader, true, true, false, false)
+		surface.SetDrawColor(C.accent)
 		surface.DrawRect(0, 22, w, 2)
 	end
 
@@ -107,7 +120,7 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 	instrLabel:SetWrap(true)
 	instrLabel:Dock(TOP)
 	instrLabel:DockMargin(12, 10, 12, 8)
-	instrLabel:SetTextColor(Color(180, 195, 220))
+	instrLabel:SetTextColor(C.bindInstr)
 	instrLabel:SetAutoStretchVertical(true)
 
 	local captureBtn = vgui.Create("DButton", frame)
@@ -130,11 +143,11 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 	captureBtn.Paint = function(self, w, h)
 		local focused = self:HasFocus()
 		local hovered = self:IsHovered()
-		local bgCol = (hovered or focused) and Color(40, 60, 100) or Color(25, 40, 75)
+		local bgCol = (hovered or focused) and C.bindBtnBgHov or C.bindBtnBg
 		draw.RoundedBox(6, 0, 0, w, h, bgCol)
-		surface.SetDrawColor(60, 140, 255)
+		surface.SetDrawColor(C.accent)
 		surface.DrawOutlinedRect(0, 0, w, h, focused and 2 or 1)
-		local txtCol = focused and Color(120, 255, 120) or Color(180, 210, 255)
+		local txtCol = focused and C.bindTxtFocus or C.bindTxtNorm
 		draw.SimpleText(self:GetText(), "DermaDefaultBold", w / 2, h / 2, txtCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		return true
 	end
@@ -159,5 +172,3 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 		self:RequestFocus()
 	end
 end
-
-print("[PinnedPanels] Interact mode loaded.")

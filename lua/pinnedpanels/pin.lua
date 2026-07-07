@@ -1,0 +1,301 @@
+local C                     = PinnedPanels.C
+local BuildWrapperFrame     = PinnedPanels._BuildWrapperFrame
+local FindFreeSpawnPosition = PinnedPanels._FindFreeSpawnPosition
+local DeserializeColor      = PinnedPanels._DeserializeColor
+
+-- ── Content Builders ─────────────────────────────────────────────────────────
+local function ErrorLabel(parent, text, dock)
+	local lbl = vgui.Create("DLabel", parent)
+	lbl:SetText(text)
+	lbl:SetWrap(true)
+	lbl:Dock(dock or FILL)
+	lbl:DockMargin(8, 8, 8, 8)
+	lbl:SetTextColor(C.errorRed)
+	return lbl
+end
+
+local function BuildFillContent(frame, cpFunc)
+	local ok, result = pcall(cpFunc)
+	if ok and IsValid(result) then
+		result:SetParent(frame)
+		result:Dock(FILL)
+		result:DockMargin(0, 4, 0, 0)
+		result:SetMouseInputEnabled(true)
+		result:InvalidateLayout(true)
+		return result
+	end
+	ErrorLabel(frame, "Error loading panel" .. (not ok and (": " .. tostring(result)) or "."))
+		:DockMargin(8, 32, 8, 8)
+end
+
+local function BuildToolContent(frame, cpFunc, id)
+	local scroll = vgui.Create("DScrollPanel", frame)
+	scroll:Dock(FILL)
+	scroll:DockMargin(4, 6, 4, 4)
+
+	if isfunction(cpFunc) then
+		local ctrl = vgui.Create("ControlPanel", scroll)
+		ctrl:Dock(TOP)
+		ctrl:SetAutoSize(true)
+		local beforeCount = #ctrl:GetChildren()
+		local ok, err = pcall(cpFunc, ctrl)
+		if not ok then
+			ctrl:Remove()
+			ErrorLabel(scroll, "Error loading panel: " .. tostring(err), TOP)
+		else
+			if #ctrl:GetChildren() <= beforeCount and controlpanel then
+				local cpName = id:sub(4)
+				local origGet = controlpanel.Get
+				controlpanel.Get = function(name)
+					if name == cpName then return ctrl end
+					return origGet(name)
+				end
+				hook.Run("PostReloadToolsMenu")
+				controlpanel.Get = origGet
+			end
+			ctrl:InvalidateLayout(true)
+		end
+	else
+		local lbl = vgui.Create("DLabel", scroll)
+		lbl:SetText("This tool has no control panel.")
+		lbl:SetWrap(true)
+		lbl:Dock(TOP)
+		lbl:DockMargin(8, 8, 8, 8)
+		lbl:SetTextColor(C.mutedGray)
+	end
+
+	timer.Simple(0.2, function()
+		if IsValid(scroll) then PinnedPanels.ThrottleScroll(scroll) end
+	end)
+
+	return scroll
+end
+
+-- ── Pin ──────────────────────────────────────────────────────────────────────
+function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
+	opts = opts or {}
+	local existing = PinnedPanels.Pins[id]
+	if existing and IsValid(existing.frame) then
+		existing.frame:SetVisible(true)
+		return existing.frame
+	end
+	PinnedPanels.Pins[id] = nil
+
+	local s      = PinnedPanels.Load()[id] or {}
+	local sw, sh = ScrW(), ScrH()
+	local fw     = math.Clamp(s.w or opts.defaultW or 280, 150, sw)
+	local fh     = math.Clamp(s.h or opts.defaultH or 400, 100, sh)
+	local fx, fy
+	if s.x ~= nil and s.y ~= nil then
+		fx = math.Clamp(tonumber(s.x) or 120, 0, sw - fw)
+		fy = math.Clamp(tonumber(s.y) or 120, 0, sh - fh)
+	else
+		fx, fy = FindFreeSpawnPosition(fw, fh, 120, 120, id)
+	end
+
+	local frame = BuildWrapperFrame(title, id, fw, fh, fx, fy)
+	local contentPanel
+	if opts.fill then
+		contentPanel = BuildFillContent(frame, cpFunc)
+	else
+		contentPanel = BuildToolContent(frame, cpFunc, id)
+	end
+
+	PinnedPanels.Pins[id] = {
+		frame        = frame,
+		title        = title,
+		cpFunc       = cpFunc,
+		kind         = opts.kind or "tool",
+		content      = contentPanel,
+		fill         = opts.fill or false,
+		customBg     = s.customBg and DeserializeColor(s.customBg) or nil,
+		customHeader = s.customHeader and DeserializeColor(s.customHeader) or nil,
+		customText   = s.customText and DeserializeColor(s.customText) or nil,
+		locked       = s.locked or false,
+		idleAlpha    = tonumber(s.idleAlpha) or nil,
+	}
+
+	if s.w == nil and s.h == nil and not opts.fill then
+		timer.Simple(0.35, function()
+			if PinnedPanels.Pins[id] and not PinnedPanels.GetGroupForPanel(id) then
+				PinnedPanels.AutoSizePanel(id)
+			end
+		end)
+	end
+
+	if not noSave then PinnedPanels.Save() end
+	hook.Run("PinnedPanels_StateChanged")
+	return frame
+end
+
+-- ── Pin Frame (live panel reparenting) ───────────────────────────────────────
+function PinnedPanels.PinFrame(livePanel, title)
+	if not IsValid(livePanel) then return end
+
+	local id = "PPF_" .. tostring(livePanel)
+	local existing = PinnedPanels.Pins[id]
+	if existing and IsValid(existing.frame) then
+		existing.frame:SetVisible(true)
+		return existing.frame
+	end
+	PinnedPanels.Pins[id] = nil
+
+	local s      = PinnedPanels.Load()[id] or {}
+	local sw, sh = ScrW(), ScrH()
+	local ox, oy = livePanel:GetPos()
+	local ow, oh = livePanel:GetSize()
+	local fw     = math.Clamp(s.w or (ow + 8), 150, sw)
+	local fh     = math.Clamp(s.h or (oh + 28), 100, sh)
+	local fx, fy
+	if s.x ~= nil and s.y ~= nil then
+		fx = math.Clamp(tonumber(s.x) or ox, 0, sw - fw)
+		fy = math.Clamp(tonumber(s.y) or oy, 0, sh - fh)
+	else
+		fx, fy = FindFreeSpawnPosition(fw, fh, ox, oy, id)
+	end
+
+	local origParent  = livePanel:GetParent()
+	local origPos     = { livePanel:GetPos() }
+	local origSize    = { livePanel:GetSize() }
+	local origVisible = livePanel:IsVisible()
+	local origDock    = livePanel:GetDock()
+
+	local frame = BuildWrapperFrame(title, id, fw, fh, fx, fy)
+
+	livePanel:SetParent(frame)
+	livePanel:SetDock(FILL)
+	livePanel:DockMargin(0, 4, 0, 0)
+	livePanel:SetVisible(true)
+	livePanel:InvalidateLayout(true)
+
+	local origOnRemove = livePanel.OnRemove
+	livePanel.OnRemove = function(self)
+		if PinnedPanels.Pins[id] then
+			PinnedPanels.Pins[id] = nil
+			PinnedPanels.ClearSavedPin(id)
+			hook.Run("PinnedPanels_StateChanged")
+		end
+		if isfunction(origOnRemove) then origOnRemove(self) end
+	end
+
+	local baseOnRemove = frame.OnRemove
+	frame.OnRemove = function()
+		if isfunction(baseOnRemove) then baseOnRemove() end
+		if IsValid(livePanel) then
+			livePanel:SetDock(origDock)
+			if IsValid(origParent) then
+				livePanel:SetParent(origParent)
+				if origDock == NODOCK then
+					livePanel:SetPos(origPos[1], origPos[2])
+					livePanel:SetSize(origSize[1], origSize[2])
+				end
+			end
+			livePanel:SetVisible(origVisible)
+		end
+	end
+
+	PinnedPanels.Pins[id] = {
+		frame     = frame,
+		title     = title,
+		livePanel = livePanel,
+		kind      = "frame",
+	}
+	PinnedPanels.Save()
+	hook.Run("PinnedPanels_StateChanged")
+	return frame
+end
+
+function PinnedPanels.IsPinnedFrame(livePanel)
+	if not IsValid(livePanel) then return false end
+	local pin = PinnedPanels.Pins["PPF_" .. tostring(livePanel)]
+	return pin ~= nil and IsValid(pin.frame)
+end
+
+-- ── Unpin ────────────────────────────────────────────────────────────────────
+function PinnedPanels.Unpin(id)
+	local pin = PinnedPanels.Pins[id]
+
+	if pin and pin.kind == "group" and pin.groupName then
+		PinnedPanels.UnpinGroupMembers(pin.groupName)
+		local gp = PinnedPanels.Pins[id]
+		if gp then
+			if IsValid(gp.frame) then gp.frame:Remove() end
+			PinnedPanels.Pins[id] = nil
+		end
+		PinnedPanels.ClearSavedPin(id)
+		hook.Run("PinnedPanels_StateChanged")
+		return
+	end
+
+	local group = pin and PinnedPanels.GetGroupForPanel(id) or nil
+
+	if pin then
+		if pin.kind == "frame" and IsValid(pin.livePanel) then
+			pin.livePanel.OnRemove = nil
+		end
+		if IsValid(pin.frame) then pin.frame:Remove() end
+	end
+
+	PinnedPanels.Pins[id] = nil
+	PinnedPanels.RemoveFromAllGroups(id)
+	PinnedPanels.ClearSavedPin(id)
+
+	if group then
+		PinnedPanels.SaveSettings()
+		PinnedPanels.RebuildGroupFrame(group.name)
+	end
+
+	hook.Run("PinnedPanels_StateChanged")
+end
+
+function PinnedPanels.UnpinAll()
+	local ids = {}
+	for id in pairs(PinnedPanels.Pins) do ids[#ids + 1] = id end
+	for _, id in ipairs(ids) do PinnedPanels.Unpin(id) end
+end
+
+-- ── Scan Frames ──────────────────────────────────────────────────────────────
+local FRAME_IGNORE_NAMES = {
+	SpawnmenuTabs         = true,
+	SpawnMenuContentPanel = true,
+	DMenu                 = true,
+	ContextMenu           = true,
+}
+
+function PinnedPanels.ScanFrames()
+	local ownedPanels = {}
+	for _, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then ownedPanels[pin.frame] = true end
+		if IsValid(pin.livePanel) then ownedPanels[pin.livePanel] = true end
+	end
+
+	local results = {}
+	for _, p in ipairs(vgui.GetAll()) do
+		if not IsValid(p) then continue end
+		if ownedPanels[p] then continue end
+		if p:GetClassName() ~= "DFrame" then continue end
+
+		local name = p:GetName() or ""
+		if FRAME_IGNORE_NAMES[name] then continue end
+		if name:sub(1, 3) == "PP_" or name:sub(1, 4) == "PPF_" then continue end
+		if not p:IsVisible() then continue end
+
+		local titleText = ""
+		if p.lblTitle and IsValid(p.lblTitle) then
+			titleText = p.lblTitle:GetText() or ""
+		end
+		if titleText == "" then
+			titleText = (name ~= "" and name) or ("Frame " .. (tostring(p):match("%d+$") or tostring(p)))
+		end
+
+		results[#results + 1] = {
+			panel  = p,
+			title  = titleText,
+			id     = "PPF_" .. tostring(p),
+			pinned = PinnedPanels.IsPinnedFrame(p),
+		}
+	end
+
+	table.sort(results, function(a, b) return a.title:lower() < b.title:lower() end)
+	return results
+end

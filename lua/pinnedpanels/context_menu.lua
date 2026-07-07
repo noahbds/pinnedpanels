@@ -1,5 +1,28 @@
 -- ── Right-Click Context Menu ─────────────────────────────────────────────────
 
+local function ResolveTool(id, pin)
+	if pin.kind == "tool" then
+		return id:sub(4), pin.title
+	elseif pin.kind == "group" then
+		local activeId = PinnedPanels.GetActiveGroupMemberId(id)
+		local activePin = activeId and PinnedPanels.Pins[activeId]
+		if activePin and activePin.kind == "tool" then
+			return activeId:sub(4), activePin.title
+		end
+	end
+end
+
+local function EquipToolgunWith(toolClass)
+	if not toolClass or toolClass == "" then return end
+	RunConsoleCommand("gmod_toolmode", toolClass)
+	if isfunction(spawnmenu.ActivateTool) then pcall(spawnmenu.ActivateTool, toolClass) end
+	local ply = LocalPlayer()
+	if IsValid(ply) then
+		local wep = ply:GetWeapon("gmod_tool")
+		if IsValid(wep) then input.SelectWeapon(wep) end
+	end
+end
+
 local function PromptNewGroup(panelId)
 	Derma_StringRequest("New Group", "Enter a name for the new group:", "",
 		function(name)
@@ -127,6 +150,14 @@ function PinnedPanels.OpenContextMenu(id, frame)
 	if not pin then return end
 
 	local menu = DermaMenu()
+
+	local toolClass, toolTitle = ResolveTool(id, pin)
+	if toolClass then
+		menu:AddOption("Equip Tool: " .. toolTitle, function()
+			EquipToolgunWith(toolClass)
+		end):SetIcon("icon16/wrench.png")
+		menu:AddSpacer()
+	end
 
 	menu:AddOption("Bring to Front", function()
 		if IsValid(frame) then

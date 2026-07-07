@@ -276,6 +276,21 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		customText   = (oldPin and oldPin.customText) or (s.customText and DeserializeColor(s.customText)) or nil,
 	}
 
+	local function ApplyTabSize(mid)
+		local gp = PinnedPanels.Pins[groupId]
+		if not gp or not IsValid(frame) then return end
+		local sz = mid and gp.tabSizes and gp.tabSizes[mid]
+		if not sz then return end
+		local sw2, sh2 = ScrW(), ScrH()
+		local nw = math.Clamp(tonumber(sz.w) or frame:GetWide(), 150, sw2)
+		local nh = math.Clamp(tonumber(sz.h) or frame:GetTall(), 100, sh2)
+		if frame:GetWide() ~= nw or frame:GetTall() ~= nh then
+			frame:SetSize(nw, nh)
+			local fx2, fy2 = frame:GetPos()
+			frame:SetPos(math.Clamp(fx2, 0, sw2 - nw), math.Clamp(fy2, 0, sh2 - nh))
+		end
+	end
+
 	frame.OnUserResized = function(w, h)
 		local gp = PinnedPanels.Pins[groupId]
 		local mid = gp and PinnedPanels.GetActiveGroupMemberId(groupId)
@@ -285,19 +300,12 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	end
 
 	sheet.OnActiveTabChanged = function(_, _, newTab)
-		local gp = PinnedPanels.Pins[groupId]
-		if not gp or not IsValid(newTab) or not IsValid(frame) then return end
-		local mid = tabToMember[newTab:GetPanel()]
-		local sz = mid and gp.tabSizes and gp.tabSizes[mid]
-		if not sz then return end
-		local sw2, sh2 = ScrW(), ScrH()
-		local nw = math.Clamp(tonumber(sz.w) or frame:GetWide(), 150, sw2)
-		local nh = math.Clamp(tonumber(sz.h) or frame:GetTall(), 100, sh2)
-		frame:SetSize(nw, nh)
-		local fx2, fy2 = frame:GetPos()
-		frame:SetPos(math.Clamp(fx2, 0, sw2 - nw), math.Clamp(fy2, 0, sh2 - nh))
+		if not IsValid(newTab) then return end
+		ApplyTabSize(tabToMember[newTab:GetPanel()])
 		PinnedPanels.Save()
 	end
+
+	ApplyTabSize(members[1] and members[1].id)
 
 	timer.Simple(0, function()
 		if not IsValid(frame) then return end
@@ -325,7 +333,7 @@ end
 function PinnedPanels.AddToGroup(groupName, panelId)
 	local pin = PinnedPanels.Pins[panelId]
 	if not pin then return false end
-	if pin.kind == "frame" then return false end
+	if pin.kind == "frame" or pin.kind == "group" then return false end
 	StowContent(pin)
 	local oldGroup = PinnedPanels.GetGroupForPanel(panelId)
 	if oldGroup then

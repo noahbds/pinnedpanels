@@ -13,6 +13,11 @@ local COLORS = {
 }
 local function GetColor(i) return COLORS[((i - 1) % #COLORS) + 1] end
 
+local function Fit(s, maxChars)
+	if #s > maxChars then return s:sub(1, maxChars - 2) .. ".." end
+	return s
+end
+
 local EDITOR = {}
 EDITOR.__index = EDITOR
 
@@ -105,10 +110,6 @@ function EDITOR:Create(parent)
 
 			local maxChars = math.max(3, math.floor(bw / 6))
 			local cx = bx + bw / 2
-			local function fit(s)
-				if #s > maxChars then return s:sub(1, maxChars - 2) .. ".." end
-				return s
-			end
 
 			if box.isGroup and box.memberNames and #box.memberNames > 0 then
 				local lineH = 11
@@ -117,11 +118,11 @@ function EDITOR:Create(parent)
 				local blockH = 14 + (#names + extra) * lineH
 				local topY = by + bh / 2 - blockH / 2
 
-				draw.SimpleText(fit(box.label), "DermaDefaultBold", cx, topY,
+				draw.SimpleText(Fit(box.label, maxChars), "DermaDefaultBold", cx, topY,
 					color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 
 				for mi, mname in ipairs(names) do
-					draw.SimpleText(fit(mname), "DermaDefault", cx, topY + 14 + (mi - 1) * lineH,
+					draw.SimpleText(Fit(mname, maxChars), "DermaDefault", cx, topY + 14 + (mi - 1) * lineH,
 						C.groupBadgeText, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 				end
 				if extra == 1 then
@@ -129,7 +130,7 @@ function EDITOR:Create(parent)
 						cx, topY + 14 + #names * lineH, C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 				end
 			else
-				draw.SimpleText(fit(box.label), "DermaDefault", cx, by + bh / 2,
+				draw.SimpleText(Fit(box.label, maxChars), "DermaDefault", cx, by + bh / 2,
 					color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 			end
 

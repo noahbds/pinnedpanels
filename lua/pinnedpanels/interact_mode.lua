@@ -81,18 +81,44 @@ end)
 
 surface.CreateFont("PP_InteractFont", { font = "DefaultBold", size = 14, weight = 600 })
 
-hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
-	if not IM.Active then return end
+local HUD_H = 24
+local HUD_RT_W = 1024
+local HUD_RT_H = 32
+local hudMat = CreateMaterial("PinnedPanels_InteractHUD", "UnlitGeneric", {
+	["$translucent"] = 1,
+	["$vertexalpha"] = 1,
+	["$vertexcolor"] = 1,
+})
+local hudW, hudKeyCode = -1, nil
+
+local function RebuildHud(bw)
+	hudW, hudKeyCode = bw, IM.KeyCode
 	local keyName = (IM.KeyCode and IM.KeyCode ~= KEY_NONE) and input.GetKeyName(IM.KeyCode) or "?"
 	local text = "INTERACT MODE  |  Drag title bar to move, drag bottom-right corner to resize  |  Press ["
 		.. string.upper(keyName) .. "] to exit"
+
+	local rt = GetRenderTarget("PinnedPanels_InteractHUD_RT", HUD_RT_W, HUD_RT_H)
+	render.PushRenderTarget(rt)
+	render.Clear(0, 0, 0, 0, true, true)
+	cam.Start2D()
+	draw.RoundedBox(6, 0, 0, bw, HUD_H, C.hudBg)
+	surface.SetDrawColor(C.hudBorder)
+	surface.DrawOutlinedRect(0, 0, bw, HUD_H, 1)
+	draw.SimpleText(text, "PP_InteractFont", bw / 2, HUD_H / 2, C.hudText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	cam.End2D()
+	render.PopRenderTarget()
+
+	hudMat:SetTexture("$basetexture", rt)
+end
+
+hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
+	if not IM.Active then return end
 	local sw = ScrW()
 	local bw = math.max(220, math.min(760, sw - 20))
-	local bx = math.floor((sw - bw) / 2)
-	draw.RoundedBox(6, bx, 6, bw, 24, C.hudBg)
-	surface.SetDrawColor(C.hudBorder)
-	surface.DrawOutlinedRect(bx, 6, bw, 24, 1)
-	draw.SimpleText(text, "PP_InteractFont", sw / 2, 18, C.hudText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	if hudW ~= bw or hudKeyCode ~= IM.KeyCode then RebuildHud(bw) end
+	surface.SetMaterial(hudMat)
+	surface.SetDrawColor(255, 255, 255, 255)
+	surface.DrawTexturedRectUV(math.floor((sw - bw) / 2), 6, bw, HUD_H, 0, 0, bw / HUD_RT_W, HUD_H / HUD_RT_H)
 end)
 
 function PinnedPanels.OpenKeyBindFrame(onSaved)

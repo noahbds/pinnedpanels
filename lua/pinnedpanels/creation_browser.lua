@@ -23,15 +23,12 @@ function PinnedPanels.CreateCreationBrowser(parent)
 
 	PinnedPanels.ThrottleScroll(scroll)
 
-	local allTabs   = {}
-	local hookNames = {}
+	local allTabs    = {}
+	local refreshers = {}
 
 	local function Populate()
 		scroll:Clear()
-		for _, name in pairs(hookNames) do
-			hook.Remove("PinnedPanels_StateChanged", name)
-		end
-		hookNames = {}
+		table.Empty(refreshers)
 
 		allTabs = PinnedPanels.GetAllCreationTabs()
 
@@ -99,31 +96,30 @@ function PinnedPanels.CreateCreationBrowser(parent)
 				pinBtn:SetIcon(pinned and "icon16/lock_open.png" or "icon16/lock_add.png")
 			end
 			Refresh()
+			refreshers[#refreshers + 1] = Refresh
 
-			local hookName = "PPC_Browser_" .. id
-			hookNames[id]  = hookName
-			hook.Add("PinnedPanels_StateChanged", hookName, function()
-				if IsValid(pinBtn) then Refresh()
-				else hook.Remove("PinnedPanels_StateChanged", hookName) end
-			end)
-
-			local capturedTab = tab
 			pinBtn.DoClick = function()
 				local pin    = PinnedPanels.Pins[id]
 				local pinned = pin and IsValid(pin.frame)
 				if pinned then
 					PinnedPanels.Unpin(id)
 				else
-					PinnedPanels.Pin(id, capturedTab.label, capturedTab.func, false, CREATION_PIN_OPTS)
+					PinnedPanels.Pin(id, tab.label, tab.func, false, CREATION_PIN_OPTS)
 				end
 			end
 		end
 	end
 
-	root.OnRemove = function()
-		for _, name in pairs(hookNames) do
-			hook.Remove("PinnedPanels_StateChanged", name)
+	hook.Add("PinnedPanels_StateChanged", root, function()
+		if not IsValid(root) then
+			hook.Remove("PinnedPanels_StateChanged", root)
+			return
 		end
+		for _, refresh in ipairs(refreshers) do refresh() end
+	end)
+
+	root.OnRemove = function()
+		hook.Remove("PinnedPanels_StateChanged", root)
 	end
 
 	timer.Simple(0.5, function()

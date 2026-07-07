@@ -34,9 +34,8 @@ function PinnedPanels.CreateBrowser(parent)
 
 	PinnedPanels.ThrottleScroll(scroll)
 
-	local allTools  = {}
-	local rowCache  = {}
-	local hookNames = {}
+	local allTools = {}
+	local rowCache = {}
 
 	local rowHolder = vgui.Create("DPanel", root)
 	rowHolder:SetSize(0, 0)
@@ -98,17 +97,6 @@ function PinnedPanels.CreateBrowser(parent)
 			local pinned = pin and IsValid(pin.frame)
 			pinBtn:SetTooltip(pinned and "Remove this tool from screen" or "Pin this tool to screen")
 		end
-
-		local hookName = "PinnedPanels_Browser_" .. id
-		hookNames[id]  = hookName
-		hook.Add("PinnedPanels_StateChanged", hookName, function()
-			if IsValid(row) then
-				Refresh()
-			else
-				hook.Remove("PinnedPanels_StateChanged", hookName)
-			end
-		end)
-
 		Refresh()
 
 		pinBtn.DoClick = function()
@@ -121,7 +109,7 @@ function PinnedPanels.CreateBrowser(parent)
 			end
 		end
 
-		return row
+		return row, Refresh
 	end
 
 	local inScroll = {}
@@ -132,7 +120,8 @@ function PinnedPanels.CreateBrowser(parent)
 			for _, t in ipairs(allTools) do
 				local id = "PP_" .. t.itemName
 				if not rowCache[id] then
-					rowCache[id] = { panel = MakeRow(t, id), niceName = t.niceName }
+					local row, refresh = MakeRow(t, id)
+					rowCache[id] = { panel = row, refresh = refresh, nameLower = t.niceName:lower() }
 				end
 			end
 		end
@@ -155,7 +144,7 @@ function PinnedPanels.CreateBrowser(parent)
 			local id   = "PP_" .. t.itemName
 			local data = rowCache[id]
 			if data and IsValid(data.panel) then
-				local visible = not isFiltering or data.niceName:lower():find(lFilter, 1, true)
+				local visible = not isFiltering or data.nameLower:find(lFilter, 1, true)
 
 				if visible then
 					data.panel:SetParent(scroll)
@@ -178,10 +167,18 @@ function PinnedPanels.CreateBrowser(parent)
 		countLbl:SetText(isFiltering and (count .. " / " .. total) or (total .. " tools"))
 	end
 
-	root.OnRemove = function()
-		for _, name in pairs(hookNames) do
-			hook.Remove("PinnedPanels_StateChanged", name)
+	hook.Add("PinnedPanels_StateChanged", root, function()
+		if not IsValid(root) then
+			hook.Remove("PinnedPanels_StateChanged", root)
+			return
 		end
+		for _, data in pairs(rowCache) do
+			if data.refresh then data.refresh() end
+		end
+	end)
+
+	root.OnRemove = function()
+		hook.Remove("PinnedPanels_StateChanged", root)
 	end
 
 	timer.Simple(0.5, function()

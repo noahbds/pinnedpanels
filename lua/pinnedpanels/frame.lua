@@ -151,17 +151,16 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 	end
 
-	frame.NextFocusCheck = 0
+	frame.NextThink = 0
 	frame.Think = function(self)
+		if CurTime() < self.NextThink then return end
+		self.NextThink = CurTime() + 0.1
+
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
-		local scrW, scrH = ScrW(), ScrH()
-		local nx = math.Clamp(x, 0, scrW - w)
-		local ny = math.Clamp(y, 0, scrH - h)
+		local nx = math.Clamp(x, 0, ScrW() - w)
+		local ny = math.Clamp(y, 0, ScrH() - h)
 		if x ~= nx or y ~= ny then self:SetPos(nx, ny) end
-
-		if CurTime() < self.NextFocusCheck then return end
-		self.NextFocusCheck = CurTime() + 0.1
 
 		local hovered = vgui.GetHoveredPanel()
 		local focus   = vgui.GetKeyboardFocus()
@@ -183,12 +182,14 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	titleOverlay:SetSize(fw - CLOSE_BTN_WIDTH, TITLE_HEIGHT)
 	titleOverlay.Paint = function() end
 	titleOverlay:SetMouseInputEnabled(false)
+	titleOverlay:SetCursor("sizeall")
 
 	resizeOverlay = vgui.Create("DPanel", frame)
 	resizeOverlay:SetPos(fw - CORNER_SIZE, fh - CORNER_SIZE)
 	resizeOverlay:SetSize(CORNER_SIZE, CORNER_SIZE)
 	resizeOverlay.Paint = function() end
 	resizeOverlay:SetMouseInputEnabled(false)
+	resizeOverlay:SetCursor("sizenwse")
 
 	ApplyInteractState()
 
@@ -199,10 +200,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	end
 
 	titleOverlay.Think = function(self)
-		if not imDrag then
-			self:SetCursor("sizeall")
-			return
-		end
+		if not imDrag then return end
 		if IsLocked(id) then
 			imDrag = false
 			self:MouseCapture(false)
@@ -214,10 +212,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	end
 
 	resizeOverlay.Think = function(self)
-		if not imResize then
-			self:SetCursor("sizenwse")
-			return
-		end
+		if not imResize then return end
 		if IsLocked(id) then
 			imResize = false
 			self:MouseCapture(false)

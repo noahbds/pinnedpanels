@@ -43,8 +43,27 @@ function PinnedPanels.GetFramePaint(title, pinId)
 		local IM = PinnedPanels.InteractMode
 		local navEnabled = IM and (IM.Active or PinnedPanels.Settings.keyboardNavOutsideInteractMode)
 		if pinId and navEnabled and IM.Focused == pinId then
-			surface.SetDrawColor(C.focusRing)
+			if IM.NavigatingPanel then
+				surface.SetDrawColor(255, 50, 50, 255)
+			else
+				surface.SetDrawColor(C.focusRing)
+			end
 			surface.DrawOutlinedRect(0, 0, w, h, 2)
+
+			if IM.NavigatingPanel and PinnedPanels.GetInteractiveElements then
+				local elements = PinnedPanels.GetInteractiveElements(self)
+				local el = elements[IM.NavFocusIndex]
+				if IsValid(el) then
+					local ex, ey = el:LocalToScreen(0, 0)
+					local lx, ly = self:ScreenToLocal(ex, ey)
+					local ew, eh = el:GetSize()
+					
+					surface.SetDrawColor(255, 255, 0, 150)
+					surface.DrawOutlinedRect(lx - 2, ly - 2, ew + 4, eh + 4, 2)
+					surface.SetDrawColor(255, 255, 0, 20)
+					surface.DrawRect(lx, ly, ew, eh)
+				end
+			end
 		end
 	end
 end

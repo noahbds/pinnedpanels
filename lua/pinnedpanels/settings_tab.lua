@@ -37,7 +37,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 	end
 
 	-- ── Behavior Section ─────────────────────────────────────────────────────
-	local secBehavior = CreateSectionCard("Behavior", 140)
+	local secBehavior = CreateSectionCard("Behavior", 180)
 
 	local autoRestoreBox = vgui.Create("DCheckBoxLabel", secBehavior)
 	autoRestoreBox:SetText("Auto-restore pinned panels when joining the server")
@@ -47,6 +47,17 @@ function PinnedPanels.CreateSettingsTab(parent)
 	autoRestoreBox:SetValue(PinnedPanels.Settings.autoRestore)
 	autoRestoreBox.OnChange = function(self, val)
 		PinnedPanels.Settings.autoRestore = val
+		PinnedPanels.SaveSettings()
+	end
+
+	local keyboardNavBox = vgui.Create("DCheckBoxLabel", secBehavior)
+	keyboardNavBox:SetText("Allow keyboard navigation outside interact mode")
+	keyboardNavBox:SetTextColor(C.textLight)
+	keyboardNavBox:Dock(TOP)
+	keyboardNavBox:DockMargin(0, 0, 0, 10)
+	keyboardNavBox:SetValue(PinnedPanels.Settings.keyboardNavOutsideInteractMode)
+	keyboardNavBox.OnChange = function(self, val)
+		PinnedPanels.Settings.keyboardNavOutsideInteractMode = val
 		PinnedPanels.SaveSettings()
 	end
 
@@ -111,7 +122,17 @@ function PinnedPanels.CreateSettingsTab(parent)
 	openBindBtn:SetWide(130)
 	openBindBtn:DockMargin(0, 0, 6, 0)
 	StyleDarkButton(openBindBtn)
-	openBindBtn.DoClick = function() PinnedPanels.OpenKeyBindFrame(UpdateKeyDisplay) end
+	openBindBtn.DoClick = function()
+		PinnedPanels.OpenKeyBindFrame({
+			title = "Bind Interact Key",
+			get = function() return PinnedPanels.InteractMode.KeyCode end,
+			set = function(k)
+				PinnedPanels.InteractMode.KeyCode = k
+				RunConsoleCommand("pp_interact_key", tostring(k))
+			end,
+			onSaved = UpdateKeyDisplay,
+		})
+	end
 
 	local clearBtn = vgui.Create("DButton", bindRow)
 	clearBtn:SetText("Clear")
@@ -133,6 +154,113 @@ function PinnedPanels.CreateSettingsTab(parent)
 	toggleBtn:SetWide(110)
 	StyleDarkButton(toggleBtn)
 	toggleBtn.DoClick = function() PinnedPanels.InteractMode.Toggle() end
+
+	-- ── Keyboard Navigation Section ──────────────────────────────────────────
+	local secKeys = CreateSectionCard("Keyboard Navigation", 320)
+
+	local keysHelp = vgui.Create("DLabel", secKeys)
+	keysHelp:SetText("Shortcuts work while interact mode is on, and can also be enabled globally from Behavior. The focused panel is outlined; cycle focus, switch group tabs, or equip the focused tool.")
+	keysHelp:SetTextColor(C.textBody)
+	keysHelp:SetWrap(true)
+	keysHelp:Dock(TOP)
+	keysHelp:DockMargin(0, 0, 0, 8)
+	keysHelp:SetAutoStretchVertical(true)
+
+	local keyScroll = vgui.Create("DScrollPanel", secKeys)
+	keyScroll:Dock(FILL)
+
+	local function KeyName(code)
+		if not code or code == KEY_NONE then return "Not bound" end
+		return string.upper(input.GetKeyName(code) or "?")
+	end
+
+	local keyRefreshers = {}
+
+	for _, bind in ipairs(PinnedPanels.Keybinds or {}) do
+		local row = vgui.Create("DPanel", keyScroll)
+		row:Dock(TOP)
+		row:SetTall(26)
+		row:DockMargin(0, 0, 0, 4)
+		row.Paint = function(_, w, h)
+			draw.RoundedBox(4, 0, 0, w, h, C.bgCard)
+		end
+
+		local nameLbl = vgui.Create("DLabel", row)
+		nameLbl:SetText(bind.name)
+		nameLbl:SetTextColor(C.textLight)
+		nameLbl:Dock(LEFT)
+		nameLbl:DockMargin(8, 0, 0, 0)
+		nameLbl:SetWide(170)
+		nameLbl:SetMouseInputEnabled(false)
+
+		local keyLbl = vgui.Create("DLabel", row)
+		keyLbl:Dock(LEFT)
+		keyLbl:SetWide(90)
+		keyLbl:SetContentAlignment(5)
+
+		local function UpdateKey()
+			if not IsValid(keyLbl) then return end
+			local code = PinnedPanels.GetBind(bind.id)
+			keyLbl:SetText(KeyName(code))
+			keyLbl:SetTextColor((code and code ~= KEY_NONE) and C.keyBound or C.textMuted)
+		end
+		UpdateKey()
+		keyRefreshers[#keyRefreshers + 1] = UpdateKey
+
+		local resetBtn = vgui.Create("DButton", row)
+		resetBtn:SetText("Reset")
+		resetBtn:SetWide(52)
+		resetBtn:Dock(RIGHT)
+		resetBtn:DockMargin(0, 3, 6, 3)
+		StyleDarkButton(resetBtn)
+		resetBtn.DoClick = function()
+			PinnedPanels.ResetBind(bind.id)
+			UpdateKey()
+		end
+
+		local unbindBtn = vgui.Create("DButton", row)
+		unbindBtn:SetText("Unbind")
+		unbindBtn:SetWide(58)
+		unbindBtn:Dock(RIGHT)
+		unbindBtn:DockMargin(0, 3, 4, 3)
+		StyleDarkButton(unbindBtn)
+		unbindBtn.DoClick = function()
+			PinnedPanels.SetBind(bind.id, KEY_NONE)
+			UpdateKey()
+		end
+
+		local bindBtn = vgui.Create("DButton", row)
+		bindBtn:SetText("Bind")
+		bindBtn:SetWide(52)
+		bindBtn:Dock(RIGHT)
+		bindBtn:DockMargin(0, 3, 4, 3)
+		StyleDarkButton(bindBtn)
+		bindBtn.DoClick = function()
+			PinnedPanels.OpenKeyBindFrame({
+				title = "Bind: " .. bind.name,
+				get = function() return PinnedPanels.GetBind(bind.id) end,
+				set = function(k) PinnedPanels.SetBind(bind.id, k) end,
+				onSaved = UpdateKey,
+			})
+		end
+	end
+
+	local keysBottom = vgui.Create("DPanel", secKeys)
+	keysBottom:Dock(BOTTOM)
+	keysBottom:SetTall(28)
+	keysBottom:DockMargin(0, 6, 0, 0)
+	keysBottom.Paint = function() end
+
+	local resetAllKeys = vgui.Create("DButton", keysBottom)
+	resetAllKeys:SetText("Reset All to Default")
+	resetAllKeys:SetIcon("icon16/arrow_undo.png")
+	resetAllKeys:Dock(LEFT)
+	resetAllKeys:SetWide(160)
+	StyleDarkButton(resetAllKeys)
+	resetAllKeys.DoClick = function()
+		PinnedPanels.ResetAllBinds()
+		for _, refresh in ipairs(keyRefreshers) do refresh() end
+	end
 
 	-- ── Appearance Colors (Compact Swatch UI) ────────────────────────────────
 	local secApp = CreateSectionCard("Appearance Colors", 200)

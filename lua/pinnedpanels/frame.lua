@@ -39,6 +39,13 @@ function PinnedPanels.GetFramePaint(title, pinId)
 			surface.SetDrawColor(C.lockIcon)
 			surface.DrawRect(w - 14, 9, 6, 6)
 		end
+
+		local IM = PinnedPanels.InteractMode
+		local navEnabled = IM and (IM.Active or PinnedPanels.Settings.keyboardNavOutsideInteractMode)
+		if pinId and navEnabled and IM.Focused == pinId then
+			surface.SetDrawColor(C.focusRing)
+			surface.DrawOutlinedRect(0, 0, w, h, 2)
+		end
 	end
 end
 

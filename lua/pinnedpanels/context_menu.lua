@@ -1,6 +1,8 @@
 -- ── Right-Click Context Menu ─────────────────────────────────────────────────
 
-local function ResolveTool(id, pin)
+function PinnedPanels.GetPinTool(id)
+	local pin = PinnedPanels.Pins[id]
+	if not pin then return end
 	if pin.kind == "tool" then
 		return id:sub(4), pin.title
 	elseif pin.kind == "group" then
@@ -12,7 +14,7 @@ local function ResolveTool(id, pin)
 	end
 end
 
-local function EquipToolgunWith(toolClass)
+function PinnedPanels.EquipToolgun(toolClass)
 	if not toolClass or toolClass == "" then return end
 	RunConsoleCommand("gmod_toolmode", toolClass)
 	if isfunction(spawnmenu.ActivateTool) then pcall(spawnmenu.ActivateTool, toolClass) end
@@ -151,10 +153,10 @@ function PinnedPanels.OpenContextMenu(id, frame)
 
 	local menu = DermaMenu()
 
-	local toolClass, toolTitle = ResolveTool(id, pin)
+	local toolClass, toolTitle = PinnedPanels.GetPinTool(id)
 	if toolClass then
 		menu:AddOption("Equip Tool: " .. toolTitle, function()
-			EquipToolgunWith(toolClass)
+			PinnedPanels.EquipToolgun(toolClass)
 		end):SetIcon("icon16/wrench.png")
 		menu:AddSpacer()
 	end

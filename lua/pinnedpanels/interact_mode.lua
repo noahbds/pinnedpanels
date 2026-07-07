@@ -121,11 +121,16 @@ hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
 	surface.DrawTexturedRectUV(math.floor((sw - bw) / 2), 6, bw, HUD_H, 0, 0, bw / HUD_RT_W, HUD_H / HUD_RT_H)
 end)
 
-function PinnedPanels.OpenKeyBindFrame(onSaved)
+function PinnedPanels.OpenKeyBindFrame(opts)
+	opts = opts or {}
+	local getKey  = opts.get or function() return KEY_NONE end
+	local setKey  = opts.set or function() end
+	local onSaved = opts.onSaved
+
 	if IsValid(PinnedPanels._bindFrame) then PinnedPanels._bindFrame:Remove() end
 
 	local frame = vgui.Create("DFrame")
-	frame:SetTitle("Bind Interact Key")
+	frame:SetTitle(opts.title or "Bind Key")
 	frame:SetSize(320, 180)
 	frame:Center()
 	frame:SetDraggable(true)
@@ -160,7 +165,7 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 		if self:HasFocus() then
 			self:SetText(">> Press a key <<")
 		else
-			local code = PinnedPanels.InteractMode.KeyCode
+			local code = getKey()
 			local keyName = (code and code ~= KEY_NONE) and input.GetKeyName(code) or "None"
 			self:SetText("Click to bind  (Current: " .. string.upper(keyName) .. ")")
 		end
@@ -183,13 +188,7 @@ function PinnedPanels.OpenKeyBindFrame(onSaved)
 			frame:Close()
 			return
 		end
-		if keyCode == KEY_BACKSPACE then
-			PinnedPanels.InteractMode.KeyCode = KEY_NONE
-			RunConsoleCommand(CVAR_KEY, tostring(KEY_NONE))
-		else
-			PinnedPanels.InteractMode.KeyCode = keyCode
-			RunConsoleCommand(CVAR_KEY, tostring(keyCode))
-		end
+		setKey(keyCode == KEY_BACKSPACE and KEY_NONE or keyCode)
 		if isfunction(onSaved) then onSaved() end
 		frame:Close()
 	end

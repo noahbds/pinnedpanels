@@ -33,6 +33,7 @@ C.accent           = Color(60, 140, 255)
 C.accentGreen      = Color(60, 200, 80)
 C.accentFrame      = Color(130, 80, 220)
 C.imGreenBorder    = Color(60, 200, 120, 120)
+C.focusRing        = Color(90, 200, 255)
 
 -- ── Errors ───────────────────────────────────────────────────────────────────
 C.errorRed         = Color(220, 80, 80)

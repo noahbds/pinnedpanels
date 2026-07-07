@@ -7,6 +7,7 @@ local DEFAULT_SETTINGS = {
 	header      = Color(32, 35, 42, 255),
 	text        = Color(240, 245, 255, 255),
 	autoRestore = true,
+	keyboardNavOutsideInteractMode = false,
 	idleAlpha   = 1,
 	groups      = {},
 }
@@ -45,6 +46,7 @@ function PinnedPanels.SaveSettings()
 		header      = SerializeColor(PinnedPanels.Settings.header),
 		text        = SerializeColor(PinnedPanels.Settings.text),
 		autoRestore = PinnedPanels.Settings.autoRestore,
+		keyboardNavOutsideInteractMode = PinnedPanels.Settings.keyboardNavOutsideInteractMode,
 		idleAlpha   = PinnedPanels.Settings.idleAlpha,
 		groups      = groups,
 	}, true))
@@ -62,6 +64,7 @@ function PinnedPanels.LoadSettings()
 	S.header = DeserializeColor(t.header, DEFAULT_SETTINGS.header)
 	S.text   = DeserializeColor(t.text, DEFAULT_SETTINGS.text)
 	if t.autoRestore ~= nil then S.autoRestore = tobool(t.autoRestore) end
+	if t.keyboardNavOutsideInteractMode ~= nil then S.keyboardNavOutsideInteractMode = tobool(t.keyboardNavOutsideInteractMode) end
 	S.idleAlpha = math.Clamp(tonumber(t.idleAlpha) or 1, 0.1, 1)
 
 	local groups = {}

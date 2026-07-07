@@ -1,5 +1,5 @@
-PinnedPanels.InteractMode = PinnedPanels.InteractMode or {}
-local IM = PinnedPanels.InteractMode
+PinnedPanels.CursorMode = PinnedPanels.CursorMode or {}
+local IM = PinnedPanels.CursorMode
 IM.Active = IM.Active or false
 
 local C = PinnedPanels.C
@@ -8,7 +8,7 @@ local CVAR_KEY = "pp_interact_key"
 local DEFAULT_KEY = KEY_F4
 
 local keyConVar = CreateClientConVar(CVAR_KEY, tostring(DEFAULT_KEY), true, false,
-	"PinnedPanels interact mode keybind")
+	"PinnedPanels cursor mode keybind")
 
 IM.KeyCode = tonumber(keyConVar:GetString()) or DEFAULT_KEY
 if IM.KeyCode == KEY_NONE or not IM.KeyCode then IM.KeyCode = DEFAULT_KEY end
@@ -34,10 +34,10 @@ function PinnedPanels.UpdatePanelStates()
 			if pin.frame:GetAlpha() ~= a then pin.frame:SetAlpha(a) end
 		end
 	end
-	hook.Run("PinnedPanels_InteractModeChanged", interactive)
+	hook.Run("PinnedPanels_CursorModeChanged", interactive)
 end
 
-local function SetInteractMode(on)
+local function SetCursorMode(on)
 	if IM.Active == on then return end
 	IM.Active = on
 	gui.EnableScreenClicker(on)
@@ -47,9 +47,9 @@ local function SetInteractMode(on)
 	PinnedPanels.UpdatePanelStates()
 end
 
-function PinnedPanels.InteractMode.Enable() SetInteractMode(true) end
-function PinnedPanels.InteractMode.Disable() SetInteractMode(false) end
-function PinnedPanels.InteractMode.Toggle() SetInteractMode(not IM.Active) end
+function PinnedPanels.CursorMode.Enable() SetCursorMode(true) end
+function PinnedPanels.CursorMode.Disable() SetCursorMode(false) end
+function PinnedPanels.CursorMode.Toggle() SetCursorMode(not IM.Active) end
 
 local _keyWasDown = false
 hook.Add("Think", "PinnedPanels_InteractKey", function()
@@ -58,7 +58,7 @@ hook.Add("Think", "PinnedPanels_InteractKey", function()
 	if down and not _keyWasDown then
 		local focus = vgui.GetKeyboardFocus()
 		if not IsValid(focus) then
-			PinnedPanels.InteractMode.Toggle()
+			PinnedPanels.CursorMode.Toggle()
 		end
 	end
 	_keyWasDown = down
@@ -66,7 +66,7 @@ end)
 
 hook.Add("OnSpawnMenuOpen", "PinnedPanels_SpawnMenuOpen", function()
 	IM.SpawnMenuOpen = true
-	SetInteractMode(false)
+	SetCursorMode(false)
 	PinnedPanels.UpdatePanelStates()
 end)
 
@@ -94,7 +94,7 @@ local hudW, hudKeyCode = -1, nil
 local function RebuildHud(bw)
 	hudW, hudKeyCode = bw, IM.KeyCode
 	local keyName = (IM.KeyCode and IM.KeyCode ~= KEY_NONE) and input.GetKeyName(IM.KeyCode) or "?"
-	local text = "INTERACT MODE  |  Drag title bar to move, drag bottom-right corner to resize  |  Press ["
+	local text = "cursor mode  |  Drag title bar to move, drag bottom-right corner to resize  |  Press ["
 		.. string.upper(keyName) .. "] to exit"
 
 	local rt = GetRenderTarget("PinnedPanels_InteractHUD_RT", HUD_RT_W, HUD_RT_H)

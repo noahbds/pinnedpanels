@@ -40,8 +40,13 @@ function PinnedPanels.GetFramePaint(title, pinId)
 			surface.DrawRect(w - 14, 9, 6, 6)
 		end
 
-		local IM = PinnedPanels.InteractMode
-		local navEnabled = IM and (IM.Active or PinnedPanels.Settings.keyboardNavOutsideInteractMode)
+	end
+end
+
+function PinnedPanels.GetFramePaintOver(pinId)
+	return function(self, w, h)
+		local IM = PinnedPanels.CursorMode
+		local navEnabled = PinnedPanels.IsKeyboardNavEnabled and PinnedPanels.IsKeyboardNavEnabled()
 		if pinId and navEnabled and IM.Focused == pinId then
 			if IM.NavigatingPanel then
 				surface.SetDrawColor(255, 50, 50, 255)
@@ -57,10 +62,32 @@ function PinnedPanels.GetFramePaint(title, pinId)
 					local ex, ey = el:LocalToScreen(0, 0)
 					local lx, ly = self:ScreenToLocal(ex, ey)
 					local ew, eh = el:GetSize()
-					
-					surface.SetDrawColor(255, 255, 0, 150)
+
+					local isSelected = (IM.SelectedIndex and IM.SelectedIndex == IM.NavFocusIndex)
+
+					-- Outer black ring for contrast
+					surface.SetDrawColor(0, 0, 0, 255)
+					surface.DrawOutlinedRect(lx - 3, ly - 3, ew + 6, eh + 6, 1)
+
+					-- Thick vibrant colored ring
+					if isSelected then
+						surface.SetDrawColor(0, 255, 0, 255)     -- Neon Green
+					else
+						surface.SetDrawColor(0, 200, 255, 255)   -- Neon Cyan
+					end
 					surface.DrawOutlinedRect(lx - 2, ly - 2, ew + 4, eh + 4, 2)
-					surface.SetDrawColor(255, 255, 0, 20)
+
+					-- Inner black ring for contrast
+					surface.SetDrawColor(0, 0, 0, 255)
+					surface.DrawOutlinedRect(lx, ly, ew, eh, 1)
+
+					-- Pulsing transparent fill
+					local pulse = math.abs(math.sin(CurTime() * 6))
+					if isSelected then
+						surface.SetDrawColor(0, 255, 0, 20 + 30 * pulse)
+					else
+						surface.SetDrawColor(0, 200, 255, 10 + 20 * pulse)
+					end
 					surface.DrawRect(lx, ly, ew, eh)
 				end
 			end
@@ -153,20 +180,21 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	end
 
 	local interactHook = "PinnedPanels_InteractFrame_" .. id .. "_" .. tostring(frame)
-	hook.Add("PinnedPanels_InteractModeChanged", interactHook, function()
+	hook.Add("PinnedPanels_CursorModeChanged", interactHook, function()
 		if not IsValid(frame) then
-			hook.Remove("PinnedPanels_InteractModeChanged", interactHook)
+			hook.Remove("PinnedPanels_CursorModeChanged", interactHook)
 			return
 		end
 		ApplyInteractState()
 	end)
 	frame.OnRemove = function()
-		hook.Remove("PinnedPanels_InteractModeChanged", interactHook)
+		hook.Remove("PinnedPanels_CursorModeChanged", interactHook)
 	end
 
 	frame:ShowCloseButton(true)
 	frame.OnClose = function() frame:SetVisible(false) end
-	frame.Paint   = PinnedPanels.GetFramePaint(title, id)
+	frame.Paint     = PinnedPanels.GetFramePaint(title, id)
+	frame.PaintOver = PinnedPanels.GetFramePaintOver(id)
 
 	local saveDebounce = 0
 	local function DebouncedSave()

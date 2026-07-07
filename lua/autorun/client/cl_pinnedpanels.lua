@@ -14,7 +14,7 @@ include("pinnedpanels/layout_editor.lua")
 include("pinnedpanels/browser.lua")
 include("pinnedpanels/creation_browser.lua")
 include("pinnedpanels/pinned_list.lua")
-include("pinnedpanels/interact_mode.lua")
+include("pinnedpanels/cursor_mode.lua")
 include("pinnedpanels/keyboard.lua")
 include("pinnedpanels/settings_tab.lua")
 

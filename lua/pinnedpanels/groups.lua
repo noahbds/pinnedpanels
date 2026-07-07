@@ -413,6 +413,6 @@ function PinnedPanels.RefreshRestoredGroups()
 end
 
 hook.Add("OnSpawnMenuOpen", "PinnedPanels_GroupRefreshAfterRestore", function()
-	if PinnedPanels.InteractMode then PinnedPanels.InteractMode.SpawnMenuOpen = true end
+	if PinnedPanels.CursorMode then PinnedPanels.CursorMode.SpawnMenuOpen = true end
 	PinnedPanels.RefreshRestoredGroups()
 end)

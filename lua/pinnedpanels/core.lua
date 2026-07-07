@@ -8,7 +8,7 @@ PinnedPanels.RebuildGroupFrame = PinnedPanels.RebuildGroupFrame or function() en
 PinnedPanels.CREATION_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
 
 function PinnedPanels.PanelsInteractive()
-	local IM = PinnedPanels.InteractMode
+	local IM = PinnedPanels.CursorMode
 	return not not (IM and (IM.Active or IM.SpawnMenuOpen))
 end
 

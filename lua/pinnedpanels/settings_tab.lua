@@ -51,20 +51,20 @@ function PinnedPanels.CreateSettingsTab(parent)
 	end
 
 	local keyboardNavBox = vgui.Create("DCheckBoxLabel", secBehavior)
-	keyboardNavBox:SetText("Allow keyboard navigation outside interact mode")
+	keyboardNavBox:SetText("Allow keyboard navigation outside cursor mode")
 	keyboardNavBox:SetTextColor(C.textLight)
 	keyboardNavBox:Dock(TOP)
 	keyboardNavBox:DockMargin(0, 0, 0, 10)
-	keyboardNavBox:SetValue(PinnedPanels.Settings.keyboardNavOutsideInteractMode)
+	keyboardNavBox:SetValue(PinnedPanels.Settings.keyboardNavOutsideCursorMode)
 	keyboardNavBox.OnChange = function(self, val)
-		PinnedPanels.Settings.keyboardNavOutsideInteractMode = val
+		PinnedPanels.Settings.keyboardNavOutsideCursorMode = val
 		PinnedPanels.SaveSettings()
 	end
 
 	local opacitySlider = vgui.Create("DNumSlider", secBehavior)
 	opacitySlider:Dock(TOP)
 	opacitySlider:SetTall(30)
-	opacitySlider:SetText("Panel opacity outside interact mode (%)")
+	opacitySlider:SetText("Panel opacity outside cursor mode (%)")
 	opacitySlider:SetMin(10)
 	opacitySlider:SetMax(100)
 	opacitySlider:SetDecimals(0)
@@ -78,8 +78,8 @@ function PinnedPanels.CreateSettingsTab(parent)
 		end)
 	end
 
-	-- ── Interact Mode Section ────────────────────────────────────────────────
-	local secInteract = CreateSectionCard("Interact Mode (Cursor Toggle)", 140)
+	-- ── cursor mode Section ────────────────────────────────────────────────
+	local secInteract = CreateSectionCard("cursor mode (Cursor Toggle)", 140)
 
 	local interactHelp = vgui.Create("DLabel", secInteract)
 	interactHelp:SetText(
@@ -104,7 +104,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 
 	local function UpdateKeyDisplay()
 		if not IsValid(keyDisplay) then return end
-		local code = PinnedPanels.InteractMode.KeyCode
+		local code = PinnedPanels.CursorMode.KeyCode
 		if not code or code == KEY_NONE then
 			keyDisplay:SetText("Current key: [ Not bound ]")
 			keyDisplay:SetTextColor(C.errorRed)
@@ -125,9 +125,9 @@ function PinnedPanels.CreateSettingsTab(parent)
 	openBindBtn.DoClick = function()
 		PinnedPanels.OpenKeyBindFrame({
 			title = "Bind Interact Key",
-			get = function() return PinnedPanels.InteractMode.KeyCode end,
+			get = function() return PinnedPanels.CursorMode.KeyCode end,
 			set = function(k)
-				PinnedPanels.InteractMode.KeyCode = k
+				PinnedPanels.CursorMode.KeyCode = k
 				RunConsoleCommand("pp_interact_key", tostring(k))
 			end,
 			onSaved = UpdateKeyDisplay,
@@ -142,7 +142,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 	clearBtn:DockMargin(0, 0, 6, 0)
 	StyleDarkButton(clearBtn)
 	clearBtn.DoClick = function()
-		PinnedPanels.InteractMode.KeyCode = KEY_NONE
+		PinnedPanels.CursorMode.KeyCode = KEY_NONE
 		RunConsoleCommand("pp_interact_key", tostring(KEY_NONE))
 		UpdateKeyDisplay()
 	end
@@ -153,13 +153,13 @@ function PinnedPanels.CreateSettingsTab(parent)
 	toggleBtn:Dock(LEFT)
 	toggleBtn:SetWide(110)
 	StyleDarkButton(toggleBtn)
-	toggleBtn.DoClick = function() PinnedPanels.InteractMode.Toggle() end
+	toggleBtn.DoClick = function() PinnedPanels.CursorMode.Toggle() end
 
 	-- ── Keyboard Navigation Section ──────────────────────────────────────────
 	local secKeys = CreateSectionCard("Keyboard Navigation", 320)
 
 	local keysHelp = vgui.Create("DLabel", secKeys)
-	keysHelp:SetText("Shortcuts work while interact mode is on, and can also be enabled globally from Behavior. The focused panel is outlined; cycle focus, switch group tabs, or equip the focused tool.")
+	keysHelp:SetText("Shortcuts work while cursor mode is on, and can also be enabled globally from Behavior. The focused panel is outlined; cycle focus, switch group tabs, or equip the focused tool.")
 	keysHelp:SetTextColor(C.textBody)
 	keysHelp:SetWrap(true)
 	keysHelp:Dock(TOP)

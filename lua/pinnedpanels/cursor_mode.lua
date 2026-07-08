@@ -94,7 +94,7 @@ local hudW, hudKeyCode = -1, nil
 local function RebuildHud(bw)
 	hudW, hudKeyCode = bw, IM.KeyCode
 	local keyName = (IM.KeyCode and IM.KeyCode ~= KEY_NONE) and input.GetKeyName(IM.KeyCode) or "?"
-	local text = "cursor mode  |  Drag title bar to move, drag bottom-right corner to resize  |  Press ["
+	local text = "CURSOR MODE  |  Drag to move, resize from the corner  |  Arrows to navigate  |  Press ["
 		.. string.upper(keyName) .. "] to exit"
 
 	local rt = GetRenderTarget("PinnedPanels_InteractHUD_RT", HUD_RT_W, HUD_RT_H)

@@ -489,6 +489,202 @@ function PinnedPanels.CreateSettingsTab(parent)
 			end, function() end, "Create", "Cancel")
 	end
 
+	-- ── Taskbar Section ──────────────────────────────────────────────────────
+	local secTaskbar = CreateSectionCard("Taskbar", 400)
+
+	local tb = PinnedPanels.Settings.taskbar or {}
+
+	local tbEnabledBox = vgui.Create("DCheckBoxLabel", secTaskbar)
+	tbEnabledBox:SetText("Enable taskbar (minimized panels appear in a bar)")
+	tbEnabledBox:SetTextColor(C.textLight)
+	tbEnabledBox:Dock(TOP)
+	tbEnabledBox:DockMargin(0, 0, 0, 8)
+	tbEnabledBox:SetValue(tb.enabled ~= false)
+	tbEnabledBox.OnChange = function(_, val)
+		PinnedPanels.Settings.taskbar.enabled = val
+		PinnedPanels.SaveSettings()
+		if val then PinnedPanels.CreateTaskbar() else PinnedPanels.DestroyTaskbar() end
+	end
+
+	local posRow = vgui.Create("DPanel", secTaskbar)
+	posRow:Dock(TOP)
+	posRow:SetTall(28)
+	posRow:DockMargin(0, 0, 0, 8)
+	posRow.Paint = function() end
+
+	local posLbl = vgui.Create("DLabel", posRow)
+	posLbl:SetText("Position:")
+	posLbl:SetTextColor(C.textLabel)
+	posLbl:Dock(LEFT)
+	posLbl:SetWide(80)
+
+	local posCombo = vgui.Create("DComboBox", posRow)
+	posCombo:Dock(FILL)
+	posCombo:SetValue(string.upper((tb.position or "bottom"):sub(1, 1)) .. (tb.position or "bottom"):sub(2))
+	posCombo:AddChoice("Bottom", "bottom")
+	posCombo:AddChoice("Top", "top")
+	posCombo:AddChoice("Left", "left")
+	posCombo:AddChoice("Right", "right")
+	posCombo.OnSelect = function(_, _, _, data)
+		PinnedPanels.Settings.taskbar.position = data
+		PinnedPanels.SaveSettings()
+	end
+
+	local heightSlider = vgui.Create("DNumSlider", secTaskbar)
+	heightSlider:Dock(TOP)
+	heightSlider:SetTall(30)
+	heightSlider:DockMargin(0, 0, 0, 8)
+	heightSlider:SetText("Bar thickness (px)")
+	heightSlider:SetMin(20)
+	heightSlider:SetMax(64)
+	heightSlider:SetDecimals(0)
+	heightSlider:SetValue(tb.height or 32)
+	heightSlider.Label:SetTextColor(C.textLight)
+	heightSlider.OnValueChanged = function(_, val)
+		PinnedPanels.Settings.taskbar.height = math.Clamp(math.Round(val), 20, 64)
+		timer.Create("PinnedPanels_TaskbarHeightSave", 0.4, 1, function()
+			PinnedPanels.SaveSettings()
+		end)
+	end
+
+	local tbRevealBox = vgui.Create("DCheckBoxLabel", secTaskbar)
+	tbRevealBox:SetText("Reveal on hover (collapse until the cursor is near the bar)")
+	tbRevealBox:SetTextColor(C.textLight)
+	tbRevealBox:Dock(TOP)
+	tbRevealBox:DockMargin(0, 0, 0, 8)
+	tbRevealBox:SetValue(tb.revealOnHover == true)
+	tbRevealBox.OnChange = function(_, val)
+		PinnedPanels.Settings.taskbar.revealOnHover = val
+		PinnedPanels.SaveSettings()
+	end
+
+	local tbLabelsBox = vgui.Create("DCheckBoxLabel", secTaskbar)
+	tbLabelsBox:SetText("Show text labels on entries")
+	tbLabelsBox:SetTextColor(C.textLight)
+	tbLabelsBox:Dock(TOP)
+	tbLabelsBox:DockMargin(0, 0, 0, 8)
+	tbLabelsBox:SetValue(tb.showLabels ~= false)
+	tbLabelsBox.OnChange = function(_, val)
+		PinnedPanels.Settings.taskbar.showLabels = val
+		PinnedPanels.SaveSettings()
+	end
+
+	local tbColorEntries = {
+		{ label = "Background", key = "bgColor" },
+		{ label = "Text",       key = "textColor" },
+		{ label = "Accent",     key = "accentColor" },
+	}
+
+	local tbMixers = {}
+
+	for _, ce in ipairs(tbColorEntries) do
+		local crow = vgui.Create("DPanel", secTaskbar)
+		crow:Dock(TOP)
+		crow:SetTall(28)
+		crow:DockMargin(0, 0, 0, 4)
+		crow.Paint = function() end
+
+		local clbl = vgui.Create("DLabel", crow)
+		clbl:SetText(ce.label)
+		clbl:SetTextColor(C.textLabel)
+		clbl:Dock(LEFT)
+		clbl:SetWide(100)
+		clbl:SetContentAlignment(4)
+
+		local cswatch = vgui.Create("DButton", crow)
+		cswatch:SetText("")
+		cswatch:Dock(LEFT)
+		cswatch:SetWide(36)
+		cswatch:DockMargin(0, 3, 8, 3)
+		cswatch.Paint = function(self, w, h)
+			local col = PinnedPanels.Settings.taskbar[ce.key]
+			draw.RoundedBox(3, 0, 0, w, h, col or Color(128, 128, 128))
+			surface.SetDrawColor(C.swatchBorder)
+			surface.DrawOutlinedRect(0, 0, w, h, 1)
+			if self:IsHovered() then
+				surface.SetDrawColor(C.accent)
+				surface.DrawOutlinedRect(0, 0, w, h, 2)
+			end
+		end
+
+		local cvalLbl = vgui.Create("DLabel", crow)
+		cvalLbl:Dock(FILL)
+		cvalLbl:SetTextColor(C.textMuted)
+		local function UpdateCVal()
+			if not IsValid(cvalLbl) then return end
+			local col = PinnedPanels.Settings.taskbar[ce.key]
+			if col then
+				cvalLbl:SetText(string.format("R:%d G:%d B:%d A:%d", col.r, col.g, col.b, col.a))
+			end
+		end
+		UpdateCVal()
+
+		cswatch.DoClick = function()
+			if IsValid(tbMixers[ce.key]) then
+				tbMixers[ce.key]:Remove()
+				tbMixers[ce.key] = nil
+				return
+			end
+			local popup = vgui.Create("DFrame")
+			popup:SetTitle("Taskbar: " .. ce.label)
+			popup:SetSize(260, 220)
+			popup:SetDeleteOnClose(true)
+			popup:MakePopup()
+			popup:SetDraggable(true)
+			popup:SetSizable(false)
+			local sx, sy = cswatch:LocalToScreen(0, 0)
+			popup:SetPos(sx + 50, sy - 60)
+			popup.Paint = function(self, w, h)
+				draw.RoundedBox(6, 0, 0, w, h, C.colorPopupBg)
+				draw.RoundedBoxEx(6, 0, 0, w, 24, C.colorPopupHdr, true, true, false, false)
+				surface.SetDrawColor(C.colorPopupBorder)
+				surface.DrawOutlinedRect(0, 0, w, h, 1)
+			end
+			local mixer = vgui.Create("DColorMixer", popup)
+			mixer:Dock(FILL)
+			mixer:DockMargin(8, 8, 8, 8)
+			mixer:SetPalette(false)
+			mixer:SetAlphaBar(true)
+			mixer:SetWangs(true)
+			mixer:SetColor(PinnedPanels.Settings.taskbar[ce.key])
+			mixer.ValueChanged = function(_, col)
+				PinnedPanels.Settings.taskbar[ce.key] = Color(col.r, col.g, col.b, col.a)
+				PinnedPanels.SaveSettings()
+				UpdateCVal()
+			end
+			tbMixers[ce.key] = popup
+			popup.OnClose = function() tbMixers[ce.key] = nil end
+		end
+	end
+
+	local tbResetRow = vgui.Create("DPanel", secTaskbar)
+	tbResetRow:Dock(TOP)
+	tbResetRow:SetTall(30)
+	tbResetRow:DockMargin(0, 8, 0, 0)
+	tbResetRow.Paint = function() end
+
+	local tbResetBtn = vgui.Create("DButton", tbResetRow)
+	tbResetBtn:SetText("Reset Taskbar to Default")
+	tbResetBtn:SetIcon("icon16/arrow_undo.png")
+	tbResetBtn:Dock(LEFT)
+	tbResetBtn:SetWide(180)
+	StyleDarkButton(tbResetBtn)
+	tbResetBtn.DoClick = function()
+		PinnedPanels.Settings.taskbar = table.Copy(PinnedPanels.DEFAULT_TASKBAR)
+		PinnedPanels.SaveSettings()
+		PinnedPanels.CreateTaskbar()
+		for _, popup in pairs(tbMixers) do
+			if IsValid(popup) then popup:Close() end
+		end
+		tbMixers = {}
+		-- Refresh controls
+		tbEnabledBox:SetValue(true)
+		posCombo:SetValue("Bottom")
+		heightSlider:SetValue(32)
+		tbRevealBox:SetValue(false)
+		tbLabelsBox:SetValue(true)
+	end
+
 	-- ── Danger Zone ──────────────────────────────────────────────────────────
 	local dangerCard = CreateSectionCard("Danger Zone", 85)
 

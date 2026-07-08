@@ -154,6 +154,61 @@ function EDITOR:Create(parent)
 			surface.DrawLine(line[1], line[2], line[3], line[4])
 		end
 
+		-- Draw taskbar
+		local ts = PinnedPanels.Settings.taskbar
+		if ts and ts.enabled ~= false then
+			local tbH = math.floor((ts.height or 32) * self.scale)
+			local tbBg = ts.bgColor or C.taskbarBg
+			local tbx, tby, tbw, tbh
+
+			if ts.position == "top" then
+				tbx, tby, tbw, tbh = ox, oy, prevW, tbH
+			elseif ts.position == "left" then
+				tbx, tby, tbw, tbh = ox, oy, tbH, prevH
+			elseif ts.position == "right" then
+				tbx, tby, tbw, tbh = ox + prevW - tbH, oy, tbH, prevH
+			else -- bottom
+				tbx, tby, tbw, tbh = ox, oy + prevH - tbH, prevW, tbH
+			end
+
+			surface.SetDrawColor(tbBg.r, tbBg.g, tbBg.b, 200)
+			surface.DrawRect(tbx, tby, tbw, tbh)
+			surface.SetDrawColor(C.taskbarBorder)
+			surface.DrawOutlinedRect(tbx, tby, tbw, tbh, 1)
+
+			-- Draw minimized entries inside the bar
+			local minimized = PinnedPanels.GetMinimizedPanels()
+			if #minimized > 0 then
+				local entryOff = 3
+				local isHoriz = (ts.position == "bottom" or ts.position == "top")
+				for _, mEntry in ipairs(minimized) do
+					local entryW = isHoriz and math.min(60, math.floor((tbw - 6) / #minimized)) or (tbw - 6)
+					local entryH = isHoriz and (tbh - 6) or math.min(14, math.floor((tbh - 6) / #minimized))
+					local ex = isHoriz and (tbx + entryOff) or (tbx + 3)
+					local ey = isHoriz and (tby + 3) or (tby + entryOff)
+
+					surface.SetDrawColor(C.taskbarEntry)
+					surface.DrawRect(ex, ey, entryW, entryH)
+					surface.SetDrawColor(C.taskbarBorder)
+					surface.DrawOutlinedRect(ex, ey, entryW, entryH, 1)
+
+					if isHoriz and entryW > 20 then
+						local maxC = math.max(2, math.floor(entryW / 6))
+						draw.SimpleText(Fit(mEntry.title, maxC), "DermaDefault",
+							ex + entryW / 2, ey + entryH / 2,
+							C.taskbarText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+					end
+
+					entryOff = entryOff + (isHoriz and entryW or entryH) + 2
+				end
+			end
+
+			draw.SimpleText("TASKBAR", "DermaDefault",
+				tbx + tbw / 2, tby + tbh / 2,
+				Color(C.taskbarText.r, C.taskbarText.g, C.taskbarText.b, #minimized > 0 and 60 or 120),
+				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
+
 		if #self.boxes == 0 then
 			draw.SimpleText("No pinned panels. Pin tools from the Tools tab.",
 				"DermaDefault", w / 2, h / 2, C.emptyText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)

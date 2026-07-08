@@ -34,6 +34,9 @@ C.accentGreen      = Color(60, 200, 80)
 C.accentFrame      = Color(130, 80, 220)
 C.imGreenBorder    = Color(60, 200, 120, 120)
 C.focusRing        = Color(90, 200, 255)
+C.navRing          = Color(255, 50, 50)
+C.navElement       = Color(0, 200, 255)
+C.navSelected      = Color(0, 255, 0)
 
 -- ── Errors ───────────────────────────────────────────────────────────────────
 C.errorRed         = Color(220, 80, 80)
@@ -131,6 +134,17 @@ C.colorPopupBorder = Color(60, 140, 255, 100)
 
 -- ── Lock indicator ───────────────────────────────────────────────────────────
 C.lockIcon         = Color(255, 180, 60, 200)
+
+-- ── Taskbar ─────────────────────────────────────────────────────────────────
+C.taskbarBg        = Color(20, 22, 30, 220)
+C.taskbarBorder    = Color(50, 55, 75, 180)
+C.taskbarEntry     = Color(40, 44, 55, 200)
+C.taskbarEntryHov  = Color(55, 65, 85, 230)
+C.taskbarEntryAct  = Color(60, 140, 255, 60)
+C.taskbarText      = Color(200, 210, 225)
+C.taskbarTextHov   = Color(240, 245, 255)
+C.taskbarHandle    = Color(80, 90, 110, 150)
+C.taskbarRestore   = Color(60, 200, 120, 180)
 
 -- ── Preview hint ─────────────────────────────────────────────────────────────
 C._previewHint     = Color(0, 0, 0, 120)

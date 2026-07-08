@@ -168,6 +168,10 @@ function PinnedPanels.OpenContextMenu(id, frame)
 		end
 	end):SetIcon("icon16/arrow_up.png")
 
+	menu:AddOption("Minimize to Taskbar", function()
+		PinnedPanels.MinimizeToTaskbar(id)
+	end):SetIcon("icon16/application_put.png")
+
 	menu:AddOption("Hide Panel", function()
 		if IsValid(frame) then frame:SetVisible(false) end
 	end):SetIcon("icon16/eye.png")

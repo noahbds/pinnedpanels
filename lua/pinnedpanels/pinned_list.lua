@@ -134,6 +134,9 @@ function PinnedPanels.CreatePinnedList(parent)
 				end
 				titleText = titleText .. " (" .. memberCount .. " panels)"
 			end
+			if pin.minimized then
+				titleText = titleText .. " [minimized]"
+			end
 
 			local lbl = vgui.Create("DLabel", row)
 			lbl:SetText(titleText)
@@ -162,16 +165,26 @@ function PinnedPanels.CreatePinnedList(parent)
 
 			local function UpdateVisBtn()
 				if not IsValid(visBtn) or not IsValid(pin.frame) then return end
-				local visible = pin.frame:IsVisible()
-				visBtn:SetText(visible and "Hide" or "Show")
-				visBtn:SetIcon(visible and "icon16/eye.png" or "icon16/cancel.png")
-				visBtn:SetTooltip(visible and "Hide panel" or "Show panel")
+				if pin.minimized then
+					visBtn:SetText("Restore")
+					visBtn:SetIcon("icon16/arrow_up.png")
+					visBtn:SetTooltip("Restore from taskbar")
+				else
+					local visible = pin.frame:IsVisible()
+					visBtn:SetText(visible and "Hide" or "Show")
+					visBtn:SetIcon(visible and "icon16/eye.png" or "icon16/cancel.png")
+					visBtn:SetTooltip(visible and "Hide panel" or "Show panel")
+				end
 			end
 			UpdateVisBtn()
 
 			visBtn.DoClick = function()
 				if IsValid(pin.frame) then
-					pin.frame:SetVisible(not pin.frame:IsVisible())
+					if pin.minimized then
+						PinnedPanels.RestoreFromTaskbar(id)
+					else
+						pin.frame:SetVisible(not pin.frame:IsVisible())
+					end
 					UpdateVisBtn()
 				end
 			end

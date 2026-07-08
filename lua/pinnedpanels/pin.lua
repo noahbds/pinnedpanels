@@ -113,6 +113,7 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 		customText   = s.customText and DeserializeColor(s.customText) or nil,
 		locked       = s.locked or false,
 		idleAlpha    = tonumber(s.idleAlpha) or nil,
+		minimized    = s.minimized or false,
 	}
 
 	if s.w == nil and s.h == nil and not opts.fill then
@@ -124,8 +125,91 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	end
 
 	if not noSave then PinnedPanels.Save() end
+
+	if PinnedPanels.Pins[id] and PinnedPanels.Pins[id].minimized then
+		frame:SetVisible(false)
+	end
+
 	hook.Run("PinnedPanels_StateChanged")
 	return frame
+end
+
+-- ── Minimize / Restore ──────────────────────────────────────────────────────
+function PinnedPanels.MinimizeToTaskbar(id)
+	local pin = PinnedPanels.Pins[id]
+	if not pin or not IsValid(pin.frame) then return end
+	pin.frame:SetVisible(false)
+	pin.minimized = true
+	-- Make sure the bar actually exists so the panel has somewhere to go.
+	if PinnedPanels.EnsureTaskbar then PinnedPanels.EnsureTaskbar() end
+	PinnedPanels.Save()
+	hook.Run("PinnedPanels_StateChanged")
+end
+
+-- Toggle "cover the whole screen" (maximize) for a pin, and back to its bounds.
+function PinnedPanels.ToggleMaximizePanel(id)
+	local pin = PinnedPanels.Pins[id]
+	if not pin or not IsValid(pin.frame) or pin.locked then return end
+	local frame = pin.frame
+
+	if pin.maximized then
+		local b = pin.restoreBounds
+		if b then
+			frame:SetSize(b.w, b.h)
+			frame:SetPos(b.x, b.y)
+		end
+		pin.maximized = false
+	else
+		local x, y = frame:GetPos()
+		local w, h = frame:GetSize()
+		pin.restoreBounds = { x = x, y = y, w = w, h = h }
+		frame:SetPos(0, 0)
+		frame:SetSize(ScrW(), ScrH())
+		pin.maximized = true
+	end
+
+	frame:MoveToFront()
+	if isfunction(frame.OnUserResized) then frame.OnUserResized(frame:GetSize()) end
+	PinnedPanels.Save()
+end
+
+function PinnedPanels.RestoreFromTaskbar(id)
+	local pin = PinnedPanels.Pins[id]
+	if not pin or not IsValid(pin.frame) then return end
+	pin.minimized = false
+	pin.frame:SetVisible(true)
+	pin.frame:MoveToFront()
+
+	-- Re-enable mouse input if panels are interactive
+	local interactive = PinnedPanels.PanelsInteractive()
+	pin.frame:SetMouseInputEnabled(interactive)
+	if interactive then pin.frame:SetAlpha(255) end
+
+	PinnedPanels.Save()
+	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+	hook.Run("PinnedPanels_StateChanged")
+end
+
+function PinnedPanels.RestoreAllFromTaskbar()
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if pin.minimized and IsValid(pin.frame) then
+			pin.minimized = false
+			pin.frame:SetVisible(true)
+		end
+	end
+	PinnedPanels.Save()
+	hook.Run("PinnedPanels_StateChanged")
+end
+
+function PinnedPanels.GetMinimizedPanels()
+	local list = {}
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if pin.minimized and IsValid(pin.frame) then
+			list[#list + 1] = { id = id, title = pin.title, kind = pin.kind }
+		end
+	end
+	table.sort(list, function(a, b) return a.title < b.title end)
+	return list
 end
 
 -- ── Pin Frame (live panel reparenting) ───────────────────────────────────────

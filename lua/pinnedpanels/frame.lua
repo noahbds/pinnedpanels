@@ -1,5 +1,10 @@
 local C = PinnedPanels.C
 
+-- Header button metrics (minimize / maximize / unpin)
+local HDR_BTN_W = 26
+local HDR_BTN_H = 18
+local HDR_BTN_N = 3
+
 -- ── Frame Paint (supports per-panel colors) ──────────────────────────────────
 function PinnedPanels.GetFramePaint(title, pinId)
 	local hoverHdr = Color(0, 0, 0, 255)
@@ -24,74 +29,62 @@ function PinnedPanels.GetFramePaint(title, pinId)
 		draw.SimpleText(title, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if inIM then
-			surface.SetDrawColor(txtCol.r, txtCol.g, txtCol.b, 60)
-			for dx = 0, 4, 2 do
-				for dy = 0, 4, 2 do
-					surface.DrawRect(w - 22 + dx, 10 + dy, 1, 1)
-				end
-			end
+			-- Resize-corner hint (bottom-right); the header dots moved out for the buttons.
 			surface.SetDrawColor(C.imGreenBorder)
 			surface.DrawRect(w - 6, h - 6, 4, 1)
 			surface.DrawRect(w - 6, h - 4, 1, 2)
 		end
 
 		if pin and pin.locked then
+			-- Lock marker sits just left of the header buttons.
 			surface.SetDrawColor(C.lockIcon)
-			surface.DrawRect(w - 14, 9, 6, 6)
+			surface.DrawRect(w - HDR_BTN_W * HDR_BTN_N - 14, 9, 6, 6)
 		end
-
 	end
 end
 
 function PinnedPanels.GetFramePaintOver(pinId)
 	return function(self, w, h)
 		local IM = PinnedPanels.CursorMode
-		local navEnabled = PinnedPanels.IsKeyboardNavEnabled and PinnedPanels.IsKeyboardNavEnabled()
-		if pinId and navEnabled and IM.Focused == pinId then
-			if IM.NavigatingPanel then
-				surface.SetDrawColor(255, 50, 50, 255)
-			else
-				surface.SetDrawColor(C.focusRing)
-			end
-			surface.DrawOutlinedRect(0, 0, w, h, 2)
+		if not pinId or not IM or IM.Focused ~= pinId then return end
+		if not (PinnedPanels.IsKeyboardNavEnabled and PinnedPanels.IsKeyboardNavEnabled()) then return end
 
-			if IM.NavigatingPanel and PinnedPanels.GetInteractiveElements then
-				local elements = PinnedPanels.GetInteractiveElements(self)
-				local el = elements[IM.NavFocusIndex]
-				if IsValid(el) then
-					local ex, ey = el:LocalToScreen(0, 0)
-					local lx, ly = self:ScreenToLocal(ex, ey)
-					local ew, eh = el:GetSize()
+		surface.SetDrawColor(IM.NavigatingPanel and C.navRing or C.focusRing)
+		surface.DrawOutlinedRect(0, 0, w, h, 2)
 
-					local isSelected = (IM.SelectedIndex and IM.SelectedIndex == IM.NavFocusIndex)
+		if not IM.NavigatingPanel or not PinnedPanels.GetNavElements then return end
 
-					-- Outer black ring for contrast
-					surface.SetDrawColor(0, 0, 0, 255)
-					surface.DrawOutlinedRect(lx - 3, ly - 3, ew + 6, eh + 6, 1)
+		-- Hint bar so it's obvious how to leave content-navigation mode.
+		local hint = "Backspace: back    Enter: use    Arrows: move"
+		surface.SetFont("DermaDefault")
+		local tw, th = surface.GetTextSize(hint)
+		local bw, bh = tw + 16, th + 6
+		local bx = math.floor((w - bw) / 2)
+		local by = h - bh - 4
+		draw.RoundedBox(4, bx, by, bw, bh, Color(150, 30, 30, 235))
+		draw.SimpleText(hint, "DermaDefault", w / 2, by + bh / 2,
+			Color(255, 225, 225), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
-					-- Thick vibrant colored ring
-					if isSelected then
-						surface.SetDrawColor(0, 255, 0, 255)     -- Neon Green
-					else
-						surface.SetDrawColor(0, 200, 255, 255)   -- Neon Cyan
-					end
-					surface.DrawOutlinedRect(lx - 2, ly - 2, ew + 4, eh + 4, 2)
+		local el = PinnedPanels.GetNavElements()[IM.NavFocusIndex]
+		if not IsValid(el) then return end
 
-					-- Inner black ring for contrast
-					surface.SetDrawColor(0, 0, 0, 255)
-					surface.DrawOutlinedRect(lx, ly, ew, eh, 1)
+		local ex, ey = el:LocalToScreen(0, 0)
+		local lx, ly = self:ScreenToLocal(ex, ey)
+		local ew, eh = el:GetSize()
+		local ringCol = (IM.SelectedIndex == IM.NavFocusIndex) and C.navSelected or C.navElement
 
-					-- Pulsing transparent fill
-					local pulse = math.abs(math.sin(CurTime() * 6))
-					if isSelected then
-						surface.SetDrawColor(0, 255, 0, 20 + 30 * pulse)
-					else
-						surface.SetDrawColor(0, 200, 255, 10 + 20 * pulse)
-					end
-					surface.DrawRect(lx, ly, ew, eh)
-				end
-			end
-		end
+		surface.SetDrawColor(0, 0, 0, 255)
+		surface.DrawOutlinedRect(lx - 3, ly - 3, ew + 6, eh + 6, 1)
+
+		surface.SetDrawColor(ringCol)
+		surface.DrawOutlinedRect(lx - 2, ly - 2, ew + 4, eh + 4, 2)
+
+		surface.SetDrawColor(0, 0, 0, 255)
+		surface.DrawOutlinedRect(lx, ly, ew, eh, 1)
+
+		local pulse = math.abs(math.sin(CurTime() * 6))
+		surface.SetDrawColor(ringCol.r, ringCol.g, ringCol.b, 12 + 24 * pulse)
+		surface.DrawRect(lx, ly, ew, eh)
 	end
 end
 
@@ -143,9 +136,8 @@ end
 PinnedPanels._FindFreeSpawnPosition = FindFreeSpawnPosition
 
 -- ── Build Wrapper Frame ──────────────────────────────────────────────────────
-local TITLE_HEIGHT    = 24
-local CORNER_SIZE     = 16
-local CLOSE_BTN_WIDTH = 30
+local TITLE_HEIGHT = 24
+local CORNER_SIZE  = 16
 
 local function IsTextPanel(p)
 	if not IsValid(p) then return false end
@@ -166,17 +158,21 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetDraggable(false)
 	frame:SetSizable(false)
 	frame:SetDeleteOnClose(false)
+	frame:ShowCloseButton(false)   -- replaced by our own header buttons
 	frame:ParentToHUD()
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
 
-	local titleOverlay, resizeOverlay
+	local titleOverlay, resizeOverlay, btnMin, btnMax, btnClose
 
 	local function ApplyInteractState()
 		local on = PinnedPanels.PanelsInteractive()
 		frame:SetMouseInputEnabled(on)
-		if IsValid(titleOverlay) then titleOverlay:SetMouseInputEnabled(on) end
+		if IsValid(titleOverlay)  then titleOverlay:SetMouseInputEnabled(on) end
 		if IsValid(resizeOverlay) then resizeOverlay:SetMouseInputEnabled(on) end
+		if IsValid(btnMin)   then btnMin:SetMouseInputEnabled(on) end
+		if IsValid(btnMax)   then btnMax:SetMouseInputEnabled(on) end
+		if IsValid(btnClose) then btnClose:SetMouseInputEnabled(on) end
 	end
 
 	local interactHook = "PinnedPanels_InteractFrame_" .. id .. "_" .. tostring(frame)
@@ -191,8 +187,10 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		hook.Remove("PinnedPanels_CursorModeChanged", interactHook)
 	end
 
-	frame:ShowCloseButton(true)
-	frame.OnClose = function() frame:SetVisible(false) end
+	-- Fallback (e.g. if something calls Close): behave like minimize.
+	frame.OnClose = function()
+		PinnedPanels.MinimizeToTaskbar(id)
+	end
 	frame.Paint     = PinnedPanels.GetFramePaint(title, id)
 	frame.PaintOver = PinnedPanels.GetFramePaintOver(id)
 
@@ -233,10 +231,11 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
 	titleOverlay = vgui.Create("DPanel", frame)
 	titleOverlay:SetPos(0, 0)
-	titleOverlay:SetSize(fw - CLOSE_BTN_WIDTH, TITLE_HEIGHT)
+	titleOverlay:SetSize(fw - HDR_BTN_W * HDR_BTN_N, TITLE_HEIGHT)
 	titleOverlay.Paint = function() end
 	titleOverlay:SetMouseInputEnabled(false)
 	titleOverlay:SetCursor("sizeall")
+	titleOverlay._pp_skipNav = true
 
 	resizeOverlay = vgui.Create("DPanel", frame)
 	resizeOverlay:SetPos(fw - CORNER_SIZE, fh - CORNER_SIZE)
@@ -244,14 +243,67 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	resizeOverlay.Paint = function() end
 	resizeOverlay:SetMouseInputEnabled(false)
 	resizeOverlay:SetCursor("sizenwse")
-
-	ApplyInteractState()
+	resizeOverlay._pp_skipNav = true
 
 	local function UpdateOverlayPositions()
 		local fw2, fh2 = frame:GetSize()
-		titleOverlay:SetSize(fw2 - CLOSE_BTN_WIDTH, TITLE_HEIGHT)
+		titleOverlay:SetSize(math.max(20, fw2 - HDR_BTN_W * HDR_BTN_N - 4), TITLE_HEIGHT)
 		resizeOverlay:SetPos(fw2 - CORNER_SIZE, fh2 - CORNER_SIZE)
+		if IsValid(btnMin)   then btnMin:SetPos(fw2 - HDR_BTN_W * 3 - 2, 3) end
+		if IsValid(btnMax)   then btnMax:SetPos(fw2 - HDR_BTN_W * 2 - 2, 3) end
+		if IsValid(btnClose) then btnClose:SetPos(fw2 - HDR_BTN_W - 2, 3) end
 	end
+
+	-- Toggle "cover the whole screen" and back (shared logic in pin.lua).
+	local function ToggleMaximize()
+		PinnedPanels.ToggleMaximizePanel(id)
+		UpdateOverlayPositions()
+	end
+
+	-- ── Header buttons (minimize / maximize / unpin) ──────────────────────────
+	local function MakeHeaderBtn(glyph, onClick, isClose)
+		local b = vgui.Create("DButton", frame)
+		b:SetText("")
+		b:SetSize(HDR_BTN_W, HDR_BTN_H)
+		b:SetMouseInputEnabled(false)
+		b._pp_skipNav = true
+		b.DoClick = onClick
+		b.Paint = function(self, w, h)
+			local hovered = self:IsHovered()
+			if hovered then
+				local hc = isClose and Color(210, 60, 60, 225) or Color(255, 255, 255, 34)
+				draw.RoundedBox(3, 1, 1, w - 2, h - 2, hc)
+			end
+
+			local pin  = PinnedPanels.Pins[id]
+			local base = (pin and pin.customText) or PinnedPanels.Settings.text
+			local col  = (isClose and hovered) and color_white or base
+			surface.SetDrawColor(col.r, col.g, col.b, 235)
+
+			local cx, cy = math.floor(w / 2), math.floor(h / 2)
+			if glyph == "min" then
+				surface.DrawRect(cx - 5, cy + 4, 11, 2)
+			elseif glyph == "max" then
+				if pin and pin.maximized then
+					surface.DrawOutlinedRect(cx - 5, cy - 1, 8, 8, 1)
+					surface.DrawOutlinedRect(cx - 1, cy - 5, 8, 8, 1)
+				else
+					surface.DrawOutlinedRect(cx - 5, cy - 5, 11, 11, 1)
+				end
+			else -- close / unpin
+				surface.DrawLine(cx - 4, cy - 4, cx + 4, cy + 4)
+				surface.DrawLine(cx - 4, cy + 4, cx + 4, cy - 4)
+			end
+		end
+		return b
+	end
+
+	btnMin   = MakeHeaderBtn("min",   function() PinnedPanels.MinimizeToTaskbar(id) end, false)
+	btnMax   = MakeHeaderBtn("max",   ToggleMaximize, false)
+	btnClose = MakeHeaderBtn("close", function() PinnedPanels.Unpin(id) end, true)
+
+	ApplyInteractState()
+	UpdateOverlayPositions()
 
 	titleOverlay.Think = function(self)
 		if not imDrag then return end
@@ -283,6 +335,9 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	titleOverlay.OnMousePressed = function(self, mc)
 		if mc == MOUSE_LEFT then
 			if IsLocked(id) then return end
+			-- Dragging a maximized panel restores it first.
+			local pin = PinnedPanels.Pins[id]
+			if pin and pin.maximized then ToggleMaximize() end
 			imDrag = true
 			imDragOffX, imDragOffY = self:CursorPos()
 			self:MouseCapture(true)
@@ -302,6 +357,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	resizeOverlay.OnMousePressed = function(self, mc)
 		if mc == MOUSE_LEFT then
 			if IsLocked(id) then return end
+			local pin = PinnedPanels.Pins[id]
+			if pin then pin.maximized = false end   -- manual resize leaves "maximized"
 			imResize = true
 			imResizeSX, imResizeSY = gui.MouseX(), gui.MouseY()
 			imResizeW, imResizeH = frame:GetSize()

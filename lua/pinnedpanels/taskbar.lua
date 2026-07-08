@@ -13,8 +13,8 @@ local ENTRY_GAP   = 4
 local ICON_SIZE   = 16
 local MIN_ENTRY_W = 40
 local MAX_ENTRY_W = 170
-local START_PAD   = 8    -- gap before the first entry
-local PEEK        = 4    -- pixels left visible when the bar is collapsed (reveal-on-hover)
+local START_PAD   = 8
+local PEEK        = 4
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
 local function GetSettings()
@@ -36,7 +36,6 @@ local function GetKindIcon(kind)
 	return "icon16/wrench.png"
 end
 
--- ── Entry rectangles (shared by paint, hit-test and keyboard highlight) ───────
 local function ComputeEntryRects(entries)
 	local ts = GetSettings()
 	local horiz = IsHorizontal()
@@ -106,7 +105,6 @@ local function BuildTaskbar()
 		end
 	end
 
-	-- True when the cursor sits near the bar's screen edge (reveal-on-hover trigger).
 	local function CursorTriggersReveal()
 		local ts = GetSettings()
 		local sw, sh = ScrW(), ScrH()
@@ -206,7 +204,6 @@ local function BuildTaskbar()
 				end
 			end
 
-			-- Icon
 			local iconX = r.x + ENTRY_PAD + 2
 			local iconY = r.y + math.floor((r.h - ICON_SIZE) / 2)
 			if not (horiz and showLabels) then
@@ -219,7 +216,6 @@ local function BuildTaskbar()
 				surface.DrawTexturedRect(iconX, iconY, ICON_SIZE, ICON_SIZE)
 			end
 
-			-- Label
 			if showLabels and horiz then
 				local tc = isHov and C.taskbarTextHov or textCol
 				local maxTextW = r.w - ICON_SIZE - ENTRY_PAD * 2 - 8

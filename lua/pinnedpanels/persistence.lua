@@ -9,7 +9,7 @@ local DEFAULT_TASKBAR = {
 	bgColor       = Color(20, 22, 30, 220),
 	textColor     = Color(220, 225, 235, 255),
 	accentColor   = Color(60, 140, 255, 255),
-	revealOnHover = false,     -- collapse to a thin strip until the cursor is near it
+	revealOnHover = false,
 	showLabels    = true,
 }
 
@@ -137,7 +137,6 @@ function PinnedPanels.Save()
 		if IsValid(pin.frame) then
 			local x, y = pin.frame:GetPos()
 			local w, h = pin.frame:GetSize()
-			-- Maximize is a transient view state; persist the pre-maximize bounds.
 			if pin.maximized and pin.restoreBounds then
 				x, y = pin.restoreBounds.x, pin.restoreBounds.y
 				w, h = pin.restoreBounds.w, pin.restoreBounds.h

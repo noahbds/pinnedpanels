@@ -140,13 +140,11 @@ function PinnedPanels.MinimizeToTaskbar(id)
 	if not pin or not IsValid(pin.frame) then return end
 	pin.frame:SetVisible(false)
 	pin.minimized = true
-	-- Make sure the bar actually exists so the panel has somewhere to go.
 	if PinnedPanels.EnsureTaskbar then PinnedPanels.EnsureTaskbar() end
 	PinnedPanels.Save()
 	hook.Run("PinnedPanels_StateChanged")
 end
 
--- Toggle "cover the whole screen" (maximize) for a pin, and back to its bounds.
 function PinnedPanels.ToggleMaximizePanel(id)
 	local pin = PinnedPanels.Pins[id]
 	if not pin or not IsValid(pin.frame) or pin.locked then return end
@@ -180,7 +178,6 @@ function PinnedPanels.RestoreFromTaskbar(id)
 	pin.frame:SetVisible(true)
 	pin.frame:MoveToFront()
 
-	-- Re-enable mouse input if panels are interactive
 	local interactive = PinnedPanels.PanelsInteractive()
 	pin.frame:SetMouseInputEnabled(interactive)
 	if interactive then pin.frame:SetAlpha(255) end

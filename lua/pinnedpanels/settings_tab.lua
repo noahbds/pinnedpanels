@@ -677,7 +677,6 @@ function PinnedPanels.CreateSettingsTab(parent)
 			if IsValid(popup) then popup:Close() end
 		end
 		tbMixers = {}
-		-- Refresh controls
 		tbEnabledBox:SetValue(true)
 		posCombo:SetValue("Bottom")
 		heightSlider:SetValue(32)

@@ -29,14 +29,12 @@ function PinnedPanels.GetFramePaint(title, pinId)
 		draw.SimpleText(title, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if inIM then
-			-- Resize-corner hint (bottom-right); the header dots moved out for the buttons.
 			surface.SetDrawColor(C.imGreenBorder)
 			surface.DrawRect(w - 6, h - 6, 4, 1)
 			surface.DrawRect(w - 6, h - 4, 1, 2)
 		end
 
 		if pin and pin.locked then
-			-- Lock marker sits just left of the header buttons.
 			surface.SetDrawColor(C.lockIcon)
 			surface.DrawRect(w - HDR_BTN_W * HDR_BTN_N - 14, 9, 6, 6)
 		end
@@ -54,16 +52,26 @@ function PinnedPanels.GetFramePaintOver(pinId)
 
 		if not IM.NavigatingPanel or not PinnedPanels.GetNavElements then return end
 
-		-- Hint bar so it's obvious how to leave content-navigation mode.
-		local hint = "Backspace: back    Enter: use    Arrows: move"
+		local hint = "Backspace: back | Enter: use | Arrows: move | Shift+Enter: context menu"
 		surface.SetFont("DermaDefault")
 		local tw, th = surface.GetTextSize(hint)
 		local bw, bh = tw + 16, th + 6
 		local bx = math.floor((w - bw) / 2)
-		local by = h - bh - 4
+
+		local screenX, screenY = self:LocalToScreen(bx, h + 4 + bh)
+		if screenX < 4 then
+			bx = bx + (4 - screenX)
+		elseif screenX + bw > ScrW() - 4 then
+			bx = bx - ((screenX + bw) - (ScrW() - 4))
+		end
+
+		local by = (screenY > ScrH() - 4) and (-bh - 4) or (h + 4)
+
+		local oldClip = DisableClipping(true)
 		draw.RoundedBox(4, bx, by, bw, bh, Color(150, 30, 30, 235))
-		draw.SimpleText(hint, "DermaDefault", w / 2, by + bh / 2,
+		draw.SimpleText(hint, "DermaDefault", bx + bw / 2, by + bh / 2,
 			Color(255, 225, 225), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		DisableClipping(oldClip)
 
 		local el = PinnedPanels.GetNavElements()[IM.NavFocusIndex]
 		if not IsValid(el) then return end
@@ -158,7 +166,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetDraggable(false)
 	frame:SetSizable(false)
 	frame:SetDeleteOnClose(false)
-	frame:ShowCloseButton(false)   -- replaced by our own header buttons
+	frame:ShowCloseButton(false)
 	frame:ParentToHUD()
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
@@ -187,7 +195,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		hook.Remove("PinnedPanels_CursorModeChanged", interactHook)
 	end
 
-	-- Fallback (e.g. if something calls Close): behave like minimize.
 	frame.OnClose = function()
 		PinnedPanels.MinimizeToTaskbar(id)
 	end
@@ -254,7 +261,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if IsValid(btnClose) then btnClose:SetPos(fw2 - HDR_BTN_W - 2, 3) end
 	end
 
-	-- Toggle "cover the whole screen" and back (shared logic in pin.lua).
 	local function ToggleMaximize()
 		PinnedPanels.ToggleMaximizePanel(id)
 		UpdateOverlayPositions()
@@ -290,7 +296,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 				else
 					surface.DrawOutlinedRect(cx - 5, cy - 5, 11, 11, 1)
 				end
-			else -- close / unpin
+			else
 				surface.DrawLine(cx - 4, cy - 4, cx + 4, cy + 4)
 				surface.DrawLine(cx - 4, cy + 4, cx + 4, cy - 4)
 			end
@@ -335,7 +341,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	titleOverlay.OnMousePressed = function(self, mc)
 		if mc == MOUSE_LEFT then
 			if IsLocked(id) then return end
-			-- Dragging a maximized panel restores it first.
 			local pin = PinnedPanels.Pins[id]
 			if pin and pin.maximized then ToggleMaximize() end
 			imDrag = true
@@ -358,7 +363,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if mc == MOUSE_LEFT then
 			if IsLocked(id) then return end
 			local pin = PinnedPanels.Pins[id]
-			if pin then pin.maximized = false end   -- manual resize leaves "maximized"
+			if pin then pin.maximized = false end
 			imResize = true
 			imResizeSX, imResizeSY = gui.MouseX(), gui.MouseY()
 			imResizeW, imResizeH = frame:GetSize()

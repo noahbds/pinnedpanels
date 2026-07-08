@@ -2,12 +2,10 @@
 local IM = PinnedPanels.CursorMode
 
 -- ── Focus Helpers ────────────────────────────────────────────────────────────
-local function GetTaskbarEntries()
-	return PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
-end
-
 local function VisibleTopLevelPins()
 	local list = {}
+	local minimized = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) and pin.frame:IsVisible() then
 			if pin.kind == "group" or not PinnedPanels.GetGroupForPanel(id) then
@@ -17,8 +15,6 @@ local function VisibleTopLevelPins()
 	end
 	table.sort(list, function(a, b) return a.title < b.title end)
 
-	-- Append taskbar as virtual entry if it has minimized panels
-	local minimized = GetTaskbarEntries()
 	local ts = PinnedPanels.Settings.taskbar
 	if #minimized > 0 and ts and ts.enabled ~= false then
 		list[#list + 1] = { id = "__TASKBAR__", title = "~Taskbar" }
@@ -38,7 +34,7 @@ function PinnedPanels.IsKeyboardNavEnabled()
 
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) and pin.frame:IsVisible() then
-			local f = FocusedPin()
+			local f = IM.Focused and PinnedPanels.Pins[IM.Focused]
 			if not f or not IsValid(f.frame) or not f.frame:IsVisible() then
 				if IM.Focused ~= "__TASKBAR__" then
 					IM.Focused = id
@@ -48,10 +44,7 @@ function PinnedPanels.IsKeyboardNavEnabled()
 		end
 	end
 
-	-- With only minimized panels (no visible ones), the taskbar is keyboard-navigable
-	-- but ONLY in cursor mode, so during plain gameplay arrow keys stay free for
-	-- movement and the bar doesn't get pinned on screen. We never auto-focus it.
-	local minimized = GetTaskbarEntries()
+	local minimized = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
 	local ts = PinnedPanels.Settings.taskbar
 	if IM.Active and #minimized > 0 and ts and ts.enabled ~= false then
 		return true
@@ -71,7 +64,7 @@ local function SetFocus(id, dir)
 
 	if id == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = GetTaskbarEntries()
+		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
 		if TB then
 			if #entries == 0 then
 				TB.hoverIndex = nil
@@ -90,17 +83,15 @@ local function SetFocus(id, dir)
 end
 
 local function CycleFocus(dir)
-	-- While the taskbar is focused, step through its entries before leaving it.
 	if IM.Focused == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = GetTaskbarEntries()
+		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
 		if TB and #entries > 0 then
 			local ni = (TB.hoverIndex or 1) + dir
 			if ni >= 1 and ni <= #entries then
 				TB.hoverIndex = ni
 				return
 			end
-			-- stepped past an end: fall through to move to an adjacent panel
 		end
 	end
 
@@ -134,17 +125,16 @@ end
 local function EquipFocusedTool()
 	if not IM.Focused then return end
 
-	-- On the taskbar, "equip/enter" restores the selected minimized panel.
 	if IM.Focused == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = GetTaskbarEntries()
+		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
 		local sel = TB and TB.hoverIndex
 		if sel and entries[sel] then
 			local id = entries[sel].id
 			PinnedPanels.RestoreFromTaskbar(id)
-			local remaining = GetTaskbarEntries()
+			local remaining = PinnedPanels.GetMinimizedPanels()
 			if #remaining == 0 then
-				SetFocus(id)                        -- follow the panel we just restored
+				SetFocus(id)
 			else
 				TB.hoverIndex = math.Clamp(sel, 1, #remaining)
 			end
@@ -173,11 +163,10 @@ local function BringFocusedFront()
 	end
 end
 
--- Header-button actions available from the keyboard for the focused panel.
 local function MinimizeFocused()
 	if IM.Focused and IM.Focused ~= "__TASKBAR__" then
 		PinnedPanels.MinimizeToTaskbar(IM.Focused)
-		CycleFocus(1)   -- move focus off the panel we just hid
+		CycleFocus(1)
 	end
 end
 
@@ -190,7 +179,7 @@ end
 local function UnpinFocused()
 	if IM.Focused and IM.Focused ~= "__TASKBAR__" then
 		local target = IM.Focused
-		CycleFocus(1)   -- pick a neighbour first so focus survives removal
+		CycleFocus(1)
 		PinnedPanels.Unpin(target)
 	end
 end
@@ -226,7 +215,6 @@ function PinnedPanels.GetInteractiveElements(panel)
 	local function scan(p, depth)
 		if not IsValid(p) or depth > 20 or p._pp_skipNav or not p:IsVisible() then return 0 end
 		local class = p.ClassName or p:GetClassName()
-		-- Scrollbars/grips are drag-only, not click targets — skip them and their parts.
 		if SKIP_CLASSES[class] or class:find("ScrollBar") or class:find("Grip") then return 0 end
 
 		if class:find("Slider") or class:find("CheckBox") or class == "DButton"
@@ -237,7 +225,6 @@ function PinnedPanels.GetInteractiveElements(panel)
 		end
 
 		local isCustom = not CONTAINER_CLASSES[class] and HasCustomInteraction(p)
-
 		local interactiveChildren = 0
 		for _, child in ipairs(p:GetChildren()) do
 			interactiveChildren = interactiveChildren + scan(child, depth + 1)
@@ -247,14 +234,11 @@ function PinnedPanels.GetInteractiveElements(panel)
 			list[#list + 1] = p
 			return 1
 		end
-
 		return interactiveChildren
 	end
 
 	scan(panel, 0)
 
-	-- Drop degenerate (zero/near-zero size) controls that make useless stops.
-	-- (We keep scrolled-off elements so navigation can still scroll into them.)
 	local result = {}
 	for _, el in ipairs(list) do
 		if IsValid(el) then
@@ -291,7 +275,7 @@ local keyRepeat = {}
 
 local function StartRepeat(key) keyRepeat[key] = { start = CurTime(), last = 0, repeating = false } end
 local function StopRepeat(key) keyRepeat[key] = nil end
-local function StopAllRepeats() for k in pairs(keyRepeat) do keyRepeat[k] = nil end end
+local function StopAllRepeats() keyRepeat = {} end
 
 local function ShouldRepeat(key)
 	local t = keyRepeat[key]
@@ -313,22 +297,23 @@ end
 
 -- ── Keybinds ─────────────────────────────────────────────────────────────────
 local NAV_KEYS = { [KEY_UP] = true, [KEY_DOWN] = true, [KEY_LEFT] = true, [KEY_RIGHT] = true,
-                   [KEY_ENTER] = true, [KEY_ESCAPE] = true, [KEY_BACKSPACE] = true,
-                   [KEY_LSHIFT] = true, [KEY_RSHIFT] = true }
+                   [KEY_ENTER] = true, [KEY_ESCAPE] = true, [KEY_BACKSPACE] = true }
 local navKeyDown = {}
 
 local function ExitContentNav()
+	if IM.Focused then
+		PinnedPanels.NavMemory = PinnedPanels.NavMemory or {}
+		PinnedPanels.NavMemory[IM.Focused] = IM.NavFocusIndex
+	end
 	IM.NavigatingPanel = false
 	IM.SelectedIndex = nil
 	StopAllRepeats()
-	for k in pairs(navKeyDown) do navKeyDown[k] = false end
+	navKeyDown = {}
+	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
 end
 
 PinnedPanels.ExitContentNav = ExitContentNav
 
--- Leaving cursor mode always drops the intense content-nav ("red glow") mode,
--- giving the cursor-mode key a guaranteed way out of it. Only act on the actual
--- on→off transition (this hook also fires on unrelated state changes).
 local _prevInteractive = false
 hook.Add("PinnedPanels_CursorModeChanged", "PinnedPanels_ExitNavOnCursorOff", function(interactive)
 	if _prevInteractive and not interactive and IM.NavigatingPanel then
@@ -341,27 +326,35 @@ local function EnterContentNav()
 	local pin = FocusedPin()
 	if IM.NavigatingPanel or not pin or not IsValid(pin.frame) then return end
 	IM.NavigatingPanel = true
-	IM.NavFocusIndex = 1
+	
+	PinnedPanels.NavMemory = PinnedPanels.NavMemory or {}
+	local memIndex = PinnedPanels.NavMemory[IM.Focused] or 1
+	local elems = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
+	if #elems > 0 then
+		memIndex = math.Clamp(memIndex, 1, #elems)
+	else
+		memIndex = 1
+	end
+	IM.NavFocusIndex = memIndex
+	
 	IM.SelectedIndex = nil
 	IM.LastNavPanel = IM.Focused
 	StopAllRepeats()
+	navKeyDown = {}
 	for k in pairs(NAV_KEYS) do
-		navKeyDown[k] = input.IsKeyDown(k)
-		if navKeyDown[k] then StartRepeat(k) end
+		if input.IsKeyDown(k) then
+			navKeyDown[k] = true
+			StartRepeat(k)
+		end
 	end
+	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
 end
 
 -- ── Context-Menu Keyboard Navigation ───────────────────────────────────────
-
 local C = PinnedPanels.C
 
--- Build a custom keyboard-navigable menu panel from a list of extracted
--- options. This replaces GMod's DMenu entirely so we get full control over
--- highlighting, navigation and activation without needing cursor focus.
---
--- Each entry in `items`: { text=, icon=, callback=, enabled= }
-local function CreateKeyboardMenu(items, x, y)
-	if #items == 0 then return nil end
+local function CreateKeyboardMenu(items, x, y, parentMenu)
+	if not items or #items == 0 then return nil end
 
 	local ROW_H   = 22
 	local ICON_SZ = 16
@@ -369,18 +362,16 @@ local function CreateKeyboardMenu(items, x, y)
 	local FONT    = "DermaDefault"
 	local MIN_W   = 160
 
-	-- Measure required width.
 	surface.SetFont(FONT)
 	local maxW = MIN_W
 	for _, it in ipairs(items) do
 		local tw = select(1, surface.GetTextSize(it.text or ""))
-		maxW = math.max(maxW, tw + ICON_SZ + PAD * 4 + 8)
+		maxW = math.max(maxW, tw + ICON_SZ + PAD * 4 + 16)
 	end
 
 	local panelW = maxW + PAD * 2
 	local panelH = #items * ROW_H + PAD * 2
 
-	-- Clamp to screen.
 	local sw, sh = ScrW(), ScrH()
 	x = math.Clamp(x, 0, sw - panelW)
 	y = math.Clamp(y, 0, sh - panelH)
@@ -392,17 +383,19 @@ local function CreateKeyboardMenu(items, x, y)
 	pnl:MakePopup()
 	pnl:SetKeyboardInputEnabled(false)
 	pnl:SetMouseInputEnabled(false)
-	pnl.Items     = items
-	pnl.SelIndex  = 1
-	pnl._wasDown  = {
+	pnl.Items      = items
+	pnl.SelIndex   = 1
+	pnl.ParentMenu = parentMenu
+	pnl._wasDown   = {
 		[KEY_UP]        = input.IsKeyDown(KEY_UP),
 		[KEY_DOWN]      = input.IsKeyDown(KEY_DOWN),
+		[KEY_LEFT]      = input.IsKeyDown(KEY_LEFT),
+		[KEY_RIGHT]     = input.IsKeyDown(KEY_RIGHT),
 		[KEY_ENTER]     = input.IsKeyDown(KEY_ENTER),
 		[KEY_ESCAPE]    = input.IsKeyDown(KEY_ESCAPE),
 		[KEY_BACKSPACE] = input.IsKeyDown(KEY_BACKSPACE),
 	}
 
-	-- Preload icon materials.
 	for _, it in ipairs(items) do
 		if it.icon and it.icon ~= "" then
 			it._mat = Material(it.icon, "smooth mips")
@@ -410,7 +403,6 @@ local function CreateKeyboardMenu(items, x, y)
 	end
 
 	function pnl:Paint(w, h)
-		-- Background
 		draw.RoundedBox(4, 0, 0, w, h, C.bgPopup)
 		surface.SetDrawColor(C.bgHeaderLine)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
@@ -419,36 +411,41 @@ local function CreateKeyboardMenu(items, x, y)
 		for i, it in ipairs(self.Items) do
 			local ry = PAD + (i - 1) * ROW_H
 
-			-- Highlight
 			if i == self.SelIndex then
 				draw.RoundedBox(3, PAD - 2, ry, w - PAD * 2 + 4, ROW_H, C.accent)
 			end
 
-			-- Icon
 			if it._mat and not it._mat:IsError() then
 				surface.SetDrawColor(255, 255, 255, (it.enabled == false) and 80 or 255)
 				surface.SetMaterial(it._mat)
 				surface.DrawTexturedRect(PAD + 2, ry + (ROW_H - ICON_SZ) / 2, ICON_SZ, ICON_SZ)
 			end
 
-			-- Text
 			local textColor = (it.enabled == false) and C.textMuted
 				or (i == self.SelIndex and C.textBright or C.textLight)
 			draw.SimpleText(it.text or "", FONT, PAD + ICON_SZ + PAD + 4, ry + ROW_H / 2,
 				textColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+
+			if it.isSubMenu then
+				surface.SetDrawColor(textColor)
+				local ax = w - PAD - 6
+				local ay = ry + ROW_H / 2
+				draw.NoTexture()
+				surface.DrawPoly({
+					{ x = ax - 4, y = ay - 4 },
+					{ x = ax + 2, y = ay },
+					{ x = ax - 4, y = ay + 4 },
+				})
+			end
 		end
 	end
 
 	return pnl
 end
 
--- Snapshot existing DMenus, call triggerFn (which is expected to open a
--- DermaMenu), then find the newly created DMenu, extract its options,
--- remove it, and return the extracted items.
 local function CaptureAndExtractMenu(triggerFn)
 	local captured = nil
-	
-	-- Intercept DermaMenu and vgui.Create directly to reliably catch the menu.
+
 	local _origDermaMenu = DermaMenu
 	local _origCreate = vgui.Create
 
@@ -462,14 +459,33 @@ local function CaptureAndExtractMenu(triggerFn)
 		local m = _origCreate(class, parent, name)
 		if (class == "DMenu" or class == "DermaMenu") and not IsValid(captured) then
 			captured = m
+			local origAddOption = m.AddOption
+			if isfunction(origAddOption) then
+				m.AddOption = function(self, text, func)
+					local opt = origAddOption(self, text, func)
+					if IsValid(opt) then opt._rawCallback = func end
+					return opt
+				end
+			end
+			local origAddCVar = m.AddCVar
+			if isfunction(origAddCVar) then
+				m.AddCVar = function(self, text, cv, on, off, func)
+					local opt = origAddCVar(self, text, cv, on, off, func)
+					if IsValid(opt) then
+						opt._rawCallback = function()
+							RunConsoleCommand(cv, tostring(on))
+							if func then func() end
+						end
+					end
+					return opt
+				end
+			end
 		end
 		return m
 	end
 
-	-- Call the function that opens the menu.
 	local ok, err = pcall(triggerFn)
 
-	-- Restore globals immediately.
 	DermaMenu = _origDermaMenu
 	vgui.Create = _origCreate
 
@@ -479,12 +495,10 @@ local function CaptureAndExtractMenu(triggerFn)
 
 	if not IsValid(captured) then return {} end
 
-	-- Extract options from the captured DMenu.
-	-- The DMenu internal hierarchy varies across GMod versions, so we
-	-- recursively walk ALL descendants to find DMenuOption panels.
 	local items = {}
-	local function walk(parent)
-		for _, child in ipairs(parent:GetChildren()) do
+	local function walk(parent, outList)
+		local children = parent.GetCanvas and parent:GetCanvas():GetChildren() or parent:GetChildren()
+		for _, child in ipairs(children) do
 			if IsValid(child) then
 				local cls = child.ClassName or child:GetClassName()
 				if cls == "DMenuOption" or cls == "DMenuOptionCVar" then
@@ -494,25 +508,40 @@ local function CaptureAndExtractMenu(triggerFn)
 						icon = child.m_Image:GetImage() or ""
 					end
 					local enabled = child:IsEnabled()
-					local cb = child.DoClick
-					if text ~= "" then
-						items[#items + 1] = {
-							text     = text,
-							icon     = icon,
-							callback = cb,
-							enabled  = enabled,
-						}
+					
+					local isSubMenu = IsValid(child.SubMenu)
+
+					local cb = child._rawCallback
+					if not cb and isfunction(child.DoClick) then
+						local fallback = child.DoClick
+						cb = function()
+							pcall(fallback, { GetDisabled = function() return false end, Toggle = function() end })
+						end
 					end
+
+					if text ~= "" then
+						local item = {
+							text      = text,
+							icon      = icon,
+							callback  = cb,
+							enabled   = enabled,
+							isSubMenu = isSubMenu,
+						}
+						outList[#outList + 1] = item
+
+						if isSubMenu and IsValid(child.SubMenu) then
+							item.subItems = {}
+							walk(child.SubMenu, item.subItems)
+						end
+					end
+				elseif cls == "DMenu" or cls == "DermaMenu" then
+					walk(child, outList)
 				end
-				walk(child)
 			end
 		end
 	end
-	walk(captured)
+	walk(captured, items)
 
-	-- Kill the real DMenu immediately so it never shows on screen.
-	-- Also close any other derma menus and undo the cursor activation
-	-- that DMenu:MakePopup() causes.
 	captured:Remove()
 	if CloseDermaMenus then CloseDermaMenus() end
 	gui.EnableScreenClicker(PinnedPanels.CursorMode.Active or false)
@@ -520,14 +549,18 @@ local function CaptureAndExtractMenu(triggerFn)
 	return items
 end
 
-local function ShowKeyboardMenu(items, x, y)
-	if not items or #items == 0 then return end
-	if IsValid(IM.ActiveMenu) then IM.ActiveMenu:Remove() end
-	IM.ActiveMenu = CreateKeyboardMenu(items, x, y)
+local function CloseKeyboardMenu(pnl)
+	if not IsValid(pnl) then return end
+	local root = pnl
+	while IsValid(root.ParentMenu) do root = root.ParentMenu end
+	local curr = root
+	while IsValid(curr) do
+		local nxt = curr.ActiveSubMenu
+		curr:Remove()
+		curr = nxt
+	end
 end
 
--- Open the pin's context menu for the focused pin (blue glow / Shift+Enter
--- from panel level), build a keyboard-navigable version of it.
 local function OpenContextMenuForFocused()
 	local id = IM.Focused
 	if not id or id == "__TASKBAR__" then return end
@@ -546,14 +579,12 @@ local function OpenContextMenuForFocused()
 		gui.MouseX, gui.MouseY = _mx, _my
 	end)
 
-	ShowKeyboardMenu(items, posX, posY)
+	if #items == 0 then return end
+
+	CloseKeyboardMenu(IM.ActiveMenu)
+	IM.ActiveMenu = CreateKeyboardMenu(items, posX, posY)
 end
 
--- Open the element's own context menu (red glow / Shift+Enter from content
--- nav), e.g. SpawnIcon's "Copy to clipboard / Spawn using toolgun" menu.
--- The nav system may pick a child panel (like a Label inside ContentIcon),
--- so we walk up the parent chain until we find a panel whose right-click
--- actually creates a DMenu.
 local function OpenElementContextMenu(el)
 	if not IsValid(el) then return end
 
@@ -561,18 +592,16 @@ local function OpenElementContextMenu(el)
 	local ew, eh = el:GetSize()
 	local posX, posY = ex + ew / 2, ey + eh / 2
 
-	-- Try the element itself, then walk up to parents (max 10 levels).
 	local target = el
 	local items = {}
 	for attempt = 1, 10 do
 		if not IsValid(target) then break end
 
-		-- The methods that might trigger a context menu on this panel.
 		local methodsToTry = {
 			"OpenGenericSpawnmenuRightClickMenu",
 			"OpenMenu",
 			"DoRightClick",
-			"Mouse" -- Special case for OnMousePressed/Released
+			"Mouse"
 		}
 
 		for _, method in ipairs(methodsToTry) do
@@ -601,14 +630,15 @@ local function OpenElementContextMenu(el)
 		end
 
 		if #items > 0 then break end
-
 		target = target:GetParent()
 	end
 
-	ShowKeyboardMenu(items, posX, posY)
+	if #items == 0 then return end
+
+	CloseKeyboardMenu(IM.ActiveMenu)
+	IM.ActiveMenu = CreateKeyboardMenu(items, posX, posY)
 end
 
--- Keyboard handler that drives our custom PP_KeyboardMenu.
 local function HandleMenuNav()
 	if not IsValid(IM.ActiveMenu) then
 		IM.ActiveMenu = nil
@@ -623,40 +653,69 @@ local function HandleMenuNav()
 
 	local upNow    = input.IsKeyDown(KEY_UP)
 	local downNow  = input.IsKeyDown(KEY_DOWN)
+	local leftNow  = input.IsKeyDown(KEY_LEFT)
+	local rightNow = input.IsKeyDown(KEY_RIGHT)
 	local enterNow = input.IsKeyDown(KEY_ENTER)
 	local escNow   = input.IsKeyDown(KEY_ESCAPE) or input.IsKeyDown(KEY_BACKSPACE)
 	local wd       = pnl._wasDown
 
-	local function step(dir)
-		local tried = 0
-		repeat
-			pnl.SelIndex = pnl.SelIndex + dir
-			if pnl.SelIndex < 1 then pnl.SelIndex = n
-			elseif pnl.SelIndex > n then pnl.SelIndex = 1 end
-			tried = tried + 1
-		until (items[pnl.SelIndex] and items[pnl.SelIndex].enabled ~= false) or tried >= n
-	end
-
 	if upNow and not wd[KEY_UP] then
-		step(-1)
-	elseif downNow and not wd[KEY_DOWN] then
-		step(1)
-	elseif enterNow and not wd[KEY_ENTER] then
-		local it = items[pnl.SelIndex]
-		if it and it.enabled ~= false and isfunction(it.callback) then
-			it.callback()
+		pnl.SelIndex = (pnl.SelIndex > 1) and (pnl.SelIndex - 1) or n
+		local tried = 0
+		while items[pnl.SelIndex] and items[pnl.SelIndex].enabled == false and tried < n do
+			pnl.SelIndex = (pnl.SelIndex > 1) and (pnl.SelIndex - 1) or n
+			tried = tried + 1
 		end
-		pnl:Remove()
-		IM.ActiveMenu = nil
+	elseif downNow and not wd[KEY_DOWN] then
+		pnl.SelIndex = (pnl.SelIndex < n) and (pnl.SelIndex + 1) or 1
+		local tried = 0
+		while items[pnl.SelIndex] and items[pnl.SelIndex].enabled == false and tried < n do
+			pnl.SelIndex = (pnl.SelIndex < n) and (pnl.SelIndex + 1) or 1
+			tried = tried + 1
+		end
+	elseif (enterNow and not wd[KEY_ENTER]) or (rightNow and not wd[KEY_RIGHT]) then
+		local it = items[pnl.SelIndex]
+		if it and it.enabled ~= false then
+			if it.isSubMenu and it.subItems and #it.subItems > 0 then
+				if IsValid(pnl.ActiveSubMenu) then pnl.ActiveSubMenu:Remove() end
+				local cx, cy = pnl:GetPos()
+				local ROW_H, PAD = 22, 6
+				local rx = cx + pnl:GetWide()
+				local ry = cy + PAD + (pnl.SelIndex - 1) * ROW_H
+				pnl.ActiveSubMenu = CreateKeyboardMenu(it.subItems, rx, ry, pnl)
+				if IsValid(pnl.ActiveSubMenu) then
+					IM.ActiveMenu = pnl.ActiveSubMenu
+					IM.ActiveMenu._wasDown[KEY_ENTER] = true
+					IM.ActiveMenu._wasDown[KEY_RIGHT] = true
+				end
+			elseif enterNow and isfunction(it.callback) then
+				it.callback()
+				CloseKeyboardMenu(pnl)
+				IM.ActiveMenu = nil
+			end
+		end
 		return
-	elseif escNow and not wd[KEY_ESCAPE] and not wd[KEY_BACKSPACE] then
-		pnl:Remove()
-		IM.ActiveMenu = nil
-		return
+	elseif (leftNow and not wd[KEY_LEFT]) or (escNow and not wd[KEY_ESCAPE] and not wd[KEY_BACKSPACE]) then
+		if IsValid(pnl.ParentMenu) then
+			local parent = pnl.ParentMenu
+			parent.ActiveSubMenu = nil
+			parent._wasDown[KEY_LEFT] = true
+			parent._wasDown[KEY_ESCAPE] = true
+			parent._wasDown[KEY_BACKSPACE] = true
+			IM.ActiveMenu = parent
+			pnl:Remove()
+			return
+		elseif escNow then
+			CloseKeyboardMenu(pnl)
+			IM.ActiveMenu = nil
+			return
+		end
 	end
 
 	wd[KEY_UP]        = upNow
 	wd[KEY_DOWN]      = downNow
+	wd[KEY_LEFT]      = leftNow
+	wd[KEY_RIGHT]     = rightNow
 	wd[KEY_ENTER]     = enterNow
 	wd[KEY_ESCAPE]    = escNow
 	wd[KEY_BACKSPACE] = input.IsKeyDown(KEY_BACKSPACE)
@@ -733,14 +792,9 @@ local function ActivateElement(el)
 	if IM.SelectedIndex then IM.SelectedIndex = nil return end
 	local cls = el.ClassName or el:GetClassName()
 	IM.SelectedIndex = IM.NavFocusIndex
-
-	local keepSelected = false
-
 	if cls:find("Slider") or cls == "DComboBox" then
-		keepSelected = true
+		return
 	elseif cls == "DTextEntry" then
-		-- The wrapper frame keeps keyboard input off by default; enable it first so
-		-- the text entry can actually receive focus and typed characters.
 		local pin = FocusedPin()
 		if pin and IsValid(pin.frame) then
 			pin.frame:SetKeyboardInputEnabled(true)
@@ -748,22 +802,23 @@ local function ActivateElement(el)
 		el:SetKeyboardInputEnabled(true)
 		el:RequestFocus()
 		IM.NavigatingPanel = false
+		IM.SelectedIndex = nil
 	elseif cls == "DTree_Node_Button" then
 		local p = el:GetParent()
 		if IsValid(p) and p.InternalDoClick then p:InternalDoClick()
 		elseif isfunction(el.DoClick) then el:DoClick() end
+		IM.SelectedIndex = nil
 	elseif cls:find("CheckBox") then
 		if el.Toggle then el:Toggle() elseif el.SetValue then el:SetValue(not el:GetChecked()) end
 	elseif isfunction(el.DoClick) then
 		el:DoClick()
+		IM.SelectedIndex = nil
 	elseif isfunction(el.Toggle) then
 		el:Toggle()
+		IM.SelectedIndex = nil
 	elseif isfunction(el.OnMousePressed) then
 		el:OnMousePressed(MOUSE_LEFT)
 		if isfunction(el.OnMouseReleased) then el:OnMouseReleased(MOUSE_LEFT) end
-	end
-
-	if not keepSelected then
 		IM.SelectedIndex = nil
 	end
 end
@@ -828,7 +883,6 @@ local function HandleContentNav()
 		local wasDown = navKeyDown[key] or false
 
 		if key == KEY_ESCAPE or key == KEY_BACKSPACE then
-			-- Backspace is the reliable exit (Esc also opens the game menu).
 			if down and not wasDown then
 				if IM.SelectedIndex then IM.SelectedIndex = nil else ExitContentNav() end
 			end
@@ -836,8 +890,6 @@ local function HandleContentNav()
 			if down and not wasDown then
 				local shiftHeld = input.IsKeyDown(KEY_LSHIFT) or input.IsKeyDown(KEY_RSHIFT)
 				if shiftHeld then
-					-- Shift+Enter in content-nav: right-click the highlighted element
-					-- to open *its* context menu (e.g. spawnicon → Copy / Spawn…).
 					local el = focusedEl()
 					if el then OpenElementContextMenu(el) end
 				else
@@ -873,7 +925,8 @@ local function HandleContentNav()
 	end
 
 	if IM.NavFocusIndex ~= oldIndex then
-		ScrollIntoView(focusedEl())
+		local fe = focusedEl()
+		if fe then ScrollIntoView(fe) end
 	end
 end
 
@@ -885,7 +938,6 @@ local function HandleGlobalBinds(allowFire)
 		if k and k ~= KEY_NONE then
 			local down = input.IsKeyDown(k)
 			if allowFire and down and not b.wasDown then
-				-- Shift+Enter on the equip_tool bind → open context menu instead.
 				if b.id == "equip_tool" and shiftHeld then
 					OpenContextMenuForFocused()
 				else
@@ -900,11 +952,32 @@ local function HandleGlobalBinds(allowFire)
 end
 
 -- ── Taskbar Keyboard Nav Handoff ───────────────────────────────────────────────
-
 hook.Add("Think", "PinnedPanels_KeyNav", function()
 	if IsValid(vgui.GetKeyboardFocus()) then return end
 
-	-- If a context menu is open via keyboard, handle it exclusively.
+	local anyNavDown = false
+	for k in pairs(NAV_KEYS) do
+		if input.IsKeyDown(k) then anyNavDown = true break end
+	end
+	if not anyNavDown then
+		for _, b in ipairs(BINDS) do
+			if b.key and b.key ~= KEY_NONE and input.IsKeyDown(b.key) then anyNavDown = true break end
+		end
+	end
+
+	if anyNavDown then
+		IM.LastNavActivity = CurTime()
+		if not IM._navOpacityActive then
+			IM._navOpacityActive = true
+			if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+		end
+	end
+
+	if IM._navOpacityActive and CurTime() - (IM.LastNavActivity or 0) > 2 then
+		IM._navOpacityActive = false
+		if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+	end
+
 	if IM.ActiveMenu then
 		HandleMenuNav()
 		return
@@ -917,14 +990,11 @@ hook.Add("Think", "PinnedPanels_KeyNav", function()
 	end
 
 	if IM.Focused == "__TASKBAR__" then
-		-- Taskbar participates in the normal bind system (CycleFocus / EquipFocusedTool are taskbar-aware).
 		local TB = PinnedPanels.Taskbar
 		if TB and not TB.kbFocused and PinnedPanels.FocusTaskbar then
 			PinnedPanels.FocusTaskbar()
 		end
 
-		-- Keep the bar up only while actively used; release it on Escape, or after
-		-- a few idle seconds when not in cursor mode, so it doesn't stay stuck.
 		if input.IsKeyDown(KEY_LEFT) or input.IsKeyDown(KEY_RIGHT)
 			or input.IsKeyDown(KEY_UP) or input.IsKeyDown(KEY_DOWN) or input.IsKeyDown(KEY_ENTER) then
 			IM._taskbarLastInput = CurTime()
@@ -1033,7 +1103,6 @@ function PinnedPanels.ResetAllBinds()
 	end
 end
 
--- Diagnostic: list what the keyboard nav treats as clickable in the focused panel.
 concommand.Add("pp_navdump", function()
 	local els = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
 	print(string.format("[PinnedPanels] %d nav element(s) in focused panel:", #els))

@@ -23,12 +23,13 @@ IM.SpawnMenuOpen = IsValid(g_SpawnMenu) and g_SpawnMenu:IsVisible() or false
 -- ── Panel Input / Idle Opacity ───────────────────────────────────────────────
 function PinnedPanels.UpdatePanelStates()
 	local interactive = PinnedPanels.PanelsInteractive()
+	local navActive = IM.NavigatingPanel or IM._navOpacityActive or IsValid(IM.ActiveMenu)
 	for _, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) then
 			if pin.frame:IsMouseInputEnabled() ~= interactive then
 				pin.frame:SetMouseInputEnabled(interactive)
 			end
-			local frac = interactive and 1
+			local frac = (interactive or navActive) and 1
 				or (pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1)
 			local a = math.Round(math.Clamp(frac, 0.05, 1) * 255)
 			if pin.frame:GetAlpha() ~= a then pin.frame:SetAlpha(a) end

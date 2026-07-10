@@ -144,8 +144,9 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	if oldX then
 		fx, fy = oldX, oldY
 	elseif s.x then
-		fx = math.Clamp(tonumber(s.x) or 120, 0, sw - fw)
-		fy = math.Clamp(tonumber(s.y) or 120, 0, sh - fh)
+		local scaledX, scaledY = PinnedPanels.ScaleSavedPos(s)
+		fx = math.Clamp(scaledX or 120, 0, sw - fw)
+		fy = math.Clamp(scaledY or 120, 0, sh - fh)
 	else
 		local firstPin = members[1].pin
 		if IsValid(firstPin.frame) then

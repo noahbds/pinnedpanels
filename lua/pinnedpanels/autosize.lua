@@ -22,6 +22,7 @@ local function FindCanvasPanel(root)
 		end
 	end
 end
+PinnedPanels.FindCanvasPanel = FindCanvasPanel
 
 -- ── Width Measurement ────────────────────────────────────────────────────────
 -- Docked children stretch to whatever width the frame has, so their current

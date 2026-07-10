@@ -120,3 +120,64 @@ hook.Add("PlayerBindPress", "PinnedPanels_QuickSlotsSuppress", function(_, _, _,
 	local slots = PinnedPanels.Settings.quickSlots
 	if slots and slots[tostring(code)] then return true end
 end)
+
+-- ── Peek (hold to reveal every panel) ────────────────────────────────────────
+local peekCvar = CreateClientConVar("pp_key_peek", tostring(KEY_NONE), true, false,
+	"PinnedPanels: hold to temporarily reveal all panels")
+local peekKey = tonumber(peekCvar:GetString()) or KEY_NONE
+cvars.AddChangeCallback("pp_key_peek", function(_, _, new)
+	peekKey = tonumber(new) or KEY_NONE
+end, "PinnedPanels_PeekKey")
+
+function PinnedPanels.GetPeekKey() return peekKey end
+function PinnedPanels.SetPeekKey(code)
+	peekKey = code or KEY_NONE
+	RunConsoleCommand("pp_key_peek", tostring(peekKey))
+end
+
+local peekState = nil
+
+local function StartPeek()
+	peekState = {}
+	PinnedPanels._peeking = true
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if IsValid(pin.frame) then
+			peekState[id] = pin.frame:IsVisible()
+			pin.frame:SetVisible(true)
+			pin.frame:SetAlpha(255)
+		end
+	end
+end
+
+local function EndPeek()
+	if not peekState then return end
+	for id, wasVisible in pairs(peekState) do
+		local pin = PinnedPanels.Pins[id]
+		if pin and IsValid(pin.frame) then
+			pin.frame:SetVisible(wasVisible)
+		end
+	end
+	peekState = nil
+	PinnedPanels._peeking = nil
+	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+end
+
+hook.Add("Think", "PinnedPanels_Peek", function()
+	if not peekKey or peekKey == KEY_NONE then
+		if peekState then EndPeek() end
+		return
+	end
+	local down = input.IsKeyDown(peekKey) and not IsValid(vgui.GetKeyboardFocus())
+	if down and not peekState then
+		StartPeek()
+	elseif not down and peekState then
+		EndPeek()
+	end
+end)
+
+hook.Add("PlayerBindPress", "PinnedPanels_PeekSuppress", function(_, _, _, code)
+	if code and code == peekKey and peekKey ~= KEY_NONE
+		and not IsValid(vgui.GetKeyboardFocus()) then
+		return true
+	end
+end)

@@ -196,6 +196,27 @@ function PinnedPanels.OpenContextMenu(id, frame)
 		qOpt:SetIcon("icon16/lightning.png")
 	end
 
+	if pin.kind == "tool" and PinnedPanels.ToggleFilterBar then
+		local fOpt = menu:AddOption(pin.filterBar and "Hide Filter Bar" or "Show Filter Bar", function()
+			PinnedPanels.ToggleFilterBar(id)
+		end)
+		fOpt:SetIcon(pin.filterBar and "icon16/zoom_out.png" or "icon16/zoom.png")
+	end
+
+	local ctOpt = menu:AddOption(
+		pin.clickThrough and "Disable Click-Through" or "Click-Through (Reference Mode)",
+		function()
+			pin.clickThrough = not pin.clickThrough
+			PinnedPanels.Save()
+			if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+			if pin.clickThrough then
+				notification.AddLegacy(
+					"Panel now ignores the mouse. Re-enable via the command palette or keyboard nav (Shift+Enter).",
+					NOTIFY_GENERIC, 6)
+			end
+		end)
+	ctOpt:SetIcon(pin.clickThrough and "icon16/shape_square.png" or "icon16/shape_square_go.png")
+
 	if pin.kind ~= "frame" and pin.kind ~= "group" then
 		AddGroupSubmenu(menu, id)
 	elseif pin.kind == "group" and pin.groupName then

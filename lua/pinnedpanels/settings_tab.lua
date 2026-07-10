@@ -714,6 +714,67 @@ function PinnedPanels.CreateSettingsTab(parent)
 		timer.Create("PinnedPanels_SnapSave", 0.4, 1, function() PinnedPanels.SaveSettings() end)
 	end
 
+	-- ── Peek ─────────────────────────────────────────────────────────────────
+	local secPeek = CreateSectionCard("Peek (Hold to Reveal)", 120)
+
+	local peekHelp = vgui.Create("DLabel", secPeek)
+	peekHelp:SetText("Hold this key to temporarily show every panel — hidden, minimized or faded — at full opacity. Release to put everything back.")
+	peekHelp:SetTextColor(C.textBody)
+	peekHelp:SetWrap(true)
+	peekHelp:Dock(TOP)
+	peekHelp:DockMargin(0, 0, 0, 10)
+	peekHelp:SetAutoStretchVertical(true)
+
+	local peekRow = vgui.Create("DPanel", secPeek)
+	peekRow:Dock(TOP)
+	peekRow:SetTall(30)
+	peekRow.Paint = function() end
+
+	local peekKeyDisplay = vgui.Create("DLabel", peekRow)
+	peekKeyDisplay:Dock(LEFT)
+	peekKeyDisplay:SetWide(210)
+	peekKeyDisplay:SetFont("DermaDefaultBold")
+
+	local function UpdatePeekDisplay()
+		if not IsValid(peekKeyDisplay) then return end
+		local code = PinnedPanels.GetPeekKey and PinnedPanels.GetPeekKey() or KEY_NONE
+		if not code or code == KEY_NONE then
+			peekKeyDisplay:SetText("Current key: [ Not bound ]")
+			peekKeyDisplay:SetTextColor(C.errorRed)
+		else
+			peekKeyDisplay:SetText("Current key: [ " .. string.upper(input.GetKeyName(code)) .. " ]")
+			peekKeyDisplay:SetTextColor(C.keyBound)
+		end
+	end
+	UpdatePeekDisplay()
+
+	local peekBindBtn = vgui.Create("DButton", peekRow)
+	peekBindBtn:SetText("Change Key...")
+	peekBindBtn:SetIcon("icon16/keyboard.png")
+	peekBindBtn:Dock(LEFT)
+	peekBindBtn:SetWide(130)
+	peekBindBtn:DockMargin(0, 0, 6, 0)
+	StyleDarkButton(peekBindBtn)
+	peekBindBtn.DoClick = function()
+		PinnedPanels.OpenKeyBindFrame({
+			title = "Bind Peek Key",
+			get = function() return PinnedPanels.GetPeekKey() end,
+			set = function(k) PinnedPanels.SetPeekKey(k) end,
+			onSaved = UpdatePeekDisplay,
+		})
+	end
+
+	local peekClearBtn = vgui.Create("DButton", peekRow)
+	peekClearBtn:SetText("Clear")
+	peekClearBtn:SetIcon("icon16/cross.png")
+	peekClearBtn:Dock(LEFT)
+	peekClearBtn:SetWide(70)
+	StyleDarkButton(peekClearBtn)
+	peekClearBtn.DoClick = function()
+		PinnedPanels.SetPeekKey(KEY_NONE)
+		UpdatePeekDisplay()
+	end
+
 	-- ── Command Palette ──────────────────────────────────────────────────────
 	local secPalette = CreateSectionCard("Command Palette", 130)
 

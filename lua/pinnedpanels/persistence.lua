@@ -48,6 +48,18 @@ end
 
 PinnedPanels._DeserializeColor = DeserializeColor
 
+-- ── Resolution-Independent Positions ─────────────────────────────────────────
+-- Saved entries carry the screen size they were saved at; when restored on a
+-- different resolution, positions are rescaled proportionally (sizes stay in
+-- pixels — content doesn't scale with the screen — and just get clamped).
+function PinnedPanels.ScaleSavedPos(s)
+	local x, y = tonumber(s.x), tonumber(s.y)
+	local ssw, ssh = tonumber(s.sw), tonumber(s.sh)
+	if x and ssw and ssw > 0 and ssw ~= ScrW() then x = math.Round(x * ScrW() / ssw) end
+	if y and ssh and ssh > 0 and ssh ~= ScrH() then y = math.Round(y * ScrH() / ssh) end
+	return x, y
+end
+
 -- ── Settings Save / Load ─────────────────────────────────────────────────────
 function PinnedPanels.SaveSettings()
 	local groups = {}
@@ -158,9 +170,13 @@ function PinnedPanels.Save()
 			end
 			local entry = {
 				x = x, y = y, w = w, h = h,
+				sw = ScrW(), sh = ScrH(),
 				title = pin.title,
 				kind  = pin.kind or "tool",
 			}
+			if pin.filterBar then entry.filterBar = true end
+			if pin.clickThrough then entry.clickThrough = true end
+			if istable(pin.collapsed) and next(pin.collapsed) then entry.collapsed = pin.collapsed end
 			if pin.customBg then entry.customBg = SerializeColor(pin.customBg) end
 			if pin.customHeader then entry.customHeader = SerializeColor(pin.customHeader) end
 			if pin.customText then entry.customText = SerializeColor(pin.customText) end

@@ -26,7 +26,8 @@ function PinnedPanels.GetFramePaint(title, pinId)
 
 		draw.RoundedBox(6, 0, 0, w, h, bgCol)
 		draw.RoundedBoxEx(6, 0, 0, w, 24, hdrCol, true, true, false, false)
-		draw.SimpleText(title, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		local shownTitle = (pin and pin.clickThrough) and (title .. "  (click-through)") or title
+		draw.SimpleText(shownTitle, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if inIM then
 			surface.SetDrawColor(C.imGreenBorder)
@@ -248,7 +249,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	local titleOverlay, resizeOverlay, btnMin, btnMax, btnClose
 
 	local function ApplyInteractState()
-		local on = PinnedPanels.PanelsInteractive()
+		local pin = PinnedPanels.Pins[id]
+		local on = PinnedPanels.PanelsInteractive() and not (pin and pin.clickThrough)
 		frame:SetMouseInputEnabled(on)
 		if IsValid(titleOverlay)  then titleOverlay:SetMouseInputEnabled(on) end
 		if IsValid(resizeOverlay) then resizeOverlay:SetMouseInputEnabled(on) end

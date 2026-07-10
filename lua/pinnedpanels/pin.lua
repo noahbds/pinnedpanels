@@ -87,8 +87,9 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	local fh     = math.Clamp(s.h or opts.defaultH or 400, 100, sh)
 	local fx, fy
 	if s.x ~= nil and s.y ~= nil then
-		fx = math.Clamp(tonumber(s.x) or 120, 0, sw - fw)
-		fy = math.Clamp(tonumber(s.y) or 120, 0, sh - fh)
+		local scaledX, scaledY = PinnedPanels.ScaleSavedPos(s)
+		fx = math.Clamp(scaledX or 120, 0, sw - fw)
+		fy = math.Clamp(scaledY or 120, 0, sh - fh)
 	else
 		fx, fy = FindFreeSpawnPosition(fw, fh, 120, 120, id)
 	end
@@ -114,7 +115,20 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 		locked       = s.locked or false,
 		idleAlpha    = tonumber(s.idleAlpha) or nil,
 		minimized    = s.minimized or false,
+		clickThrough = s.clickThrough or false,
+		filterBar    = s.filterBar or false,
+		collapsed    = istable(s.collapsed) and s.collapsed or nil,
 	}
+
+	if s.filterBar and not opts.fill and PinnedPanels.AttachFilterBar then
+		PinnedPanels.AttachFilterBar(id)
+	end
+
+	timer.Simple(0.25, function()
+		if PinnedPanels.Pins[id] and PinnedPanels.ApplyCollapseMemory then
+			PinnedPanels.ApplyCollapseMemory(id)
+		end
+	end)
 
 	if s.w == nil and s.h == nil and not opts.fill then
 		timer.Simple(0.35, function()
@@ -229,8 +243,9 @@ function PinnedPanels.PinFrame(livePanel, title)
 	local fh     = math.Clamp(s.h or (oh + 28), 100, sh)
 	local fx, fy
 	if s.x ~= nil and s.y ~= nil then
-		fx = math.Clamp(tonumber(s.x) or ox, 0, sw - fw)
-		fy = math.Clamp(tonumber(s.y) or oy, 0, sh - fh)
+		local scaledX, scaledY = PinnedPanels.ScaleSavedPos(s)
+		fx = math.Clamp(scaledX or ox, 0, sw - fw)
+		fy = math.Clamp(scaledY or oy, 0, sh - fh)
 	else
 		fx, fy = FindFreeSpawnPosition(fw, fh, ox, oy, id)
 	end

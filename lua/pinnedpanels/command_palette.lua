@@ -48,6 +48,21 @@ local function BuildEntries()
 		end
 	end
 
+	-- Click-through panels need a mouse-free way back to interactive
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if pin.clickThrough and IsValid(pin.frame) then
+			local pid = id
+			add("Action", "Restore Interaction: " .. (pin.title or id), "Disable click-through", "icon16/cursor.png",
+				function()
+					local p = PinnedPanels.Pins[pid]
+					if not p then return end
+					p.clickThrough = false
+					PinnedPanels.Save()
+					if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+				end)
+		end
+	end
+
 	-- All tools (pin)
 	for _, t in ipairs(PinnedPanels.GetAllTools()) do
 		local itemName, nice, cp = t.itemName, t.niceName, t.cpFunc

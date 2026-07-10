@@ -61,11 +61,19 @@ end)
 hook.Add("OnScreenSizeChanged", "PinnedPanels_ScreenResize", function(oldW, oldH)
 	local nw, nh = ScrW(), ScrH()
 	if nw == oldW and nh == oldH then return end
+	local kx = (oldW and oldW > 0) and (nw / oldW) or 1
+	local ky = (oldH and oldH > 0) and (nh / oldH) or 1
 	for _, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) then
 			local x, y = pin.frame:GetPos()
 			local w, h = pin.frame:GetSize()
-			pin.frame:SetPos(math.Clamp(x, 0, nw - w), math.Clamp(y, 0, nh - h))
+			w, h = math.min(w, nw), math.min(h, nh)
+			pin.frame:SetSize(w, h)
+			pin.frame:SetPos(
+				math.Clamp(math.Round(x * kx), 0, nw - w),
+				math.Clamp(math.Round(y * ky), 0, nh - h)
+			)
 		end
 	end
+	PinnedPanels.Save()
 end)

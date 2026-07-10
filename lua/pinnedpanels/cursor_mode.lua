@@ -26,10 +26,11 @@ function PinnedPanels.UpdatePanelStates()
 	local navActive = IM.NavigatingPanel or IM._navOpacityActive or IsValid(IM.ActiveMenu)
 	for _, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) then
-			if pin.frame:IsMouseInputEnabled() ~= interactive then
-				pin.frame:SetMouseInputEnabled(interactive)
+			local wantMouse = interactive and not pin.clickThrough
+			if pin.frame:IsMouseInputEnabled() ~= wantMouse then
+				pin.frame:SetMouseInputEnabled(wantMouse)
 			end
-			local frac = (interactive or navActive) and 1
+			local frac = (interactive or navActive or PinnedPanels._peeking) and 1
 				or (pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1)
 			local a = math.Round(math.Clamp(frac, 0.05, 1) * 255)
 			if pin.frame:GetAlpha() ~= a then pin.frame:SetAlpha(a) end

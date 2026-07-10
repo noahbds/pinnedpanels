@@ -20,6 +20,9 @@ local DEFAULT_SETTINGS = {
 	autoRestore = true,
 	keyboardNavOutsideCursorMode = true,
 	idleAlpha   = 1,
+	snapEnabled  = true,
+	snapDistance = 12,
+	quickSlots   = {},
 	groups      = {},
 	taskbar     = table.Copy(DEFAULT_TASKBAR),
 }
@@ -74,6 +77,9 @@ function PinnedPanels.SaveSettings()
 		autoRestore = PinnedPanels.Settings.autoRestore,
 		keyboardNavOutsideCursorMode = PinnedPanels.Settings.keyboardNavOutsideCursorMode,
 		idleAlpha   = PinnedPanels.Settings.idleAlpha,
+		snapEnabled  = PinnedPanels.Settings.snapEnabled,
+		snapDistance = PinnedPanels.Settings.snapDistance,
+		quickSlots   = PinnedPanels.Settings.quickSlots or {},
 		groups      = groups,
 		taskbar     = taskbarData,
 	}, true))
@@ -93,6 +99,15 @@ function PinnedPanels.LoadSettings()
 	if t.autoRestore ~= nil then S.autoRestore = tobool(t.autoRestore) end
 	if t.keyboardNavOutsideCursorMode ~= nil then S.keyboardNavOutsideCursorMode = tobool(t.keyboardNavOutsideCursorMode) end
 	S.idleAlpha = math.Clamp(tonumber(t.idleAlpha) or 1, 0.1, 1)
+
+	if t.snapEnabled ~= nil then S.snapEnabled = tobool(t.snapEnabled) end
+	S.snapDistance = math.Clamp(tonumber(t.snapDistance) or 12, 0, 64)
+	S.quickSlots = {}
+	if istable(t.quickSlots) then
+		for k, v in pairs(t.quickSlots) do
+			if isstring(v) and v ~= "" then S.quickSlots[tostring(k)] = v end
+		end
+	end
 
 	local groups = {}
 	if istable(t.groups) then
@@ -172,4 +187,50 @@ function PinnedPanels.ClearSavedPin(id)
 	local d = PinnedPanels.Load()
 	d[id] = nil
 	file.Write(SAVEF, util.TableToJSON(d, true))
+end
+
+-- ── Export / Import (shareable layout string) ────────────────────────────────
+function PinnedPanels.ExportLayout()
+	local groups = {}
+	for _, g in ipairs(PinnedPanels.Settings.groups or {}) do
+		groups[#groups + 1] = { name = g.name, color = SerializeColor(g.color), ids = g.ids }
+	end
+	local payload = util.TableToJSON({
+		v      = 1,
+		pins   = PinnedPanels.Load(),
+		groups = groups,
+	})
+	local packed = util.Compress(payload)
+	return packed and util.Base64Encode(packed, true) or ""
+end
+
+-- Returns true on success, or false plus an error message.
+function PinnedPanels.ImportLayout(str)
+	if not isstring(str) or str == "" then return false, "Empty import string." end
+	str = string.Trim(str)
+	local packed = util.Base64Decode(str)
+	if not packed or packed == "" then return false, "Could not decode string." end
+	local json = util.Decompress(packed)
+	if not json or json == "" then return false, "Corrupt or invalid data." end
+	local t = util.JSONToTable(json)
+	if not istable(t) or not istable(t.pins) then return false, "Not a valid layout." end
+
+	file.Write(SAVEF, util.TableToJSON(t.pins, true))
+
+	if istable(t.groups) then
+		local groups = {}
+		for _, g in ipairs(t.groups) do
+			if istable(g) and isstring(g.name) then
+				groups[#groups + 1] = {
+					name  = g.name,
+					color = DeserializeColor(g.color, Color(255, 200, 60)),
+					ids   = istable(g.ids) and g.ids or {},
+				}
+			end
+		end
+		PinnedPanels.Settings.groups = groups
+		PinnedPanels.SaveSettings()
+	end
+
+	return true
 end

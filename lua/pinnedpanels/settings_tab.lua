@@ -684,6 +684,201 @@ function PinnedPanels.CreateSettingsTab(parent)
 		tbLabelsBox:SetValue(true)
 	end
 
+	-- ── Window Snapping ──────────────────────────────────────────────────────
+	local secSnap = CreateSectionCard("Window Snapping", 120)
+
+	local snapBox = vgui.Create("DCheckBoxLabel", secSnap)
+	snapBox:SetText("Snap panels to screen edges and each other while dragging (hold Alt to bypass)")
+	snapBox:SetTextColor(C.textLight)
+	snapBox:Dock(TOP)
+	snapBox:DockMargin(0, 0, 0, 10)
+	snapBox:SetWrap(true)
+	snapBox:SetTall(34)
+	snapBox:SetValue(PinnedPanels.Settings.snapEnabled ~= false)
+	snapBox.OnChange = function(_, val)
+		PinnedPanels.Settings.snapEnabled = val
+		PinnedPanels.SaveSettings()
+	end
+
+	local snapSlider = vgui.Create("DNumSlider", secSnap)
+	snapSlider:Dock(TOP)
+	snapSlider:SetTall(30)
+	snapSlider:SetText("Snap distance (px)")
+	snapSlider:SetMin(0)
+	snapSlider:SetMax(40)
+	snapSlider:SetDecimals(0)
+	snapSlider:SetValue(PinnedPanels.Settings.snapDistance or 12)
+	snapSlider.Label:SetTextColor(C.textLight)
+	snapSlider.OnValueChanged = function(_, val)
+		PinnedPanels.Settings.snapDistance = math.Clamp(math.Round(val), 0, 64)
+		timer.Create("PinnedPanels_SnapSave", 0.4, 1, function() PinnedPanels.SaveSettings() end)
+	end
+
+	-- ── Command Palette ──────────────────────────────────────────────────────
+	local secPalette = CreateSectionCard("Command Palette", 130)
+
+	local palHelp = vgui.Create("DLabel", secPalette)
+	palHelp:SetText("Open a searchable list of every tool, content browser, pinned panel and action. Bind a key to open it anywhere in-game.")
+	palHelp:SetTextColor(C.textBody)
+	palHelp:SetWrap(true)
+	palHelp:Dock(TOP)
+	palHelp:DockMargin(0, 0, 0, 10)
+	palHelp:SetAutoStretchVertical(true)
+
+	local palRow = vgui.Create("DPanel", secPalette)
+	palRow:Dock(TOP)
+	palRow:SetTall(30)
+	palRow.Paint = function() end
+
+	local palKeyDisplay = vgui.Create("DLabel", palRow)
+	palKeyDisplay:Dock(LEFT)
+	palKeyDisplay:SetWide(210)
+	palKeyDisplay:SetFont("DermaDefaultBold")
+
+	local function UpdatePalDisplay()
+		if not IsValid(palKeyDisplay) then return end
+		local code = PinnedPanels.GetPaletteKey and PinnedPanels.GetPaletteKey() or KEY_NONE
+		if not code or code == KEY_NONE then
+			palKeyDisplay:SetText("Current key: [ Not bound ]")
+			palKeyDisplay:SetTextColor(C.errorRed)
+		else
+			palKeyDisplay:SetText("Current key: [ " .. string.upper(input.GetKeyName(code)) .. " ]")
+			palKeyDisplay:SetTextColor(C.keyBound)
+		end
+	end
+	UpdatePalDisplay()
+
+	local palBindBtn = vgui.Create("DButton", palRow)
+	palBindBtn:SetText("Change Key...")
+	palBindBtn:SetIcon("icon16/keyboard.png")
+	palBindBtn:Dock(LEFT)
+	palBindBtn:SetWide(130)
+	palBindBtn:DockMargin(0, 0, 6, 0)
+	StyleDarkButton(palBindBtn)
+	palBindBtn.DoClick = function()
+		PinnedPanels.OpenKeyBindFrame({
+			title = "Bind Command Palette",
+			get = function() return PinnedPanels.GetPaletteKey() end,
+			set = function(k) PinnedPanels.SetPaletteKey(k) end,
+			onSaved = UpdatePalDisplay,
+		})
+	end
+
+	local palClearBtn = vgui.Create("DButton", palRow)
+	palClearBtn:SetText("Clear")
+	palClearBtn:SetIcon("icon16/cross.png")
+	palClearBtn:Dock(LEFT)
+	palClearBtn:SetWide(70)
+	palClearBtn:DockMargin(0, 0, 6, 0)
+	StyleDarkButton(palClearBtn)
+	palClearBtn.DoClick = function()
+		PinnedPanels.SetPaletteKey(KEY_NONE)
+		UpdatePalDisplay()
+	end
+
+	local palOpenBtn = vgui.Create("DButton", palRow)
+	palOpenBtn:SetText("Open Now")
+	palOpenBtn:SetIcon("icon16/application_view_list.png")
+	palOpenBtn:Dock(LEFT)
+	palOpenBtn:SetWide(110)
+	StyleDarkButton(palOpenBtn)
+	palOpenBtn.DoClick = function() PinnedPanels.OpenCommandPalette() end
+
+	-- ── Backup & Sharing ─────────────────────────────────────────────────────
+	local secBackup = CreateSectionCard("Backup & Sharing", 120)
+
+	local backupHelp = vgui.Create("DLabel", secBackup)
+	backupHelp:SetText("Export your current layout (panels + groups) to a shareable code, or paste a code to import. Importing replaces your current layout.")
+	backupHelp:SetTextColor(C.textBody)
+	backupHelp:SetWrap(true)
+	backupHelp:Dock(TOP)
+	backupHelp:DockMargin(0, 0, 0, 10)
+	backupHelp:SetAutoStretchVertical(true)
+
+	local function ShowCodePopup(title, code, onApply)
+		local p = vgui.Create("DFrame")
+		p:SetSize(480, 260)
+		p:Center()
+		p:SetTitle(title)
+		p:MakePopup()
+		p.Paint = function(_, w, h)
+			draw.RoundedBox(6, 0, 0, w, h, C.bgPopup)
+			draw.RoundedBoxEx(6, 0, 0, w, 24, C.colorPopupHdr, true, true, false, false)
+			surface.SetDrawColor(C.colorPopupBorder)
+			surface.DrawOutlinedRect(0, 0, w, h, 1)
+		end
+
+		local bar = vgui.Create("DPanel", p)
+		bar:Dock(BOTTOM)
+		bar:SetTall(34)
+		bar:DockMargin(0, 6, 0, 0)
+		bar.Paint = function() end
+
+		local entry = vgui.Create("DTextEntry", p)
+		entry:Dock(FILL)
+		entry:DockMargin(10, 30, 10, 4)
+		entry:SetMultiline(true)
+		entry:SetText(code or "")
+
+		if onApply then
+			local applyBtn = vgui.Create("DButton", bar)
+			applyBtn:SetText("Import & Reload")
+			applyBtn:Dock(RIGHT)
+			applyBtn:SetWide(140)
+			StyleDarkButton(applyBtn)
+			applyBtn.DoClick = function()
+				local ok, err = PinnedPanels.ImportLayout(entry:GetValue())
+				p:Remove()
+				if ok then
+					RunConsoleCommand("pp_reload")
+					Derma_Message("Layout imported successfully.", "Import Layout", "OK")
+				else
+					Derma_Message("Import failed: " .. tostring(err), "Import Layout", "OK")
+				end
+			end
+		else
+			entry:RequestFocus()
+			entry:SelectAllOnFocus(true)
+			entry:SelectAll()
+			local hintLbl = vgui.Create("DLabel", bar)
+			hintLbl:Dock(FILL)
+			hintLbl:SetText("Copy this code (Ctrl+C) and share it.")
+			hintLbl:SetTextColor(C.textMuted)
+		end
+		return p
+	end
+
+	local backupRow = vgui.Create("DPanel", secBackup)
+	backupRow:Dock(TOP)
+	backupRow:SetTall(30)
+	backupRow.Paint = function() end
+
+	local exportBtn = vgui.Create("DButton", backupRow)
+	exportBtn:SetText("Export Layout...")
+	exportBtn:SetIcon("icon16/page_white_get.png")
+	exportBtn:Dock(LEFT)
+	exportBtn:SetWide(160)
+	exportBtn:DockMargin(0, 0, 6, 0)
+	StyleDarkButton(exportBtn)
+	exportBtn.DoClick = function()
+		local code = PinnedPanels.ExportLayout()
+		if not code or code == "" then
+			Derma_Message("Nothing to export yet.", "Export Layout", "OK")
+			return
+		end
+		ShowCodePopup("Export Layout", code, nil)
+	end
+
+	local importBtn = vgui.Create("DButton", backupRow)
+	importBtn:SetText("Import Layout...")
+	importBtn:SetIcon("icon16/page_white_put.png")
+	importBtn:Dock(LEFT)
+	importBtn:SetWide(160)
+	StyleDarkButton(importBtn)
+	importBtn.DoClick = function()
+		ShowCodePopup("Import Layout", "", true)
+	end
+
 	-- ── Danger Zone ──────────────────────────────────────────────────────────
 	local dangerCard = CreateSectionCard("Danger Zone", 85)
 

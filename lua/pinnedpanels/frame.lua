@@ -53,6 +53,17 @@ function PinnedPanels.GetFramePaintOver(pinId)
 		if not IM.NavigatingPanel or not PinnedPanels.GetNavElements then return end
 
 		local hint = "Backspace: back | Enter: use | Arrows: move | Shift+Enter: context menu"
+		local selEl = IM.SelectedIndex and PinnedPanels.GetNavElements()[IM.SelectedIndex]
+		if IsValid(selEl) then
+			local sc = selEl.ClassName or selEl:GetClassName()
+			if sc == "DColorMixer" then
+				hint = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done"
+			elseif sc:find("ColorCube") then
+				hint = "Arrows: Saturation / Value | Enter or Backspace: done"
+			elseif sc:find("Slider") or sc == "DComboBox" then
+				hint = "Left / Right: adjust | Enter or Backspace: done"
+			end
+		end
 		surface.SetFont("DermaDefault")
 		local tw, th = surface.GetTextSize(hint)
 		local bw, bh = tw + 16, th + 6
@@ -142,6 +153,69 @@ local function FindFreeSpawnPosition(w, h, preferredX, preferredY, ignoreId)
 end
 
 PinnedPanels._FindFreeSpawnPosition = FindFreeSpawnPosition
+
+-- ── Edge Snapping (drag / resize) ────────────────────────────────────────────
+local function SnapActive()
+	local S = PinnedPanels.Settings
+	if S.snapEnabled == false then return false end
+	if input.IsKeyDown(KEY_LALT) or input.IsKeyDown(KEY_RALT) then return false end
+	return true
+end
+
+-- Collect candidate snap coordinates from the screen and every other panel.
+-- `axis` is "x" or "y". Returned list holds screen-space edge positions.
+local function SnapLines(id, axis, w, h)
+	local sw, sh = ScrW(), ScrH()
+	local lines
+	if axis == "x" then
+		lines = { 0, sw - w, math.floor((sw - w) / 2) }
+	else
+		lines = { 0, sh - h, math.floor((sh - h) / 2) }
+	end
+	for pid, pin in pairs(PinnedPanels.Pins) do
+		if pid ~= id and IsValid(pin.frame) and pin.frame:IsVisible() then
+			local px, py = pin.frame:GetPos()
+			local pw, ph = pin.frame:GetSize()
+			if axis == "x" then
+				lines[#lines + 1] = px            -- align left edges
+				lines[#lines + 1] = px + pw - w   -- align right edges
+				lines[#lines + 1] = px + pw       -- our left against their right
+				lines[#lines + 1] = px - w        -- our right against their left
+			else
+				lines[#lines + 1] = py
+				lines[#lines + 1] = py + ph - h
+				lines[#lines + 1] = py + ph
+				lines[#lines + 1] = py - h
+			end
+		end
+	end
+	return lines
+end
+
+local function SnapValue(id, axis, value, w, h)
+	local dist = tonumber(PinnedPanels.Settings.snapDistance) or 12
+	if dist <= 0 then return value end
+	local best, bestD = value, dist + 1
+	for _, line in ipairs(SnapLines(id, axis, w, h)) do
+		local d = math.abs(value - line)
+		if d < bestD then bestD, best = d, line end
+	end
+	return (bestD <= dist) and best or value
+end
+
+-- Snap the top-left position during a drag.
+local function SnapDragPos(id, x, y, w, h)
+	if not SnapActive() then return x, y end
+	return SnapValue(id, "x", x, w, h), SnapValue(id, "y", y, w, h)
+end
+
+-- Snap the bottom-right edge during a resize (position stays fixed).
+local function SnapResizeSize(id, x, y, w, h)
+	if not SnapActive() then return w, h end
+	local right  = SnapValue(id, "x", x + w, 0, h)
+	local bottom = SnapValue(id, "y", y + h, w, 0)
+	return math.max(150, right - x), math.max(100, bottom - y)
+end
 
 -- ── Build Wrapper Frame ──────────────────────────────────────────────────────
 local TITLE_HEIGHT = 24
@@ -320,7 +394,10 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 		local mx, my = gui.MouseX(), gui.MouseY()
 		local w, h = frame:GetSize()
-		frame:SetPos(math.Clamp(mx - imDragOffX, 0, ScrW() - w), math.Clamp(my - imDragOffY, 0, ScrH() - h))
+		local nx = math.Clamp(mx - imDragOffX, 0, ScrW() - w)
+		local ny = math.Clamp(my - imDragOffY, 0, ScrH() - h)
+		nx, ny = SnapDragPos(id, nx, ny, w, h)
+		frame:SetPos(nx, ny)
 	end
 
 	resizeOverlay.Think = function(self)
@@ -334,6 +411,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		local mx, my   = gui.MouseX(), gui.MouseY()
 		local nw = math.min(math.max(150, imResizeW + mx - imResizeSX), ScrW() - fpx)
 		local nh = math.min(math.max(100, imResizeH + my - imResizeSY), ScrH() - fpy)
+		nw, nh = SnapResizeSize(id, fpx, fpy, nw, nh)
 		frame:SetSize(nw, nh)
 		UpdateOverlayPositions()
 	end

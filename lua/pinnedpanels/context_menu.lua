@@ -182,6 +182,20 @@ function PinnedPanels.OpenContextMenu(id, frame)
 	menu:AddOption("Change Colors...", function() PinnedPanels.OpenColorChanger(id) end):SetIcon("icon16/color_wheel.png")
 	menu:AddOption("Rename...", function() PinnedPanels.OpenRenamePopup(id) end):SetIcon("icon16/textfield_rename.png")
 
+	if PinnedPanels.SetQuickSlot then
+		local qKey = PinnedPanels.GetQuickSlotFor(id)
+		local qLabel = qKey and ("Quick Key: [ " .. string.upper(input.GetKeyName(qKey) or "?") .. " ]")
+			or "Assign Quick Key..."
+		local qOpt = menu:AddOption(qLabel, function()
+			PinnedPanels.OpenKeyBindFrame({
+				title = "Quick Key: " .. pin.title,
+				get   = function() return PinnedPanels.GetQuickSlotFor(id) or KEY_NONE end,
+				set   = function(k) PinnedPanels.SetQuickSlot(k, id) end,
+			})
+		end)
+		qOpt:SetIcon("icon16/lightning.png")
+	end
+
 	if pin.kind ~= "frame" and pin.kind ~= "group" then
 		AddGroupSubmenu(menu, id)
 	elseif pin.kind == "group" and pin.groupName then

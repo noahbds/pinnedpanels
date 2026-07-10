@@ -292,9 +292,70 @@ function PinnedPanels.IsPinnedFrame(livePanel)
 	return pin ~= nil and IsValid(pin.frame)
 end
 
+-- ── Recently Closed (undo unpin) ─────────────────────────────────────────────
+PinnedPanels._closedStack = PinnedPanels._closedStack or {}
+local CLOSED_MAX = 15
+
+-- Only tool/creation panels can be recreated later (frames wrap a live panel
+-- that is gone once closed, so they are not recorded).
+local function RecordClosed(id, pin)
+	if not pin or (pin.kind ~= "tool" and pin.kind ~= "creation") then return end
+	local entry = { id = id, title = pin.title, kind = pin.kind }
+	if IsValid(pin.frame) then
+		local x, y = pin.frame:GetPos()
+		local w, h = pin.frame:GetSize()
+		entry.x, entry.y, entry.w, entry.h = x, y, w, h
+	end
+	local stack = PinnedPanels._closedStack
+	stack[#stack + 1] = entry
+	while #stack > CLOSED_MAX do table.remove(stack, 1) end
+end
+
+function PinnedPanels.HasClosedPanels()
+	return #PinnedPanels._closedStack > 0
+end
+
+function PinnedPanels.ReopenLastClosed()
+	local stack = PinnedPanels._closedStack
+	if #stack == 0 then return end
+	local e = stack[#stack]
+
+	local function finish(frame)
+		table.remove(stack, #stack)
+		if IsValid(frame) and e.x then
+			local sw, sh = ScrW(), ScrH()
+			frame:SetSize(math.Clamp(e.w, 150, sw), math.Clamp(e.h, 100, sh))
+			frame:SetPos(math.Clamp(e.x, 0, sw - e.w), math.Clamp(e.y, 0, sh - e.h))
+			frame:MoveToFront()
+			PinnedPanels.Save()
+		end
+	end
+
+	if e.kind == "tool" then
+		for _, t in ipairs(PinnedPanels.GetAllTools()) do
+			if "PP_" .. t.itemName == e.id then
+				finish(PinnedPanels.Pin(e.id, e.title, t.cpFunc))
+				return
+			end
+		end
+	elseif e.kind == "creation" then
+		for _, t in ipairs(PinnedPanels.GetAllCreationTabs()) do
+			if t.id == e.id then
+				finish(PinnedPanels.Pin(e.id, e.title, t.func, false, PinnedPanels.CREATION_OPTS))
+				return
+			end
+		end
+	end
+
+	-- Source no longer available (tool uninstalled, etc.) — drop it and try older.
+	table.remove(stack, #stack)
+	PinnedPanels.ReopenLastClosed()
+end
+
 -- ── Unpin ────────────────────────────────────────────────────────────────────
 function PinnedPanels.Unpin(id)
 	local pin = PinnedPanels.Pins[id]
+	RecordClosed(id, pin)
 
 	if pin and pin.kind == "group" and pin.groupName then
 		PinnedPanels.UnpinGroupMembers(pin.groupName)

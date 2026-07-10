@@ -17,6 +17,8 @@ include("pinnedpanels/creation_browser.lua")
 include("pinnedpanels/pinned_list.lua")
 include("pinnedpanels/cursor_mode.lua")
 include("pinnedpanels/keyboard.lua")
+include("pinnedpanels/actions.lua")
+include("pinnedpanels/command_palette.lua")
 include("pinnedpanels/settings_tab.lua")
 
 local C = PinnedPanels.C

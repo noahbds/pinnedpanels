@@ -733,6 +733,11 @@ local BINDS = {
 	{ id = "minimize_focused", name = "Minimize Focused (Taskbar)",  default = KEY_NONE, action = MinimizeFocused },
 	{ id = "maximize_focused", name = "Maximize Focused (Fill Screen)", default = KEY_NONE, action = MaximizeFocused },
 	{ id = "unpin_focused",    name = "Unpin Focused",              default = KEY_NONE, action = UnpinFocused },
+	{ id = "auto_arrange",     name = "Auto-Arrange Panels",        default = KEY_NONE, action = function() if PinnedPanels.AutoArrange then PinnedPanels.AutoArrange() end end },
+	{ id = "autosize_focused", name = "Auto-Size Focused",          default = KEY_NONE, action = function()
+		if IM.Focused and IM.Focused ~= "__TASKBAR__" then PinnedPanels.AutoSizePanel(IM.Focused) end
+	end },
+	{ id = "reopen_closed",    name = "Reopen Last Closed",         default = KEY_NONE, action = function() if PinnedPanels.ReopenLastClosed then PinnedPanels.ReopenLastClosed() end end },
 }
 PinnedPanels.Keybinds = BINDS
 
@@ -785,6 +790,39 @@ local function AdjustValue(el, key)
 			if id < 1 then id = n elseif id > n then id = 1 end
 			el:ChooseOptionID(id)
 		end
+	elseif cls == "DColorMixer" then
+		-- Full picker: Arrows = Hue / Value, Shift+Arrows = Saturation / Alpha.
+		local col = (isfunction(el.GetColor) and el:GetColor()) or color_white
+		local h, s, v = ColorToHSV(col)
+		local a = col.a or 255
+		local shift = input.IsKeyDown(KEY_LSHIFT) or input.IsKeyDown(KEY_RSHIFT)
+		if shift then
+			if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
+			elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
+			elseif key == KEY_UP    then a = math.Clamp(a + 10, 0, 255)
+			elseif key == KEY_DOWN  then a = math.Clamp(a - 10, 0, 255) end
+		else
+			if key == KEY_LEFT      then h = (h - 8) % 360
+			elseif key == KEY_RIGHT then h = (h + 8) % 360
+			elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
+			elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
+		end
+		local nc = HSVToColor(h, s, v)
+		nc.a = math.Round(a)
+		if isfunction(el.SetColor) then el:SetColor(nc) end
+		if isfunction(el.ValueChanged) then el:ValueChanged(nc) end
+	elseif cls:find("ColorCube") then
+		-- Cube controls saturation (X) and value (Y); hue stays fixed.
+		local col = (isfunction(el.GetRGB) and el:GetRGB())
+			or (isfunction(el.GetColor) and el:GetColor()) or color_white
+		local h, s, v = ColorToHSV(col)
+		if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
+		elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
+		elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
+		elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
+		local nc = HSVToColor(h, s, v)
+		if isfunction(el.SetColor) then el:SetColor(nc) end
+		if isfunction(el.OnUserChanged) then el:OnUserChanged(nc) end
 	end
 end
 
@@ -792,7 +830,7 @@ local function ActivateElement(el)
 	if IM.SelectedIndex then IM.SelectedIndex = nil return end
 	local cls = el.ClassName or el:GetClassName()
 	IM.SelectedIndex = IM.NavFocusIndex
-	if cls:find("Slider") or cls == "DComboBox" then
+	if cls:find("Slider") or cls == "DComboBox" or cls == "DColorMixer" or cls:find("ColorCube") then
 		return
 	elseif cls == "DTextEntry" then
 		local pin = FocusedPin()
@@ -901,7 +939,9 @@ local function HandleContentNav()
 			if not wasDown then StartRepeat(key) end
 			if not wasDown or ShouldRepeat(key) then
 				if IM.SelectedIndex and IsValid(selectedEl) then
-					if key == KEY_LEFT or key == KEY_RIGHT then
+					local scls = selectedEl.ClassName or selectedEl:GetClassName()
+					local twoD = scls == "DColorMixer" or scls:find("ColorCube")
+					if key == KEY_LEFT or key == KEY_RIGHT or (twoD and (key == KEY_UP or key == KEY_DOWN)) then
 						AdjustValue(selectedEl, key)
 					else
 						IM.SelectedIndex = nil

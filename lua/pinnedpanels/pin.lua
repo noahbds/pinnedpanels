@@ -120,7 +120,7 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 		collapsed    = istable(s.collapsed) and s.collapsed or nil,
 	}
 
-	if s.filterBar and not opts.fill and PinnedPanels.AttachFilterBar then
+	if s.filterBar and PinnedPanels.AttachFilterBar then
 		PinnedPanels.AttachFilterBar(id)
 	end
 
@@ -175,8 +175,9 @@ function PinnedPanels.ToggleMaximizePanel(id)
 		local x, y = frame:GetPos()
 		local w, h = frame:GetSize()
 		pin.restoreBounds = { x = x, y = y, w = w, h = h }
-		frame:SetPos(0, 0)
-		frame:SetSize(ScrW(), ScrH())
+		local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+		frame:SetPos(ux, uy)
+		frame:SetSize(uw, uh)
 		pin.maximized = true
 	end
 

@@ -17,6 +17,27 @@ function PinnedPanels.OpenColorChanger(id)
 	frame:MakePopup()
 	PinnedPanels._colorFrame = frame
 
+	-- The keyboard-nav Think loop refuses to run while any panel holds
+	-- keyboard focus, so the popup must not keep it; only borrow it while a
+	-- text field inside (RGB wangs) is hovered or focused.
+	frame:SetKeyboardInputEnabled(false)
+	local function IsTextPanel(p)
+		if not IsValid(p) then return false end
+		local c = p:GetClassName()
+		return c == "TextEntry" or c == "DTextEntry" or c == "RichText"
+	end
+	frame.Think = function(self)
+		local hovered = vgui.GetHoveredPanel()
+		local focus   = vgui.GetKeyboardFocus()
+		local needs = (IsTextPanel(hovered) and hovered:HasParent(self))
+			or (IsTextPanel(focus) and focus:HasParent(self))
+		if self:IsKeyboardInputEnabled() ~= needs then
+			self:SetKeyboardInputEnabled(needs)
+		end
+	end
+
+	local IM = PinnedPanels.CursorMode
+
 	frame.Paint = function(self, w, h)
 		draw.RoundedBox(6, 0, 0, w, h, C.colorPopupBg)
 		draw.RoundedBoxEx(6, 0, 0, w, 28, C.colorPopupHdr, true, true, false, false)
@@ -24,6 +45,36 @@ function PinnedPanels.OpenColorChanger(id)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
 		draw.SimpleText("Panel Colors: " .. pin.title, "DermaDefaultBold", 10, 14,
 			C.textBright, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+
+		if IM and IM.NavPopup == self and IM.NavigatingPanel then
+			draw.SimpleText("Arrows: move / adjust   Enter: select   Backspace: back",
+				"DermaDefault", w / 2, h - 10, C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
+	end
+
+	-- nav focus ring (mirrors the pinned-frame PaintOver, popup-local)
+	frame.PaintOver = function(self, w, h)
+		if not IM or IM.NavPopup ~= self or not IM.NavigatingPanel then return end
+		local els = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
+		local el = els[IM.NavFocusIndex]
+		if not IsValid(el) then return end
+
+		local ex, ey = el:LocalToScreen(0, 0)
+		local lx, ly = self:ScreenToLocal(ex, ey)
+		local ew, eh = el:GetSize()
+		local ringCol = (IM.SelectedIndex == IM.NavFocusIndex) and C.navSelected or C.navElement
+
+		surface.SetDrawColor(0, 0, 0, 255)
+		surface.DrawOutlinedRect(lx - 3, ly - 3, ew + 6, eh + 6, 1)
+		surface.SetDrawColor(ringCol)
+		surface.DrawOutlinedRect(lx - 2, ly - 2, ew + 4, eh + 4, 2)
+	end
+
+	frame.OnRemove = function(self)
+		if IM and IM.NavPopup == self and PinnedPanels.SetNavPopup then
+			PinnedPanels.SetNavPopup(nil)
+		end
+		if PinnedPanels._colorFrame == self then PinnedPanels._colorFrame = nil end
 	end
 
 	local scroll = vgui.Create("DScrollPanel", frame)
@@ -106,6 +157,13 @@ function PinnedPanels.OpenColorChanger(id)
 		Repaint()
 		PinnedPanels.Save()
 		frame:Close()
+	end
+
+	-- hand keyboard navigation to this popup while it is open (after the
+	-- controls exist, so the initial focus lands on the top-most element)
+	if PinnedPanels.SetNavPopup and PinnedPanels.IsKeyboardNavEnabled
+		and PinnedPanels.IsKeyboardNavEnabled() then
+		PinnedPanels.SetNavPopup(frame)
 	end
 end
 

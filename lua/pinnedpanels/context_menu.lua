@@ -188,15 +188,16 @@ function PinnedPanels.OpenContextMenu(id, frame)
 			or "Assign Quick Key..."
 		local qOpt = menu:AddOption(qLabel, function()
 			PinnedPanels.OpenKeyBindFrame({
-				title = "Quick Key: " .. pin.title,
-				get   = function() return PinnedPanels.GetQuickSlotFor(id) or KEY_NONE end,
-				set   = function(k) PinnedPanels.SetQuickSlot(k, id) end,
+				title  = "Quick Key: " .. pin.title,
+				get    = function() return PinnedPanels.GetQuickSlotFor(id) or KEY_NONE end,
+				set    = function(k) PinnedPanels.SetQuickSlot(k, id) end,
+				ignore = "quick:" .. id,
 			})
 		end)
 		qOpt:SetIcon("icon16/lightning.png")
 	end
 
-	if pin.kind == "tool" and PinnedPanels.ToggleFilterBar then
+	if pin.kind ~= "frame" and PinnedPanels.ToggleFilterBar then
 		local fOpt = menu:AddOption(pin.filterBar and "Hide Filter Bar" or "Show Filter Bar", function()
 			PinnedPanels.ToggleFilterBar(id)
 		end)

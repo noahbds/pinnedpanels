@@ -14,8 +14,8 @@ function PinnedPanels.AutoArrange()
 	table.sort(list, function(a, b) return a.title:lower() < b.title:lower() end)
 
 	local margin = 8
-	local sw, sh = ScrW(), ScrH()
-	local x, y, rowH = margin, margin, 0
+	local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+	local x, y, rowH = ux + margin, uy + margin, 0
 
 	for _, e in ipairs(list) do
 		if e.pin.maximized then
@@ -23,15 +23,15 @@ function PinnedPanels.AutoArrange()
 			e.pin.restoreBounds = nil
 		end
 		local w, h = e.frame:GetSize()
-		w = math.min(w, sw - margin * 2)
-		h = math.min(h, sh - margin * 2)
+		w = math.min(w, uw - margin * 2)
+		h = math.min(h, uh - margin * 2)
 
-		if x + w + margin > sw and x > margin then
-			x = margin
+		if x + w + margin > ux + uw and x > ux + margin then
+			x = ux + margin
 			y = y + rowH + margin
 			rowH = 0
 		end
-		if y + h + margin > sh then y = margin end
+		if y + h + margin > uy + uh then y = uy + margin end
 
 		e.frame:SetSize(w, h)
 		e.frame:SetPos(x, y)
@@ -137,12 +137,20 @@ end
 
 local peekState = nil
 
+-- Grouped members are empty husk frames — their content lives inside the
+-- group frame's tab sheet — so revealing them shows big blank boxes.
+local function IsPeekable(id, pin)
+	if not IsValid(pin.frame) then return false end
+	if pin.kind ~= "group" and PinnedPanels.GetGroupForPanel(id) then return false end
+	return true
+end
+
 local function StartPeek()
 	peekState = {}
 	PinnedPanels._peeking = true
 	for id, pin in pairs(PinnedPanels.Pins) do
-		if IsValid(pin.frame) then
-			peekState[id] = pin.frame:IsVisible()
+		if IsPeekable(id, pin) then
+			peekState[id] = { visible = pin.frame:IsVisible(), minimized = pin.minimized }
 			pin.frame:SetVisible(true)
 			pin.frame:SetAlpha(255)
 		end
@@ -151,10 +159,12 @@ end
 
 local function EndPeek()
 	if not peekState then return end
-	for id, wasVisible in pairs(peekState) do
+	for id, st in pairs(peekState) do
 		local pin = PinnedPanels.Pins[id]
-		if pin and IsValid(pin.frame) then
-			pin.frame:SetVisible(wasVisible)
+		-- if the minimize state changed mid-peek (e.g. restored from the
+		-- taskbar), the new state wins over the snapshot
+		if pin and IsValid(pin.frame) and pin.minimized == st.minimized then
+			pin.frame:SetVisible(st.visible)
 		end
 	end
 	peekState = nil

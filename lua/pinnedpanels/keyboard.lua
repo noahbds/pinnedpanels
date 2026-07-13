@@ -4,7 +4,7 @@ local IM = PinnedPanels.CursorMode
 -- ── Focus Helpers ────────────────────────────────────────────────────────────
 local function VisibleTopLevelPins()
 	local list = {}
-	local minimized = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+	local minimized = PinnedPanels.GetMinimizedPanels()
 
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) and pin.frame:IsVisible() then
@@ -44,7 +44,7 @@ function PinnedPanels.IsKeyboardNavEnabled()
 		end
 	end
 
-	local minimized = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+	local minimized = PinnedPanels.GetMinimizedPanels()
 	local ts = PinnedPanels.Settings.taskbar
 	if IM.Active and #minimized > 0 and ts and ts.enabled ~= false then
 		return true
@@ -52,7 +52,6 @@ function PinnedPanels.IsKeyboardNavEnabled()
 
 	return false
 end
-local NavEnabled = PinnedPanels.IsKeyboardNavEnabled
 
 -- ── Panel & Tab Navigation ───────────────────────────────────────────────────
 local function SetFocus(id, dir)
@@ -64,7 +63,7 @@ local function SetFocus(id, dir)
 
 	if id == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+		local entries = PinnedPanels.GetMinimizedPanels()
 		if TB then
 			if #entries == 0 then
 				TB.hoverIndex = nil
@@ -73,19 +72,20 @@ local function SetFocus(id, dir)
 			end
 		end
 		IM._taskbarLastInput = CurTime()
-		if PinnedPanels.FocusTaskbar then PinnedPanels.FocusTaskbar() end
+		PinnedPanels.FocusTaskbar()
 		return
 	end
 
-	if PinnedPanels.UnfocusTaskbar then PinnedPanels.UnfocusTaskbar() end
+	PinnedPanels.UnfocusTaskbar()
 	local pin = id and PinnedPanels.Pins[id]
 	if pin and IsValid(pin.frame) then pin.frame:MoveToFront() end
+	PinnedPanels.UpdatePanelStates()
 end
 
 local function CycleFocus(dir)
 	if IM.Focused == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+		local entries = PinnedPanels.GetMinimizedPanels()
 		if TB and #entries > 0 then
 			local ni = (TB.hoverIndex or 1) + dir
 			if ni >= 1 and ni <= #entries then
@@ -127,7 +127,7 @@ local function EquipFocusedTool()
 
 	if IM.Focused == "__TASKBAR__" then
 		local TB = PinnedPanels.Taskbar
-		local entries = PinnedPanels.GetMinimizedPanels and PinnedPanels.GetMinimizedPanels() or {}
+		local entries = PinnedPanels.GetMinimizedPanels()
 		local sel = TB and TB.hoverIndex
 		if sel and entries[sel] then
 			local id = entries[sel].id
@@ -171,7 +171,7 @@ local function MinimizeFocused()
 end
 
 local function MaximizeFocused()
-	if IM.Focused and IM.Focused ~= "__TASKBAR__" and PinnedPanels.ToggleMaximizePanel then
+	if IM.Focused and IM.Focused ~= "__TASKBAR__" then
 		PinnedPanels.ToggleMaximizePanel(IM.Focused)
 	end
 end
@@ -184,11 +184,49 @@ local function UnpinFocused()
 	end
 end
 
+-- ── Colour Control Resolution ────────────────────────────────────────────────
+local function ColorTarget(el)
+	if not IsValid(el) then return nil end
+	local cls = el.ClassName or el:GetClassName()
+	if cls:find("ColorCube") then return el, cls end
+	if not cls:find("Color") then return nil end
+
+	local found, fcls
+	local function dig(p, d)
+		if not IsValid(p) or d > 5 or found then return end
+		for _, c in ipairs(p:GetChildren()) do
+			if IsValid(c) then
+				local ccls = c.ClassName or c:GetClassName()
+				if ccls == "DColorMixer" or ccls:find("ColorCube") then
+					found, fcls = c, ccls
+					return
+				end
+				dig(c, d + 1)
+			end
+		end
+	end
+	dig(el, 0)
+	if IsValid(found) then return found, fcls end
+
+	-- a clickable colour thing (palette swatch, swatch-button…) is a
+	-- button to press, not a value to adjust
+	if isfunction(el.GetColor) and isfunction(el.SetColor)
+		and not isfunction(el.DoClick) then
+		return el, cls
+	end
+	return nil
+end
+PinnedPanels._ColorTarget = ColorTarget
+
 -- ── Interactive Element Scan (cached) ────────────────────────────────────────
 local SKIP_CLASSES = {
 	DLabel = true, Label = true, DImage = true, Image = true,
 	DDivider = true, Divider = true, DExpandButton = true,
 	DVScrollBar = true, DHScrollBar = true,
+}
+
+local COLOR_CONTAINERS = {
+	DColorMixer = true, CtrlColor = true, DColorCombo = true, DColorPalette = true,
 }
 
 local CONTAINER_CLASSES = {
@@ -197,6 +235,7 @@ local CONTAINER_CLASSES = {
 	DTree_Node = true, DListLayout = true, DIconLayout = true, DTileLayout = true,
 	ContentContainer = true, SpawnmenuContentPanel = true, DMenu = true, DMenuBar = true,
 }
+for k in pairs(COLOR_CONTAINERS) do CONTAINER_CLASSES[k] = true end
 
 local BASE_OMP = (vgui.GetControlTable and vgui.GetControlTable("DPanel") or {}).OnMousePressed
 
@@ -219,7 +258,9 @@ function PinnedPanels.GetInteractiveElements(panel)
 
 		if class:find("Slider") or class:find("CheckBox") or class == "DButton"
 			or class == "DImageButton" or class == "DComboBox" or class == "DTextEntry"
-			or class == "DNumSlider" or class:find("Color") or class == "DTree_Node_Button" then
+			or class == "DNumSlider" or class == "DTree_Node_Button"
+			or class == "DRGBPicker" or class == "DAlphaBar" or class == "DNumberWang"
+			or (class:find("Color") and not COLOR_CONTAINERS[class]) then
 			list[#list + 1] = p
 			return 1
 		end
@@ -254,19 +295,37 @@ end
 local navCache = { frame = nil, expire = 0, list = {} }
 
 function PinnedPanels.GetNavElements()
-	local pin = FocusedPin()
-	if not pin or not IsValid(pin.frame) then
+	-- a nav popup (e.g. the colour changer) takes precedence over the pin
+	local target = IsValid(IM.NavPopup) and IM.NavPopup or nil
+	if not target then
+		local pin = FocusedPin()
+		target = pin and IsValid(pin.frame) and pin.frame or nil
+	end
+	if not target then
 		navCache.frame, navCache.list = nil, {}
 		return navCache.list
 	end
-	if navCache.frame ~= pin.frame or CurTime() >= navCache.expire then
-		navCache.frame  = pin.frame
+	if navCache.frame ~= target or CurTime() >= navCache.expire then
+		navCache.frame  = target
 		navCache.expire = CurTime() + 0.15
-		navCache.list   = PinnedPanels.GetInteractiveElements(pin.frame)
+		navCache.list   = PinnedPanels.GetInteractiveElements(target)
 	end
 	return navCache.list
 end
 local GetNavElements = PinnedPanels.GetNavElements
+
+local function TopMostIndex(elems)
+	local bestIdx, bestY, bestX = 1, math.huge, math.huge
+	for i, el in ipairs(elems) do
+		if IsValid(el) then
+			local x, y = el:LocalToScreen(0, 0)
+			if y < bestY - 2 or (math.abs(y - bestY) <= 2 and x < bestX) then
+				bestIdx, bestY, bestX = i, y, x
+			end
+		end
+	end
+	return bestIdx
+end
 
 -- ── Key Repeat ───────────────────────────────────────────────────────────────
 local KEY_REPEAT_DELAY    = 0.35
@@ -296,23 +355,47 @@ local function ShouldRepeat(key)
 end
 
 -- ── Keybinds ─────────────────────────────────────────────────────────────────
+-- ESC is deliberately NOT captured anywhere in nav — it must stay free to open
+-- the game pause menu. BACKSPACE is the "back / exit" key instead.
 local NAV_KEYS = { [KEY_UP] = true, [KEY_DOWN] = true, [KEY_LEFT] = true, [KEY_RIGHT] = true,
-                   [KEY_ENTER] = true, [KEY_ESCAPE] = true, [KEY_BACKSPACE] = true }
+                   [KEY_ENTER] = true, [KEY_BACKSPACE] = true }
 local navKeyDown = {}
+local navMemory = {}
+
+local function ResetNavKeyState()
+	StopAllRepeats()
+	navKeyDown = {}
+	for k in pairs(NAV_KEYS) do
+		if input.IsKeyDown(k) then
+			navKeyDown[k] = true
+			StartRepeat(k)
+		end
+	end
+end
 
 local function ExitContentNav()
-	if IM.Focused then
-		PinnedPanels.NavMemory = PinnedPanels.NavMemory or {}
-		PinnedPanels.NavMemory[IM.Focused] = IM.NavFocusIndex
+	if IM.Focused and not IsValid(IM.NavPopup) then
+		navMemory[IM.Focused] = GetNavElements()[IM.NavFocusIndex]
 	end
+	IM.NavPopup = nil
 	IM.NavigatingPanel = false
 	IM.SelectedIndex = nil
 	StopAllRepeats()
 	navKeyDown = {}
-	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+	PinnedPanels.UpdatePanelStates()
 end
 
-PinnedPanels.ExitContentNav = ExitContentNav
+function PinnedPanels.SetNavPopup(frame)
+	if IsValid(frame) then
+		IM.NavPopup        = frame
+		IM.NavigatingPanel = true
+		IM.NavFocusIndex   = TopMostIndex(GetNavElements())
+		IM.SelectedIndex   = nil
+		ResetNavKeyState()
+	elseif IM.NavPopup ~= nil then
+		ExitContentNav()
+	end
+end
 
 local _prevInteractive = false
 hook.Add("PinnedPanels_CursorModeChanged", "PinnedPanels_ExitNavOnCursorOff", function(interactive)
@@ -326,28 +409,21 @@ local function EnterContentNav()
 	local pin = FocusedPin()
 	if IM.NavigatingPanel or not pin or not IsValid(pin.frame) then return end
 	IM.NavigatingPanel = true
-	
-	PinnedPanels.NavMemory = PinnedPanels.NavMemory or {}
-	local memIndex = PinnedPanels.NavMemory[IM.Focused] or 1
-	local elems = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
-	if #elems > 0 then
-		memIndex = math.Clamp(memIndex, 1, #elems)
-	else
-		memIndex = 1
-	end
-	IM.NavFocusIndex = memIndex
-	
-	IM.SelectedIndex = nil
-	IM.LastNavPanel = IM.Focused
-	StopAllRepeats()
-	navKeyDown = {}
-	for k in pairs(NAV_KEYS) do
-		if input.IsKeyDown(k) then
-			navKeyDown[k] = true
-			StartRepeat(k)
+
+	local elems = GetNavElements()
+	local idx
+	local mem = navMemory[IM.Focused]
+	if IsValid(mem) then
+		for i, el in ipairs(elems) do
+			if el == mem then idx = i break end
 		end
 	end
-	if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+	IM.NavFocusIndex = idx or TopMostIndex(elems)
+
+	IM.SelectedIndex = nil
+	IM.LastNavPanel = IM.Focused
+	ResetNavKeyState()
+	PinnedPanels.UpdatePanelStates()
 end
 
 -- ── Context-Menu Keyboard Navigation ───────────────────────────────────────
@@ -386,15 +462,8 @@ local function CreateKeyboardMenu(items, x, y, parentMenu)
 	pnl.Items      = items
 	pnl.SelIndex   = 1
 	pnl.ParentMenu = parentMenu
-	pnl._wasDown   = {
-		[KEY_UP]        = input.IsKeyDown(KEY_UP),
-		[KEY_DOWN]      = input.IsKeyDown(KEY_DOWN),
-		[KEY_LEFT]      = input.IsKeyDown(KEY_LEFT),
-		[KEY_RIGHT]     = input.IsKeyDown(KEY_RIGHT),
-		[KEY_ENTER]     = input.IsKeyDown(KEY_ENTER),
-		[KEY_ESCAPE]    = input.IsKeyDown(KEY_ESCAPE),
-		[KEY_BACKSPACE] = input.IsKeyDown(KEY_BACKSPACE),
-	}
+	pnl._wasDown   = {}
+	for k in pairs(NAV_KEYS) do pnl._wasDown[k] = input.IsKeyDown(k) end
 
 	for _, it in ipairs(items) do
 		if it.icon and it.icon ~= "" then
@@ -656,7 +725,7 @@ local function HandleMenuNav()
 	local leftNow  = input.IsKeyDown(KEY_LEFT)
 	local rightNow = input.IsKeyDown(KEY_RIGHT)
 	local enterNow = input.IsKeyDown(KEY_ENTER)
-	local escNow   = input.IsKeyDown(KEY_ESCAPE) or input.IsKeyDown(KEY_BACKSPACE)
+	local backNow  = input.IsKeyDown(KEY_BACKSPACE) -- back out of / close the menu (not ESC)
 	local wd       = pnl._wasDown
 
 	if upNow and not wd[KEY_UP] then
@@ -695,17 +764,16 @@ local function HandleMenuNav()
 			end
 		end
 		return
-	elseif (leftNow and not wd[KEY_LEFT]) or (escNow and not wd[KEY_ESCAPE] and not wd[KEY_BACKSPACE]) then
+	elseif (leftNow and not wd[KEY_LEFT]) or (backNow and not wd[KEY_BACKSPACE]) then
 		if IsValid(pnl.ParentMenu) then
 			local parent = pnl.ParentMenu
 			parent.ActiveSubMenu = nil
 			parent._wasDown[KEY_LEFT] = true
-			parent._wasDown[KEY_ESCAPE] = true
 			parent._wasDown[KEY_BACKSPACE] = true
 			IM.ActiveMenu = parent
 			pnl:Remove()
 			return
-		elseif escNow then
+		elseif backNow then
 			CloseKeyboardMenu(pnl)
 			IM.ActiveMenu = nil
 			return
@@ -717,8 +785,7 @@ local function HandleMenuNav()
 	wd[KEY_LEFT]      = leftNow
 	wd[KEY_RIGHT]     = rightNow
 	wd[KEY_ENTER]     = enterNow
-	wd[KEY_ESCAPE]    = escNow
-	wd[KEY_BACKSPACE] = input.IsKeyDown(KEY_BACKSPACE)
+	wd[KEY_BACKSPACE] = backNow
 end
 
 local BINDS = {
@@ -773,9 +840,97 @@ local function ScrollIntoView(el)
 	end
 end
 
+local function OwnerMixer(el)
+	local p = el:GetParent()
+	for _ = 1, 6 do
+		if not IsValid(p) then return nil end
+		if IsValid(p.HSV) and isfunction(p.GetColor) and isfunction(p.SetColor) then
+			return p
+		end
+		p = p:GetParent()
+	end
+	return nil
+end
+
+local function AdjustKind(el)
+	if not IsValid(el) then return nil end
+	local cls = el.ClassName or el:GetClassName()
+	if cls == "DRGBPicker" or cls == "DAlphaBar" then return "vert" end
+	if ColorTarget(el) then return "2d" end
+	if cls:find("Slider") or cls == "DComboBox" then return "1d" end
+	return nil
+end
+
 local function AdjustValue(el, key)
 	local cls = el.ClassName or el:GetClassName()
 	local dir = (key == KEY_RIGHT) and 1 or -1
+
+	if cls == "DRGBPicker" then
+		-- hue strip: step the owning mixer's hue. On a grey colour a hue
+		-- change is invisible, so give it saturation first (clicking the
+		-- strip with the mouse yields a fully saturated colour too).
+		local mixer = OwnerMixer(el)
+		if mixer then
+			local col = mixer:GetColor()
+			local h, s, v = ColorToHSV(col)
+			if s < 0.05 then s = 1 end
+			if v < 0.05 then v = 1 end
+			local step = (key == KEY_UP or key == KEY_RIGHT) and 8 or -8
+			local nc = HSVToColor((h + step) % 360, s, v)
+			nc.a = col.a or 255
+			mixer:SetColor(nc)
+		end
+		return
+	end
+
+	if cls == "DAlphaBar" then
+		-- SetValue alone doesn't notify; fire OnChange like the mouse does
+		local step = (key == KEY_UP or key == KEY_RIGHT) and 0.04 or -0.04
+		local v = math.Clamp((el:GetValue() or 1) + step, 0, 1)
+		el:SetValue(v)
+		el:OnChange(v)
+		return
+	end
+
+	local tgt, tcls = ColorTarget(el)
+	if tgt then
+		if tcls:find("ColorCube") then
+			-- Cube controls saturation (X) and value (Y); hue stays fixed.
+			local col = (isfunction(tgt.GetRGB) and tgt:GetRGB())
+				or (isfunction(tgt.GetColor) and tgt:GetColor()) or color_white
+			local h, s, v = ColorToHSV(col)
+			if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
+			elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
+			elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
+			elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
+			local nc = HSVToColor(h, s, v)
+			if isfunction(tgt.SetColor) then tgt:SetColor(nc) end
+			if isfunction(tgt.OnUserChanged) then tgt:OnUserChanged(nc) end
+		else
+			-- Full mixer: Arrows = Hue / Value, Shift+Arrows = Saturation / Alpha.
+			-- SetColor fires the mixer's ValueChanged, which pushes the convars.
+			local col = (isfunction(tgt.GetColor) and tgt:GetColor()) or color_white
+			local h, s, v = ColorToHSV(col)
+			local a = col.a or 255
+			local shift = input.IsKeyDown(KEY_LSHIFT) or input.IsKeyDown(KEY_RSHIFT)
+			if shift then
+				if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
+				elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
+				elseif key == KEY_UP    then a = math.Clamp(a + 10, 0, 255)
+				elseif key == KEY_DOWN  then a = math.Clamp(a - 10, 0, 255) end
+			else
+				if key == KEY_LEFT      then h = (h - 8) % 360
+				elseif key == KEY_RIGHT then h = (h + 8) % 360
+				elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
+				elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
+			end
+			local nc = HSVToColor(h, s, v)
+			nc.a = math.Round(a)
+			if isfunction(tgt.SetColor) then tgt:SetColor(nc) end
+		end
+		return
+	end
+
 	if cls:find("Slider") then
 		local mn, mx = el:GetMin(), el:GetMax()
 		el:SetValue(math.Clamp(el:GetValue() + (mx - mn) / 30 * dir, mn, mx))
@@ -790,39 +945,6 @@ local function AdjustValue(el, key)
 			if id < 1 then id = n elseif id > n then id = 1 end
 			el:ChooseOptionID(id)
 		end
-	elseif cls == "DColorMixer" then
-		-- Full picker: Arrows = Hue / Value, Shift+Arrows = Saturation / Alpha.
-		local col = (isfunction(el.GetColor) and el:GetColor()) or color_white
-		local h, s, v = ColorToHSV(col)
-		local a = col.a or 255
-		local shift = input.IsKeyDown(KEY_LSHIFT) or input.IsKeyDown(KEY_RSHIFT)
-		if shift then
-			if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
-			elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
-			elseif key == KEY_UP    then a = math.Clamp(a + 10, 0, 255)
-			elseif key == KEY_DOWN  then a = math.Clamp(a - 10, 0, 255) end
-		else
-			if key == KEY_LEFT      then h = (h - 8) % 360
-			elseif key == KEY_RIGHT then h = (h + 8) % 360
-			elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
-			elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
-		end
-		local nc = HSVToColor(h, s, v)
-		nc.a = math.Round(a)
-		if isfunction(el.SetColor) then el:SetColor(nc) end
-		if isfunction(el.ValueChanged) then el:ValueChanged(nc) end
-	elseif cls:find("ColorCube") then
-		-- Cube controls saturation (X) and value (Y); hue stays fixed.
-		local col = (isfunction(el.GetRGB) and el:GetRGB())
-			or (isfunction(el.GetColor) and el:GetColor()) or color_white
-		local h, s, v = ColorToHSV(col)
-		if key == KEY_LEFT      then s = math.Clamp(s - 0.04, 0, 1)
-		elseif key == KEY_RIGHT then s = math.Clamp(s + 0.04, 0, 1)
-		elseif key == KEY_UP    then v = math.Clamp(v + 0.04, 0, 1)
-		elseif key == KEY_DOWN  then v = math.Clamp(v - 0.04, 0, 1) end
-		local nc = HSVToColor(h, s, v)
-		if isfunction(el.SetColor) then el:SetColor(nc) end
-		if isfunction(el.OnUserChanged) then el:OnUserChanged(nc) end
 	end
 end
 
@@ -830,9 +952,10 @@ local function ActivateElement(el)
 	if IM.SelectedIndex then IM.SelectedIndex = nil return end
 	local cls = el.ClassName or el:GetClassName()
 	IM.SelectedIndex = IM.NavFocusIndex
-	if cls:find("Slider") or cls == "DComboBox" or cls == "DColorMixer" or cls:find("ColorCube") then
+	if AdjustKind(el) then
+		-- enter adjust mode; arrows tweak the value in place
 		return
-	elseif cls == "DTextEntry" then
+	elseif cls == "DTextEntry" or cls == "DNumberWang" or el:GetClassName() == "TextEntry" then
 		local pin = FocusedPin()
 		if pin and IsValid(pin.frame) then
 			pin.frame:SetKeyboardInputEnabled(true)
@@ -861,6 +984,12 @@ local function ActivateElement(el)
 	end
 end
 
+local function ElementRect(el)
+	local x, y = el:LocalToScreen(0, 0)
+	local w, h = el:GetSize()
+	return x, y, w, h, x + w / 2, y + h / 2
+end
+
 local function SpatialMove(elements, focusEl, key)
 	local cls = focusEl.ClassName or focusEl:GetClassName()
 	if cls == "DTree_Node_Button" then
@@ -871,39 +1000,59 @@ local function SpatialMove(elements, focusEl, key)
 		end
 	end
 
-	local cx, cy = focusEl:LocalToScreen(0, 0)
-	local best, bestIdx = math.huge, nil
+	local fx, fy, fw, fh, fcx, fcy = ElementRect(focusEl)
+	local horiz = (key == KEY_LEFT or key == KEY_RIGHT)
+
+	-- overlapping candidates (same row / column) beat non-overlapping ones
+	local bestOver, bestOverIdx = math.huge, nil
+	local bestAny,  bestAnyIdx  = math.huge, nil
+
 	for i, el in ipairs(elements) do
 		if el ~= focusEl and IsValid(el) then
-			local ox, oy = el:LocalToScreen(0, 0)
-			local dx, dy = ox - cx, oy - cy
-			local valid, score = false, 0
-			if key == KEY_LEFT and dx < -5 then valid, score = true, math.abs(dx) + math.abs(dy) * 4
-			elseif key == KEY_RIGHT and dx > 5 then valid, score = true, math.abs(dx) + math.abs(dy) * 4
-			elseif key == KEY_UP and dy < -5 then valid, score = true, math.abs(dy) + math.abs(dx) * 4
-			elseif key == KEY_DOWN and dy > 5 then valid, score = true, math.abs(dy) + math.abs(dx) * 4 end
-			if valid and score < best then best, bestIdx = score, i end
+			local ex, ey, ew, eh, ecx, ecy = ElementRect(el)
+			local dx, dy = ecx - fcx, ecy - fcy
+
+			local valid
+			if key == KEY_LEFT then      valid = dx < -2
+			elseif key == KEY_RIGHT then valid = dx > 2
+			elseif key == KEY_UP then    valid = dy < -2
+			else                         valid = dy > 2 end
+
+			if valid then
+				local overlap
+				if horiz then
+					overlap = (ey < fy + fh) and (fy < ey + eh)
+				else
+					overlap = (ex < fx + fw) and (fx < ex + ew)
+				end
+				local score = horiz and (math.abs(dx) + math.abs(dy) * 4)
+					or (math.abs(dy) + math.abs(dx) * 4)
+				if overlap then
+					if score < bestOver then bestOver, bestOverIdx = score, i end
+				elseif score < bestAny then
+					bestAny, bestAnyIdx = score, i
+				end
+			end
 		end
 	end
 
-	if bestIdx then
-		IM.NavFocusIndex = bestIdx
-	elseif key == KEY_DOWN and IM.NavFocusIndex < #elements then
-		IM.NavFocusIndex = IM.NavFocusIndex + 1
+	local idx = bestOverIdx or ((not horiz) and bestAnyIdx or nil)
+	if idx then
+		IM.NavFocusIndex = idx
 	elseif key == KEY_UP then
-		if IM.NavFocusIndex > 1 then
-			IM.NavFocusIndex = IM.NavFocusIndex - 1
-		else
-			ExitContentNav()
-		end
+		-- moving up from the top-most element leaves content nav
+		ExitContentNav()
 	end
 end
 
 local function HandleContentNav()
-	local pin = FocusedPin()
-	if not pin or not IsValid(pin.frame) or IM.Focused ~= IM.LastNavPanel then
-		ExitContentNav()
-		return
+	-- popup nav (colour changer…) has no owning pin to validate against
+	if not IsValid(IM.NavPopup) then
+		local pin = FocusedPin()
+		if not pin or not IsValid(pin.frame) or IM.Focused ~= IM.LastNavPanel then
+			ExitContentNav()
+			return
+		end
 	end
 
 	local elements = GetNavElements()
@@ -920,7 +1069,7 @@ local function HandleContentNav()
 		local down = input.IsKeyDown(key)
 		local wasDown = navKeyDown[key] or false
 
-		if key == KEY_ESCAPE or key == KEY_BACKSPACE then
+		if key == KEY_BACKSPACE then
 			if down and not wasDown then
 				if IM.SelectedIndex then IM.SelectedIndex = nil else ExitContentNav() end
 			end
@@ -939,9 +1088,10 @@ local function HandleContentNav()
 			if not wasDown then StartRepeat(key) end
 			if not wasDown or ShouldRepeat(key) then
 				if IM.SelectedIndex and IsValid(selectedEl) then
-					local scls = selectedEl.ClassName or selectedEl:GetClassName()
-					local twoD = scls == "DColorMixer" or scls:find("ColorCube")
-					if key == KEY_LEFT or key == KEY_RIGHT or (twoD and (key == KEY_UP or key == KEY_DOWN)) then
+					local kind = AdjustKind(selectedEl)
+					local consume = (kind == "2d" or kind == "vert")
+						or (kind == "1d" and (key == KEY_LEFT or key == KEY_RIGHT))
+					if consume then
 						AdjustValue(selectedEl, key)
 					else
 						IM.SelectedIndex = nil
@@ -1023,7 +1173,7 @@ hook.Add("Think", "PinnedPanels_KeyNav", function()
 		return
 	end
 
-	if not NavEnabled() then
+	if not PinnedPanels.IsKeyboardNavEnabled() then
 		if IM.NavigatingPanel then ExitContentNav() end
 		if PinnedPanels.UnfocusTaskbar then PinnedPanels.UnfocusTaskbar() end
 		return
@@ -1040,7 +1190,7 @@ hook.Add("Think", "PinnedPanels_KeyNav", function()
 			IM._taskbarLastInput = CurTime()
 		end
 		local idle = IM._taskbarLastInput and (CurTime() - IM._taskbarLastInput > 5)
-		if input.IsKeyDown(KEY_ESCAPE) or (idle and not PinnedPanels.PanelsInteractive()) then
+		if input.IsKeyDown(KEY_BACKSPACE) or (idle and not PinnedPanels.PanelsInteractive()) then
 			if PinnedPanels.UnfocusTaskbar then PinnedPanels.UnfocusTaskbar() end
 			return
 		end
@@ -1069,7 +1219,7 @@ local bindToButton = {
 
 local function IsCapturedKey(k)
 	if not k or k == KEY_NONE then return false end
-	if IM.ActiveMenu and (k == KEY_UP or k == KEY_DOWN or k == KEY_ENTER or k == KEY_ESCAPE or k == KEY_BACKSPACE) then return true end
+	if IM.ActiveMenu and (k == KEY_UP or k == KEY_DOWN or k == KEY_ENTER or k == KEY_BACKSPACE) then return true end
 	if IM.NavigatingPanel and NAV_KEYS[k] then return true end
 	for _, b in ipairs(BINDS) do
 		if b.key == k then return true end
@@ -1078,7 +1228,7 @@ local function IsCapturedKey(k)
 end
 
 hook.Add("CreateMove", "PinnedPanels_KeyNavSuppressMove", function(cmd)
-	if not NavEnabled() or IsValid(vgui.GetKeyboardFocus()) then return end
+	if not PinnedPanels.IsKeyboardNavEnabled() or IsValid(vgui.GetKeyboardFocus()) then return end
 
 	local buttons = cmd:GetButtons()
 	local function suppress(k)
@@ -1103,7 +1253,7 @@ hook.Add("CreateMove", "PinnedPanels_KeyNavSuppressMove", function(cmd)
 end)
 
 hook.Add("PlayerBindPress", "PinnedPanels_KeyNavSuppressBind", function(ply, bind, pressed, code)
-	if not NavEnabled() or IsValid(vgui.GetKeyboardFocus()) then return end
+	if not PinnedPanels.IsKeyboardNavEnabled() or IsValid(vgui.GetKeyboardFocus()) then return end
 	if code and IsCapturedKey(code) then return true end
 end)
 
@@ -1142,14 +1292,3 @@ function PinnedPanels.ResetAllBinds()
 		RunConsoleCommand(b.convar, tostring(b.default))
 	end
 end
-
-concommand.Add("pp_navdump", function()
-	local els = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
-	print(string.format("[PinnedPanels] %d nav element(s) in focused panel:", #els))
-	for i, el in ipairs(els) do
-		if IsValid(el) then
-			local w, h = el:GetSize()
-			print(string.format("  %2d: %-24s %dx%d", i, el:GetClassName(), w, h))
-		end
-	end
-end, nil, "List the keyboard-nav targets of the focused pinned panel")

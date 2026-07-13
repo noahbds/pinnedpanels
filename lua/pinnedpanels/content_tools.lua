@@ -36,6 +36,10 @@ local function SubtreeText(p, depth)
 		local t = p:GetText()
 		if isstring(t) and t ~= "" then parts[#parts + 1] = t end
 	end
+	-- content icons (NPCs, entities, weapons…) label via m_NiceName, not GetText
+	if isstring(p.m_NiceName) and p.m_NiceName ~= "" then
+		parts[#parts + 1] = p.m_NiceName
+	end
 	for _, c in ipairs(p:GetChildren()) do
 		local s = SubtreeText(c, depth + 1)
 		if s ~= "" then parts[#parts + 1] = s end
@@ -89,6 +93,15 @@ local function RestoreFiltered(root, depth)
 			if c._pp_filtered then
 				c._pp_filtered = nil
 				c:SetVisible(true)
+				if c._pp_prevSizeY ~= nil then
+					c:SetSizeY(c._pp_prevSizeY)
+					c._pp_prevSizeY = nil
+				end
+				if c._pp_prevTall ~= nil then
+					c:SetTall(c._pp_prevTall)
+					c._pp_prevTall = nil
+				end
+				c:InvalidateLayout()
 			end
 			if c._pp_filterExpanded then
 				c._pp_filterExpanded = nil
@@ -99,21 +112,31 @@ local function RestoreFiltered(root, depth)
 	end
 end
 
+-- Form containers (ControlPanel/DForm rows are DSizeToContents wrappers) size
+-- themselves from every child regardless of visibility, so a hidden row must
+-- also collapse to zero height — and stop auto-sizing back — to free its space.
 local function HideRow(p)
 	p._pp_filtered = true
 	p:SetVisible(false)
+	if p._pp_prevTall == nil then
+		p._pp_prevTall = p:GetTall()
+		if isfunction(p.GetSizeY) and isfunction(p.SetSizeY) then
+			p._pp_prevSizeY = p:GetSizeY()
+			p:SetSizeY(false)
+		end
+	end
+	p:SetTall(0)
 end
 
-function PinnedPanels.ApplyContentFilter(id, query)
-	local pin = PinnedPanels.Pins[id]
-	if not pin or not IsValid(pin.content) then return end
-	local content = pin.content
+local function FilterContent(content, query)
+	if not IsValid(content) then return end
 
 	query = string.Trim((query or ""):lower())
 	RestoreFiltered(content, 0)
 
 	local scroll, canvas = PinnedPanels.FindCanvasPanel(content)
 	local root = IsValid(canvas) and canvas or content
+	local rowParent = root
 
 	if query ~= "" then
 		local function match(txt)
@@ -122,7 +145,6 @@ function PinnedPanels.ApplyContentFilter(id, query)
 
 		-- rows usually live inside a single container (the ControlPanel) on
 		-- the canvas; descend into it so we filter rows, not the whole panel
-		local rowParent = root
 		local visKids = {}
 		for _, k in ipairs(root:GetChildren()) do
 			if IsValid(k) and k:IsVisible() then visKids[#visKids + 1] = k end
@@ -130,7 +152,8 @@ function PinnedPanels.ApplyContentFilter(id, query)
 		if #visKids == 1 and #visKids[1]:GetChildren() > 0 then rowParent = visKids[1] end
 
 		for _, row in ipairs(rowParent:GetChildren()) do
-			if IsValid(row) and row:IsVisible() then
+			-- never hide a form/category header; it drives expand & layout
+			if IsValid(row) and row:IsVisible() and row ~= rowParent.Header then
 				if IsCategory(row) then
 					local headerTxt = CategoryLabel(row) or ""
 					if not match(headerTxt) then
@@ -156,9 +179,32 @@ function PinnedPanels.ApplyContentFilter(id, query)
 		end
 	end
 
+	-- relayout the whole chain so freed space is actually reclaimed
+	if IsValid(rowParent) and rowParent ~= root then rowParent:InvalidateLayout(true) end
+	root:InvalidateChildren(true)
 	root:InvalidateLayout(true)
 	if IsValid(scroll) then scroll:InvalidateLayout(true) end
 	content:InvalidateLayout(true)
+end
+
+function PinnedPanels.ApplyContentFilter(id, query)
+	local pin = PinnedPanels.Pins[id]
+	if not pin then return end
+
+	-- groups filter the active tab's content; other tabs get cleared so no
+	-- stale filtering lingers when the user switches
+	if pin.kind == "group" then
+		local activeId = PinnedPanels.GetActiveGroupMemberId(id)
+		for _, mid in ipairs(PinnedPanels.GetGroupPanels(pin.groupName or "")) do
+			local mp = PinnedPanels.Pins[mid]
+			if mp and IsValid(mp.content) then
+				FilterContent(mp.content, mid == activeId and query or "")
+			end
+		end
+		return
+	end
+
+	FilterContent(pin.content, query)
 end
 
 -- ── Filter Bar UI ────────────────────────────────────────────────────────────
@@ -177,10 +223,12 @@ function PinnedPanels.AttachFilterBar(id)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
 	end
 
+	-- only show the clear button when the user has typed something
 	local clearBtn = vgui.Create("DButton", bar)
 	clearBtn:Dock(RIGHT)
 	clearBtn:SetWide(22)
 	clearBtn:SetText("")
+	clearBtn:SetVisible(false)
 	clearBtn.Paint = function(self, w, h)
 		draw.SimpleText("×", "DermaDefaultBold", w / 2, h / 2 - 1,
 			self:IsHovered() and C.textBright or C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
@@ -195,12 +243,30 @@ function PinnedPanels.AttachFilterBar(id)
 	entry:SetPlaceholderText("Filter controls…")
 	entry:SetUpdateOnType(true)
 	entry.OnValueChange = function(_, val)
+		clearBtn:SetVisible(val ~= "")
 		PinnedPanels.ApplyContentFilter(id, val)
 	end
 
 	clearBtn.DoClick = function()
 		entry:SetText("")
+		clearBtn:SetVisible(false)
 		PinnedPanels.ApplyContentFilter(id, "")
+	end
+
+	-- groups: re-apply the query when the user switches tabs. Guard against
+	-- wrapping the same sheet twice (rebuilds make a fresh sheet, so the flag
+	-- naturally resets with it).
+	if pin.kind == "group" and IsValid(pin.sheet) and not pin.sheet._pp_filterHooked then
+		local sheet = pin.sheet
+		sheet._pp_filterHooked = true
+		local origTabChanged = sheet.OnActiveTabChanged
+		sheet.OnActiveTabChanged = function(s, old, new)
+			if isfunction(origTabChanged) then origTabChanged(s, old, new) end
+			local fp = PinnedPanels.Pins[id]
+			if fp and IsValid(fp.filterBarPanel) and IsValid(entry) and entry:GetValue() ~= "" then
+				PinnedPanels.ApplyContentFilter(id, entry:GetValue())
+			end
+		end
 	end
 
 	pin.filterBarPanel = bar
@@ -214,9 +280,7 @@ function PinnedPanels.DetachFilterBar(id)
 	pin.filterBar = nil
 	if IsValid(pin.filterBarPanel) then pin.filterBarPanel:Remove() end
 	pin.filterBarPanel = nil
-	if IsValid(pin.content) then
-		PinnedPanels.ApplyContentFilter(id, "")
-	end
+	PinnedPanels.ApplyContentFilter(id, "")
 	if IsValid(pin.frame) then pin.frame:InvalidateLayout(true) end
 end
 

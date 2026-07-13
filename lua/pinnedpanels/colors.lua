@@ -146,6 +146,10 @@ C.taskbarTextHov   = Color(240, 245, 255)
 C.taskbarHandle    = Color(80, 90, 110, 150)
 C.taskbarRestore   = Color(60, 200, 120, 180)
 
+-- ── Command palette ──────────────────────────────────────────────────────────
+C.paletteSelBg     = Color(42, 72, 116, 255)
+C.paletteFooterBg  = Color(16, 18, 24, 255)
+
 -- ── Preview hint ─────────────────────────────────────────────────────────────
 C._previewHint     = Color(0, 0, 0, 120)
 

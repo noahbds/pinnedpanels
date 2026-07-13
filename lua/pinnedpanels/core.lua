@@ -12,6 +12,37 @@ function PinnedPanels.PanelsInteractive()
 	return not not (IM and (IM.Active or IM.SpawnMenuOpen))
 end
 
+-- ── Usable Screen Bounds ─────────────────────────────────────────────────────
+-- The screen area panels may occupy, excluding an always-visible docked
+-- taskbar so panels never sit under it. A reveal-on-hover taskbar auto-hides,
+-- so it reserves nothing.
+function PinnedPanels.GetUsableBounds()
+	local x, y, w, h = 0, 0, ScrW(), ScrH()
+	local ts = PinnedPanels.Settings and PinnedPanels.Settings.taskbar
+	if ts and ts.enabled ~= false and not ts.revealOnHover then
+		local th  = math.Clamp(tonumber(ts.height) or 32, 0, ScrH())
+		local pos = ts.position or "bottom"
+		if pos == "top" then
+			y, h = th, h - th
+		elseif pos == "left" then
+			x, w = th, w - th
+		elseif pos == "right" then
+			w = w - th
+		else -- bottom
+			h = h - th
+		end
+	end
+	return x, y, w, h
+end
+
+-- Clamp a rect's top-left so the rect stays within the usable area.
+function PinnedPanels.ClampToUsable(px, py, w, h)
+	local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+	local nx = math.Clamp(px, ux, math.max(ux, ux + uw - w))
+	local ny = math.Clamp(py, uy, math.max(uy, uy + uh - h))
+	return nx, ny
+end
+
 -- ── Restore All ──────────────────────────────────────────────────────────────
 function PinnedPanels.RestoreAll(noSave)
 	local saved = PinnedPanels.Load()
@@ -69,10 +100,7 @@ hook.Add("OnScreenSizeChanged", "PinnedPanels_ScreenResize", function(oldW, oldH
 			local w, h = pin.frame:GetSize()
 			w, h = math.min(w, nw), math.min(h, nh)
 			pin.frame:SetSize(w, h)
-			pin.frame:SetPos(
-				math.Clamp(math.Round(x * kx), 0, nw - w),
-				math.Clamp(math.Round(y * ky), 0, nh - h)
-			)
+			pin.frame:SetPos(PinnedPanels.ClampToUsable(math.Round(x * kx), math.Round(y * ky), w, h))
 		end
 	end
 	PinnedPanels.Save()

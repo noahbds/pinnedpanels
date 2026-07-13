@@ -57,10 +57,20 @@ function PinnedPanels.GetFramePaintOver(pinId)
 		local selEl = IM.SelectedIndex and PinnedPanels.GetNavElements()[IM.SelectedIndex]
 		if IsValid(selEl) then
 			local sc = selEl.ClassName or selEl:GetClassName()
-			if sc == "DColorMixer" then
-				hint = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done"
-			elseif sc:find("ColorCube") then
-				hint = "Arrows: Saturation / Value | Enter or Backspace: done"
+			local colorTgt, colorCls
+			if PinnedPanels._ColorTarget then
+				colorTgt, colorCls = PinnedPanels._ColorTarget(selEl)
+			end
+			if sc == "DRGBPicker" then
+				hint = "Arrows: Hue | Enter or Backspace: done"
+			elseif sc == "DAlphaBar" then
+				hint = "Arrows: Alpha | Enter or Backspace: done"
+			elseif colorTgt then
+				if colorCls and colorCls:find("ColorCube") then
+					hint = "Arrows: Saturation / Value | Enter or Backspace: done"
+				else
+					hint = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done"
+				end
 			elseif sc:find("Slider") or sc == "DComboBox" then
 				hint = "Left / Right: adjust | Enter or Backspace: done"
 			end
@@ -131,19 +141,20 @@ local function IsSpawnOccupied(x, y, w, h, ignoreId)
 end
 
 local function FindFreeSpawnPosition(w, h, preferredX, preferredY, ignoreId)
-	local sw, sh = ScrW(), ScrH()
-	local maxX = math.max(0, sw - w)
-	local maxY = math.max(0, sh - h)
-	local baseX = math.Clamp(preferredX or 120, 0, maxX)
-	local baseY = math.Clamp(preferredY or 120, 0, maxY)
+	local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+	local minX, minY = ux, uy
+	local maxX = math.max(ux, ux + uw - w)
+	local maxY = math.max(uy, uy + uh - h)
+	local baseX = math.Clamp(preferredX or 120, minX, maxX)
+	local baseY = math.Clamp(preferredY or 120, minY, maxY)
 
 	if not IsSpawnOccupied(baseX, baseY, w, h, ignoreId) then
 		return baseX, baseY
 	end
 
 	local STEP = 28
-	for y = 0, maxY, STEP do
-		for x = 0, maxX, STEP do
+	for y = minY, maxY, STEP do
+		for x = minX, maxX, STEP do
 			if not IsSpawnOccupied(x, y, w, h, ignoreId) then
 				return x, y
 			end
@@ -247,6 +258,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetKeyboardInputEnabled(false)
 
 	local titleOverlay, resizeOverlay, btnMin, btnMax, btnClose
+	local ctGrip                -- click-through header grip (top-level popup)
+	local UpdateCTGrip          -- forward decl, defined once the grip is built
 
 	local function ApplyInteractState()
 		local pin = PinnedPanels.Pins[id]
@@ -257,6 +270,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if IsValid(btnMin)   then btnMin:SetMouseInputEnabled(on) end
 		if IsValid(btnMax)   then btnMax:SetMouseInputEnabled(on) end
 		if IsValid(btnClose) then btnClose:SetMouseInputEnabled(on) end
+		if UpdateCTGrip then UpdateCTGrip() end
 	end
 
 	local interactHook = "PinnedPanels_InteractFrame_" .. id .. "_" .. tostring(frame)
@@ -269,6 +283,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	end)
 	frame.OnRemove = function()
 		hook.Remove("PinnedPanels_CursorModeChanged", interactHook)
+		if IsValid(ctGrip) then ctGrip:Remove() end
 	end
 
 	frame.OnClose = function()
@@ -293,8 +308,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
-		local nx = math.Clamp(x, 0, ScrW() - w)
-		local ny = math.Clamp(y, 0, ScrH() - h)
+		local nx, ny = PinnedPanels.ClampToUsable(x, y, w, h)
 		if x ~= nx or y ~= ny then self:SetPos(nx, ny) end
 
 		local hovered = vgui.GetHoveredPanel()
@@ -304,6 +318,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if self:IsKeyboardInputEnabled() ~= needsKeyboard then
 			self:SetKeyboardInputEnabled(needsKeyboard)
 		end
+
+		if UpdateCTGrip then UpdateCTGrip() end
 	end
 
 	local imDrag = false
@@ -396,9 +412,9 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 		local mx, my = gui.MouseX(), gui.MouseY()
 		local w, h = frame:GetSize()
-		local nx = math.Clamp(mx - imDragOffX, 0, ScrW() - w)
-		local ny = math.Clamp(my - imDragOffY, 0, ScrH() - h)
+		local nx, ny = PinnedPanels.ClampToUsable(mx - imDragOffX, my - imDragOffY, w, h)
 		nx, ny = SnapDragPos(id, nx, ny, w, h)
+		nx, ny = PinnedPanels.ClampToUsable(nx, ny, w, h)
 		frame:SetPos(nx, ny)
 	end
 
@@ -411,8 +427,9 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		end
 		local fpx, fpy = frame:GetPos()
 		local mx, my   = gui.MouseX(), gui.MouseY()
-		local nw = math.min(math.max(150, imResizeW + mx - imResizeSX), ScrW() - fpx)
-		local nh = math.min(math.max(100, imResizeH + my - imResizeSY), ScrH() - fpy)
+		local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+		local nw = math.min(math.max(150, imResizeW + mx - imResizeSX), (ux + uw) - fpx)
+		local nh = math.min(math.max(100, imResizeH + my - imResizeSY), (uy + uh) - fpy)
 		nw, nh = SnapResizeSize(id, fpx, fpy, nw, nh)
 		frame:SetSize(nw, nh)
 		UpdateOverlayPositions()
@@ -465,6 +482,74 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame.OnSizeChanged = function()
 		UpdateOverlayPositions()
 		DebouncedSave()
+	end
+
+	-- ── Click-through header grip ─────────────────────────────────────────────
+	-- A click-through panel disables mouse input on the whole frame, and the
+	-- engine skips hit-testing children of a mouse-disabled panel, so the title
+	-- bar can't be right-clicked. This tiny top-level popup rides over the header
+	-- only while click-through is active, restoring right-click (context menu)
+	-- and header dragging while the body stays click-through.
+	local ctDrag, ctOffX, ctOffY = false, 0, 0
+
+	local function EnsureCTGrip()
+		if IsValid(ctGrip) then return end
+		ctGrip = vgui.Create("DPanel")
+		ctGrip:MakePopup()
+		ctGrip:SetKeyboardInputEnabled(false)
+		ctGrip:SetCursor("sizeall")
+		ctGrip._pp_skipNav = true
+		ctGrip.Paint = function(_, w, h)
+			local pin = PinnedPanels.Pins[id]
+			draw.RoundedBoxEx(6, 0, 0, w, h, Color(18, 20, 28, 230), true, true, false, false)
+			surface.SetDrawColor(C.accentFrame)
+			surface.DrawRect(0, h - 2, w, 2)
+			draw.SimpleText(pin and pin.title or "", "DermaDefaultBold", 8, h / 2,
+				C.textLight, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+			draw.SimpleText("click-through · right-click for menu", "DermaDefault", w - 8, h / 2,
+				C.textMuted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		end
+		ctGrip.OnMousePressed = function(self, mc)
+			if mc == MOUSE_RIGHT then
+				PinnedPanels.OpenContextMenu(id, frame)
+			elseif mc == MOUSE_LEFT and not IsLocked(id) then
+				ctDrag = true
+				local mx, my = gui.MouseX(), gui.MouseY()
+				local fx, fy = frame:GetPos()
+				ctOffX, ctOffY = mx - fx, my - fy
+				self:MouseCapture(true)
+			end
+		end
+		ctGrip.OnMouseReleased = function(self)
+			if ctDrag then
+				ctDrag = false
+				self:MouseCapture(false)
+				PinnedPanels.Save()
+			end
+		end
+		ctGrip.Think = function()
+			if not ctDrag then return end
+			local w, h = frame:GetSize()
+			local mx, my = gui.MouseX(), gui.MouseY()
+			frame:SetPos(PinnedPanels.ClampToUsable(mx - ctOffX, my - ctOffY, w, h))
+		end
+	end
+
+	UpdateCTGrip = function()
+		local pin  = PinnedPanels.Pins[id]
+		local show = pin and pin.clickThrough and PinnedPanels.PanelsInteractive()
+			and IsValid(frame) and frame:IsVisible()
+		if not show then
+			if IsValid(ctGrip) then ctGrip:Remove() end
+			ctGrip = nil
+			ctDrag = false
+			return
+		end
+		EnsureCTGrip()
+		local fx, fy = frame:GetPos()
+		ctGrip:SetSize(frame:GetWide(), TITLE_HEIGHT)
+		ctGrip:SetPos(fx, fy)
+		ctGrip:MoveToFront()
 	end
 
 	return frame

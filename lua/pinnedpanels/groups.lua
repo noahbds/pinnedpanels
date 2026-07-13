@@ -262,6 +262,11 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		end
 	end
 
+	-- when rebuilding an existing pin its live state wins; on the first build
+	-- after a restart fall back to what was saved
+	local wantMinimized = oldPin and oldPin.minimized or (oldPin == nil and s.minimized) or false
+	local wantFilterBar = oldPin and oldPin.filterBar or (oldPin == nil and s.filterBar) or false
+
 	PinnedPanels.Pins[groupId] = {
 		frame        = frame,
 		title        = groupName,
@@ -271,11 +276,15 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		tabToMember  = tabToMember,
 		tabSizes     = (oldPin and oldPin.tabSizes) or (istable(s.tabSizes) and s.tabSizes) or {},
 		locked       = (oldPin and oldPin.locked) or s.locked or false,
+		minimized    = wantMinimized,
+		clickThrough = oldPin and oldPin.clickThrough or (oldPin == nil and s.clickThrough) or false,
 		idleAlpha    = (oldPin and oldPin.idleAlpha) or tonumber(s.idleAlpha) or nil,
 		customBg     = (oldPin and oldPin.customBg) or (s.customBg and DeserializeColor(s.customBg)) or nil,
 		customHeader = (oldPin and oldPin.customHeader) or (s.customHeader and DeserializeColor(s.customHeader)) or nil,
 		customText   = (oldPin and oldPin.customText) or (s.customText and DeserializeColor(s.customText)) or nil,
 	}
+
+	if wantMinimized then frame:SetVisible(false) end
 
 	local function ApplyTabSize(mid)
 		local gp = PinnedPanels.Pins[groupId]
@@ -307,6 +316,10 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	end
 
 	ApplyTabSize(members[1] and members[1].id)
+
+	if wantFilterBar and PinnedPanels.AttachFilterBar then
+		PinnedPanels.AttachFilterBar(groupId)
+	end
 
 	timer.Simple(0, function()
 		if not IsValid(frame) then return end

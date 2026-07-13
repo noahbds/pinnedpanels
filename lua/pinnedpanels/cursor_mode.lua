@@ -23,15 +23,24 @@ IM.SpawnMenuOpen = IsValid(g_SpawnMenu) and g_SpawnMenu:IsVisible() or false
 -- ── Panel Input / Idle Opacity ───────────────────────────────────────────────
 function PinnedPanels.UpdatePanelStates()
 	local interactive = PinnedPanels.PanelsInteractive()
+	-- Keyboard nav lifts only the focused panel out of idle; the rest keep
+	-- their idle opacity so navigation doesn't flash every panel to full.
 	local navActive = IM.NavigatingPanel or IM._navOpacityActive or IsValid(IM.ActiveMenu)
-	for _, pin in pairs(PinnedPanels.Pins) do
+	local focused   = IM.Focused
+	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) then
 			local wantMouse = interactive and not pin.clickThrough
 			if pin.frame:IsMouseInputEnabled() ~= wantMouse then
 				pin.frame:SetMouseInputEnabled(wantMouse)
 			end
-			local frac = (interactive or navActive or PinnedPanels._peeking) and 1
-				or (pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1)
+			local frac
+			if interactive or PinnedPanels._peeking then
+				frac = 1
+			elseif navActive and id == focused then
+				frac = 1
+			else
+				frac = pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1
+			end
 			local a = math.Round(math.Clamp(frac, 0.05, 1) * 255)
 			if pin.frame:GetAlpha() ~= a then pin.frame:SetAlpha(a) end
 		end
@@ -123,6 +132,42 @@ hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
 	surface.DrawTexturedRectUV(math.floor((sw - bw) / 2), 6, bw, HUD_H, 0, 0, bw / HUD_RT_W, HUD_H / HUD_RT_H)
 end)
 
+-- ── Key Conflict Detection ───────────────────────────────────────────────────
+-- Returns descriptions of everything already using `code` — game binds and
+-- every addon binding. `ignoreTag` names the binding being edited so it does
+-- not report itself: "cursor", "peek", "palette", "bind:<id>", "quick:<pinId>".
+function PinnedPanels.GetKeyConflicts(code, ignoreTag)
+	local out = {}
+	if not code or code == KEY_NONE then return out end
+
+	local gameBind = input.LookupKeyBinding(code)
+	if isstring(gameBind) and gameBind ~= "" then
+		out[#out + 1] = "Game bind: " .. gameBind
+	end
+
+	if ignoreTag ~= "cursor" and IM.KeyCode == code then
+		out[#out + 1] = "PinnedPanels: Cursor Mode key"
+	end
+	if ignoreTag ~= "peek" and PinnedPanels.GetPeekKey and PinnedPanels.GetPeekKey() == code then
+		out[#out + 1] = "PinnedPanels: Peek key"
+	end
+	if ignoreTag ~= "palette" and PinnedPanels.GetPaletteKey and PinnedPanels.GetPaletteKey() == code then
+		out[#out + 1] = "PinnedPanels: Command Palette key"
+	end
+	for _, b in ipairs(PinnedPanels.Keybinds or {}) do
+		if b.key == code and ignoreTag ~= ("bind:" .. b.id) then
+			out[#out + 1] = "PinnedPanels: " .. b.name
+		end
+	end
+	for kStr, pid in pairs(PinnedPanels.Settings.quickSlots or {}) do
+		if tonumber(kStr) == code and ignoreTag ~= ("quick:" .. pid) then
+			local p = PinnedPanels.Pins[pid]
+			out[#out + 1] = "PinnedPanels: Quick Key for \"" .. (p and p.title or pid) .. "\""
+		end
+	end
+	return out
+end
+
 function PinnedPanels.OpenKeyBindFrame(opts)
 	opts = opts or {}
 	local getKey  = opts.get or function() return KEY_NONE end
@@ -190,9 +235,31 @@ function PinnedPanels.OpenKeyBindFrame(opts)
 			frame:Close()
 			return
 		end
-		setKey(keyCode == KEY_BACKSPACE and KEY_NONE or keyCode)
-		if isfunction(onSaved) then onSaved() end
+
+		local newKey = (keyCode == KEY_BACKSPACE) and KEY_NONE or keyCode
+		local function apply()
+			setKey(newKey)
+			if isfunction(onSaved) then onSaved() end
+		end
+
+		local conflicts = {}
+		if newKey ~= KEY_NONE and newKey ~= getKey() then
+			conflicts = PinnedPanels.GetKeyConflicts(newKey, opts.ignore)
+		end
 		frame:Close()
+
+		if #conflicts > 0 then
+			local keyName = string.upper(input.GetKeyName(newKey) or "?")
+			Derma_Query(
+				"[ " .. keyName .. " ] is already used by:\n\n- "
+					.. table.concat(conflicts, "\n- ")
+					.. "\n\nEverything bound to this key will trigger together.\nBind it anyway?",
+				"Key Already In Use",
+				"Bind Anyway", apply,
+				"Cancel", function() end)
+		else
+			apply()
+		end
 	end
 
 	captureBtn.DoClick = function(self)

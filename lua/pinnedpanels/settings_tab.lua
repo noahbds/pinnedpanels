@@ -131,6 +131,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 				RunConsoleCommand("pp_interact_key", tostring(k))
 			end,
 			onSaved = UpdateKeyDisplay,
+			ignore  = "cursor",
 		})
 	end
 
@@ -241,6 +242,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 				get = function() return PinnedPanels.GetBind(bind.id) end,
 				set = function(k) PinnedPanels.SetBind(bind.id, k) end,
 				onSaved = UpdateKey,
+				ignore  = "bind:" .. bind.id,
 			})
 		end
 	end
@@ -761,6 +763,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 			get = function() return PinnedPanels.GetPeekKey() end,
 			set = function(k) PinnedPanels.SetPeekKey(k) end,
 			onSaved = UpdatePeekDisplay,
+			ignore  = "peek",
 		})
 	end
 
@@ -822,6 +825,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 			get = function() return PinnedPanels.GetPaletteKey() end,
 			set = function(k) PinnedPanels.SetPaletteKey(k) end,
 			onSaved = UpdatePalDisplay,
+			ignore  = "palette",
 		})
 	end
 

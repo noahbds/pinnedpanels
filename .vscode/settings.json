@@ -13,5 +13,6 @@
   "Lua.runtime.special": {
     "include": "dofile",
     "IncludeCS": "dofile"
-  }
+  },
+  "gluals.gmod.debugRealm": "client"
 }

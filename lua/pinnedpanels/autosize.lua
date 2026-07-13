@@ -1,8 +1,8 @@
 -- ── Auto-Size Panel ──────────────────────────────────────────────────────────
 local MIN_W, MIN_H   = 150, 100
-local MAX_W_FRAC     = 0.6   -- never wider than this fraction of the screen
-local MAX_H_FRAC     = 0.92  -- never taller than this fraction of the screen
-local WIDTH_DEADBAND = 12    -- ignore width changes smaller than this
+local MAX_W_FRAC     = 0.6  -- never wider than this fraction of the screen
+local MAX_H_FRAC     = 0.92 -- never taller than this fraction of the screen
+local WIDTH_DEADBAND = 12   -- ignore width changes smaller than this
 local ANIM_TIME      = 0.12
 
 local function FindCanvasPanel(root)
@@ -24,12 +24,6 @@ local function FindCanvasPanel(root)
 end
 PinnedPanels.FindCanvasPanel = FindCanvasPanel
 
--- ── Width Measurement ────────────────────────────────────────────────────────
--- Docked children stretch to whatever width the frame has, so their current
--- width says nothing about what they *need*. Instead we look for intrinsic
--- widths: text extents, fixed-size (NODOCK) children, and sensible per-class
--- minimums, recursing into containers.
-
 local function TextWidth(p)
 	if not isfunction(p.GetText) then return 0 end
 	-- wrapped labels reflow to any width; they must not force one
@@ -48,7 +42,7 @@ local function TextWidth(p)
 	local tw = select(1, surface.GetTextSize(txt)) or 0
 	if tw <= 0 then return 0 end
 
-	tw = tw + 16 -- breathing room
+	tw = tw + 16                                           -- breathing room
 	if p.m_Image and IsValid(p.m_Image) then tw = tw + 24 end -- icon'd buttons/options
 	return tw
 end
@@ -116,8 +110,8 @@ local function ResolveContent(id, pin)
 	local content, srcPin = pin.content, pin
 	if pin.kind == "group" then
 		local memberId = PinnedPanels.GetActiveGroupMemberId(id)
-		srcPin  = memberId and PinnedPanels.Pins[memberId] or pin
-		content = srcPin and srcPin.content or nil
+		srcPin         = memberId and PinnedPanels.Pins[memberId] or pin
+		content        = srcPin and srcPin.content or nil
 	elseif pin.kind == "frame" then
 		content = IsValid(pin.livePanel) and pin.livePanel or pin.content
 	end

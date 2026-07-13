@@ -1,11 +1,11 @@
 -- ── Bootstrap ────────────────────────────────────────────────────────────────
-PinnedPanels          = PinnedPanels or {}
-PinnedPanels.Pins     = PinnedPanels.Pins or {}
-PinnedPanels._clipboard = nil
+PinnedPanels                   = PinnedPanels or {}
+PinnedPanels.Pins              = PinnedPanels.Pins or {}
+PinnedPanels._clipboard        = nil
 
 PinnedPanels.RebuildGroupFrame = PinnedPanels.RebuildGroupFrame or function() end
 
-PinnedPanels.CREATION_OPTS = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
+PinnedPanels.CREATION_OPTS     = { kind = "creation", fill = true, defaultW = 350, defaultH = 560 }
 
 function PinnedPanels.PanelsInteractive()
 	local IM = PinnedPanels.CursorMode
@@ -13,9 +13,6 @@ function PinnedPanels.PanelsInteractive()
 end
 
 -- ── Usable Screen Bounds ─────────────────────────────────────────────────────
--- The screen area panels may occupy, excluding an always-visible docked
--- taskbar so panels never sit under it. A reveal-on-hover taskbar auto-hides,
--- so it reserves nothing.
 function PinnedPanels.GetUsableBounds()
 	local x, y, w, h = 0, 0, ScrW(), ScrH()
 	local ts = PinnedPanels.Settings and PinnedPanels.Settings.taskbar
@@ -35,7 +32,6 @@ function PinnedPanels.GetUsableBounds()
 	return x, y, w, h
 end
 
--- Clamp a rect's top-left so the rect stays within the usable area.
 function PinnedPanels.ClampToUsable(px, py, w, h)
 	local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
 	local nx = math.Clamp(px, ux, math.max(ux, ux + uw - w))

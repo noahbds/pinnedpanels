@@ -270,13 +270,7 @@ function PinnedPanels.CreatePinnedList(parent)
 						end
 						if #PinnedPanels.Settings.groups > 0 then m:AddSpacer() end
 						m:AddOption("New Group...", function()
-							Derma_StringRequest("New Group", "Enter a name for the new group:", "",
-								function(name)
-									if name and name ~= "" then
-										PinnedPanels.CreateGroup(name)
-										PinnedPanels.AddToGroup(name, id)
-									end
-								end, function() end, "Create", "Cancel")
+							PinnedPanels.PromptNewGroup(id)
 						end):SetIcon("icon16/folder_add.png")
 						m:Open()
 					end

@@ -482,13 +482,7 @@ function PinnedPanels.CreateSettingsTab(parent)
 	addGroupBtn:SetWide(120)
 	StyleDarkButton(addGroupBtn)
 	addGroupBtn.DoClick = function()
-		Derma_StringRequest("New Group", "Enter a name for the new group:", "",
-			function(name)
-				if name and name ~= "" then
-					PinnedPanels.CreateGroup(name)
-					RebuildGroups()
-				end
-			end, function() end, "Create", "Cancel")
+		PinnedPanels.PromptNewGroup(nil, RebuildGroups)
 	end
 
 	-- ── Taskbar Section ──────────────────────────────────────────────────────
@@ -968,6 +962,9 @@ function PinnedPanels.CreateSettingsTab(parent)
 	root.OnRemove = function()
 		hook.Remove("PinnedPanels_StateChanged", groupHookName)
 		for _, popup in pairs(activeMixers) do
+			if IsValid(popup) then popup:Remove() end
+		end
+		for _, popup in pairs(tbMixers) do
 			if IsValid(popup) then popup:Remove() end
 		end
 	end

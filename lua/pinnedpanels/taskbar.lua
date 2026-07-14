@@ -400,11 +400,6 @@ function PinnedPanels.DestroyTaskbar()
 	TB.panel = nil
 end
 
-function PinnedPanels.GetTaskbarEntryRects()
-	if not IsValid(TB.panel) or not TB.entries or #TB.entries == 0 then return {}, {} end
-	return ComputeEntryRects(TB.entries), TB.entries
-end
-
 -- ── Keyboard focus (driven by keyboard.lua's navigation) ──────────────────────
 function PinnedPanels.FocusTaskbar()
 	PinnedPanels.EnsureTaskbar()

@@ -4,16 +4,6 @@ local FindFreeSpawnPosition = PinnedPanels._FindFreeSpawnPosition
 local DeserializeColor      = PinnedPanels._DeserializeColor
 
 -- ── Content Builders ─────────────────────────────────────────────────────────
-local function ErrorLabel(parent, text, dock)
-	local lbl = vgui.Create("DLabel", parent)
-	lbl:SetText(text)
-	lbl:SetWrap(true)
-	lbl:Dock(dock or FILL)
-	lbl:DockMargin(8, 8, 8, 8)
-	lbl:SetTextColor(C.errorRed)
-	return lbl
-end
-
 local function BuildFillContent(frame, cpFunc)
 	local ok, result = pcall(cpFunc)
 	if ok and IsValid(result) then
@@ -24,7 +14,7 @@ local function BuildFillContent(frame, cpFunc)
 		result:InvalidateLayout(true)
 		return result
 	end
-	ErrorLabel(frame, "Error loading panel" .. (not ok and (": " .. tostring(result)) or "."))
+	PinnedPanels.ErrorLabel(frame, "Error loading panel" .. (not ok and (": " .. tostring(result)) or "."))
 		:DockMargin(8, 32, 8, 8)
 end
 
@@ -34,27 +24,7 @@ local function BuildToolContent(frame, cpFunc, id)
 	scroll:DockMargin(4, 6, 4, 4)
 
 	if isfunction(cpFunc) then
-		local ctrl = vgui.Create("ControlPanel", scroll)
-		ctrl:Dock(TOP)
-		ctrl:SetAutoSize(true)
-		local beforeCount = #ctrl:GetChildren()
-		local ok, err = pcall(cpFunc, ctrl)
-		if not ok then
-			ctrl:Remove()
-			ErrorLabel(scroll, "Error loading panel: " .. tostring(err), TOP)
-		else
-			if #ctrl:GetChildren() <= beforeCount and controlpanel then
-				local cpName = id:sub(4)
-				local origGet = controlpanel.Get
-				controlpanel.Get = function(name)
-					if name == cpName then return ctrl end
-					return origGet(name)
-				end
-				hook.Run("PostReloadToolsMenu")
-				controlpanel.Get = origGet
-			end
-			ctrl:InvalidateLayout(true)
-		end
+		PinnedPanels.PopulateToolControls(scroll, cpFunc, id:sub(4))
 	else
 		local lbl = vgui.Create("DLabel", scroll)
 		lbl:SetText("This tool has no control panel.")

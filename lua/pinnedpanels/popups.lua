@@ -21,11 +21,7 @@ function PinnedPanels.OpenColorChanger(id)
 	-- keyboard focus, so the popup must not keep it; only borrow it while a
 	-- text field inside (RGB wangs) is hovered or focused.
 	frame:SetKeyboardInputEnabled(false)
-	local function IsTextPanel(p)
-		if not IsValid(p) then return false end
-		local c = p:GetClassName()
-		return c == "TextEntry" or c == "DTextEntry" or c == "RichText"
-	end
+	local IsTextPanel = PinnedPanels.IsTextPanel
 	frame.Think = function(self)
 		local hovered = vgui.GetHoveredPanel()
 		local focus   = vgui.GetKeyboardFocus()

@@ -233,11 +233,7 @@ end
 local TITLE_HEIGHT = 24
 local CORNER_SIZE  = 16
 
-local function IsTextPanel(p)
-	if not IsValid(p) then return false end
-	local c = p:GetClassName()
-	return c == "TextEntry" or c == "DTextEntry" or c == "RichText"
-end
+local IsTextPanel = PinnedPanels.IsTextPanel
 
 local function IsLocked(id)
 	local pin = PinnedPanels.Pins[id]

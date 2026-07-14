@@ -29,6 +29,57 @@ function PinnedPanels.MakePinRowPaint(id, radius)
 	end
 end
 
+-- ── Shared Panel Helpers ─────────────────────────────────────────────────────
+-- A live text field; frames borrow keyboard focus only while one is hovered or
+-- focused, so keyboard-nav keeps working everywhere else.
+function PinnedPanels.IsTextPanel(p)
+	if not IsValid(p) then return false end
+	local c = p:GetClassName()
+	return c == "TextEntry" or c == "DTextEntry" or c == "RichText"
+end
+
+function PinnedPanels.ErrorLabel(parent, text, dock)
+	local lbl = vgui.Create("DLabel", parent)
+	lbl:SetText(text)
+	lbl:SetWrap(true)
+	lbl:Dock(dock or FILL)
+	lbl:DockMargin(8, 8, 8, 8)
+	lbl:SetTextColor(C.errorRed)
+	return lbl
+end
+
+-- Builds a tool's ControlPanel into `scroll`. Some tools populate the panel
+-- indirectly via controlpanel.Get()/PostReloadToolsMenu rather than the CPanel
+-- passed to their function, so when the direct call adds nothing we briefly
+-- alias controlpanel.Get to hand back our panel. `cpName` is the tool's
+-- spawnmenu ItemName (the pin id minus its "PP_" prefix).
+function PinnedPanels.PopulateToolControls(scroll, cpFunc, cpName)
+	local ctrl = vgui.Create("ControlPanel", scroll)
+	ctrl:Dock(TOP)
+	ctrl:SetAutoSize(true)
+
+	local beforeCount = #ctrl:GetChildren()
+	local ok, err = pcall(cpFunc, ctrl)
+	if not ok then
+		ctrl:Remove()
+		PinnedPanels.ErrorLabel(scroll, "Error loading panel: " .. tostring(err), TOP)
+		return nil
+	end
+
+	if #ctrl:GetChildren() <= beforeCount and controlpanel then
+		local origGet = controlpanel.Get
+		controlpanel.Get = function(name)
+			if name == cpName then return ctrl end
+			return origGet(name)
+		end
+		hook.Run("PostReloadToolsMenu")
+		controlpanel.Get = origGet
+	end
+
+	ctrl:InvalidateLayout(true)
+	return ctrl
+end
+
 -- ── Get All Tools ────────────────────────────────────────────────────────────
 function PinnedPanels.GetAllTools()
 	local tabs = spawnmenu.GetTools()

@@ -1,6 +1,6 @@
 {
   "Lua.workspace.library": [
-    "${addons}/garrysmod/module/library"
+    "${workspaceFolder}/garrysmod/module/library"
   ],
   "Lua.runtime.version": "LuaJIT",
   "Lua.runtime.nonstandardSymbol": [
@@ -14,5 +14,5 @@
     "include": "dofile",
     "IncludeCS": "dofile"
   },
-  "gluals.gmod.debugRealm": "client"
+  "gluals.gmod.debugRealm": "shared"
 }

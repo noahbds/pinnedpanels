@@ -25,16 +25,6 @@ function PinnedPanels.EquipToolgun(toolClass)
 	end
 end
 
-local function PromptNewGroup(panelId)
-	Derma_StringRequest("New Group", "Enter a name for the new group:", "",
-		function(name)
-			if name and name ~= "" then
-				PinnedPanels.CreateGroup(name)
-				if panelId then PinnedPanels.AddToGroup(name, panelId) end
-			end
-		end, function() end, "Create", "Cancel")
-end
-
 local function AddGroupSubmenu(menu, id)
 	local groupSub, groupParent = menu:AddSubMenu("Group")
 	if groupParent then groupParent:SetIcon("icon16/folder.png") end
@@ -56,7 +46,7 @@ local function AddGroupSubmenu(menu, id)
 	end
 
 	groupSub:AddSpacer()
-	groupSub:AddOption("New Group...", function() PromptNewGroup(id) end):SetIcon("icon16/folder_add.png")
+	groupSub:AddOption("New Group...", function() PinnedPanels.PromptNewGroup(id) end):SetIcon("icon16/folder_add.png")
 end
 
 local function AddGroupFrameOptions(menu, id, gName)

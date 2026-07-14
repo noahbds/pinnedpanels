@@ -92,12 +92,6 @@ function PinnedPanels.GetQuickSlotFor(id)
 	return nil
 end
 
-function PinnedPanels.ClearQuickSlotKey(keycode)
-	local S = PinnedPanels.Settings
-	if S.quickSlots then S.quickSlots[tostring(keycode)] = nil end
-	PinnedPanels.SaveSettings()
-end
-
 local quickDown = {}
 
 hook.Add("Think", "PinnedPanels_QuickSlots", function()

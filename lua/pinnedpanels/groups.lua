@@ -186,12 +186,8 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 				result:InvalidateLayout(true)
 				pin.content = result
 			else
-				local lbl = vgui.Create("DLabel", tabPanel)
-				lbl:SetText("Error loading: " .. (not ok and tostring(result) or "unknown"))
-				lbl:SetWrap(true)
-				lbl:Dock(FILL)
-				lbl:DockMargin(8, 8, 8, 8)
-				lbl:SetTextColor(C.errorRed)
+					PinnedPanels.ErrorLabel(tabPanel,
+						"Error loading: " .. (not ok and tostring(result) or "unknown"))
 			end
 		elseif isfunction(pin.cpFunc) then
 			local scroll = vgui.Create("DScrollPanel", tabPanel)
@@ -199,32 +195,7 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 			scroll:DockMargin(4, 4, 4, 4)
 			pin.content = scroll
 
-			local ctrl = vgui.Create("ControlPanel", scroll)
-			ctrl:Dock(TOP)
-			ctrl:SetAutoSize(true)
-			local beforeCount = #ctrl:GetChildren()
-			local ok, err = pcall(pin.cpFunc, ctrl)
-			if not ok then
-				ctrl:Remove()
-				local lbl = vgui.Create("DLabel", scroll)
-				lbl:SetText("Error: " .. tostring(err))
-				lbl:SetWrap(true)
-				lbl:Dock(TOP)
-				lbl:DockMargin(8, 8, 8, 8)
-				lbl:SetTextColor(C.errorRed)
-			else
-				if #ctrl:GetChildren() <= beforeCount and controlpanel then
-					local cpName = member.id:sub(4)
-					local origGet = controlpanel.Get
-					controlpanel.Get = function(name)
-						if name == cpName then return ctrl end
-						return origGet(name)
-					end
-					hook.Run("PostReloadToolsMenu")
-					controlpanel.Get = origGet
-				end
-				ctrl:InvalidateLayout(true)
-			end
+				PinnedPanels.PopulateToolControls(scroll, pin.cpFunc, member.id:sub(4))
 
 			timer.Simple(0.2, function()
 				if IsValid(scroll) then PinnedPanels.ThrottleScroll(scroll) end
@@ -331,6 +302,19 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 end
 
 -- ── Group Membership ─────────────────────────────────────────────────────────
+-- Shared "New Group..." prompt. Creates the group, optionally adds `panelId` to
+-- it, and calls `onCreated(name)` afterwards.
+function PinnedPanels.PromptNewGroup(panelId, onCreated)
+	Derma_StringRequest("New Group", "Enter a name for the new group:", "",
+		function(name)
+			name = name and string.Trim(name) or ""
+			if name == "" then return end
+			PinnedPanels.CreateGroup(name)
+			if panelId then PinnedPanels.AddToGroup(name, panelId) end
+			if isfunction(onCreated) then onCreated(name) end
+		end, function() end, "Create", "Cancel")
+end
+
 function PinnedPanels.CreateGroup(name)
 	local groups = PinnedPanels.Settings.groups
 	for _, g in ipairs(groups) do

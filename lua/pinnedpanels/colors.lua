@@ -153,7 +153,7 @@ C.paletteFooterBg  = Color(16, 18, 24, 255)
 -- ── Preview hint ─────────────────────────────────────────────────────────────
 C._previewHint     = Color(0, 0, 0, 120)
 
--- ── Localization ─────────────────────────────────────────────────────────────
+-- ── Localization (unimplemented) ─────────────────────────────────────────────────────────────
 PinnedPanels.Lang = PinnedPanels.Lang or {
 	["en"] = {
 		["no_pinned"]      = "No Pinned Panels",

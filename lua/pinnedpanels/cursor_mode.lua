@@ -133,9 +133,6 @@ hook.Add("HUDPaint", "PinnedPanels_InteractHUD", function()
 end)
 
 -- ── Key Conflict Detection ───────────────────────────────────────────────────
--- Returns descriptions of everything already using `code` — game binds and
--- every addon binding. `ignoreTag` names the binding being edited so it does
--- not report itself: "cursor", "peek", "palette", "bind:<id>", "quick:<pinId>".
 function PinnedPanels.GetKeyConflicts(code, ignoreTag)
 	local out = {}
 	if not code or code == KEY_NONE then return out end

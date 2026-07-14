@@ -137,6 +137,8 @@ local function AddPositionOptions(menu, id, pin, frame)
 	if not PinnedPanels._clipboard then pasteOpt:SetEnabled(false) end
 end
 
+-- Custom context menu for pinned panels. 
+-- Right-clicking a panel's header opens this menu or shift+enter when the panel is focused. 
 function PinnedPanels.OpenContextMenu(id, frame)
 	local pin = PinnedPanels.Pins[id]
 	if not pin then return end

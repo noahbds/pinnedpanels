@@ -254,8 +254,8 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:SetKeyboardInputEnabled(false)
 
 	local titleOverlay, resizeOverlay, btnMin, btnMax, btnClose
-	local ctGrip                -- click-through header grip (top-level popup)
-	local UpdateCTGrip          -- forward decl, defined once the grip is built
+	local ctGrip
+	local UpdateCTGrip
 
 	local function ApplyInteractState()
 		local pin = PinnedPanels.Pins[id]
@@ -481,11 +481,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	end
 
 	-- ── Click-through header grip ─────────────────────────────────────────────
-	-- A click-through panel disables mouse input on the whole frame, and the
-	-- engine skips hit-testing children of a mouse-disabled panel, so the title
-	-- bar can't be right-clicked. This tiny top-level popup rides over the header
-	-- only while click-through is active, restoring right-click (context menu)
-	-- and header dragging while the body stays click-through.
 	local ctDrag, ctOffX, ctOffY = false, 0, 0
 
 	local function EnsureCTGrip()

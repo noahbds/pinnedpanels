@@ -233,8 +233,6 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		end
 	end
 
-	-- when rebuilding an existing pin its live state wins; on the first build
-	-- after a restart fall back to what was saved
 	local wantMinimized = oldPin and oldPin.minimized or (oldPin == nil and s.minimized) or false
 	local wantFilterBar = oldPin and oldPin.filterBar or (oldPin == nil and s.filterBar) or false
 
@@ -302,8 +300,6 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 end
 
 -- ── Group Membership ─────────────────────────────────────────────────────────
--- Shared "New Group..." prompt. Creates the group, optionally adds `panelId` to
--- it, and calls `onCreated(name)` afterwards.
 function PinnedPanels.PromptNewGroup(panelId, onCreated)
 	Derma_StringRequest("New Group", "Enter a name for the new group:", "",
 		function(name)

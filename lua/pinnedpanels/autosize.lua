@@ -1,8 +1,12 @@
--- ── Auto-Size Panel ──────────────────────────────────────────────────────────
+-- Auto size a pinned panel to fit its content 
+-- (Mostly broken and need to be reworked 
+-- since it doesn't work with all types of panels, 
+-- but works for most of the tools)
+
 local MIN_W, MIN_H   = 150, 100
-local MAX_W_FRAC     = 0.6  -- never wider than this fraction of the screen
-local MAX_H_FRAC     = 0.92 -- never taller than this fraction of the screen
-local WIDTH_DEADBAND = 12   -- ignore width changes smaller than this
+local MAX_W_FRAC     = 0.6
+local MAX_H_FRAC     = 0.92
+local WIDTH_DEADBAND = 12
 local ANIM_TIME      = 0.12
 
 local function FindCanvasPanel(root)
@@ -42,8 +46,8 @@ local function TextWidth(p)
 	local tw = select(1, surface.GetTextSize(txt)) or 0
 	if tw <= 0 then return 0 end
 
-	tw = tw + 16                                           -- breathing room
-	if p.m_Image and IsValid(p.m_Image) then tw = tw + 24 end -- icon'd buttons/options
+	tw = tw + 16
+	if p.m_Image and IsValid(p.m_Image) then tw = tw + 24 end
 	return tw
 end
 
@@ -143,7 +147,6 @@ local function AutoSizePass(id, animate)
 	local sw, sh = ScrW(), ScrH()
 	local curW, curH = frame:GetSize()
 
-	-- ── width: tool-style content only; browsers/live grids reflow to any width
 	local newW = curW
 	if srcPin and srcPin.kind == "tool" and not srcPin.fill then
 		local nat = NaturalWidth(canvas or content, 0)
@@ -153,7 +156,6 @@ local function AutoSizePass(id, animate)
 		end
 	end
 
-	-- ── height
 	local contentH, chrome
 	if IsValid(canvas) then
 		contentH = BottomExtent(canvas)
@@ -166,7 +168,6 @@ local function AutoSizePass(id, animate)
 
 	local newH = math.Clamp(contentH + chrome + 4, MIN_H, math.floor(sh * MAX_H_FRAC))
 
-	-- ── position: grow past the bottom/right edge by shifting the panel
 	local x, y = frame:GetPos()
 	local newX = math.Clamp(x, 0, math.max(0, sw - newW))
 	local newY = math.Clamp(y, 0, math.max(0, sh - newH))
@@ -204,9 +205,6 @@ local function AutoSizePass(id, animate)
 end
 
 -- ── Public API ───────────────────────────────────────────────────────────────
--- Derma layouts (and word-wrapped labels after a width change) settle over a
--- few frames, so one measurement is never trustworthy: apply an animated first
--- pass, then re-measure and correct once things have settled.
 function PinnedPanels.AutoSizePanel(id)
 	AutoSizePass(id, true)
 

@@ -131,14 +131,16 @@ end
 
 local peekState = nil
 
--- Grouped members are empty husk frames — their content lives inside the
--- group frame's tab sheet — so revealing them shows big blank boxes.
 local function IsPeekable(id, pin)
 	if not IsValid(pin.frame) then return false end
 	if pin.kind ~= "group" and PinnedPanels.GetGroupForPanel(id) then return false end
 	return true
 end
 
+-- Peek state is a snapshot of each panel's visibility and minimized state at the
+-- moment the peek key was pressed. When the key is released, each panel is
+-- restored to its original state, unless the minimized state changed mid-peek
+-- (e.g. restored from the taskbar), in which case the new state wins over the snapshot.
 local function StartPeek()
 	peekState = {}
 	PinnedPanels._peeking = true
@@ -155,8 +157,6 @@ local function EndPeek()
 	if not peekState then return end
 	for id, st in pairs(peekState) do
 		local pin = PinnedPanels.Pins[id]
-		-- if the minimize state changed mid-peek (e.g. restored from the
-		-- taskbar), the new state wins over the snapshot
 		if pin and IsValid(pin.frame) and pin.minimized == st.minimized then
 			pin.frame:SetVisible(st.visible)
 		end

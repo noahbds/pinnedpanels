@@ -30,8 +30,6 @@ function PinnedPanels.MakePinRowPaint(id, radius)
 end
 
 -- ── Shared Panel Helpers ─────────────────────────────────────────────────────
--- A live text field; frames borrow keyboard focus only while one is hovered or
--- focused, so keyboard-nav keeps working everywhere else.
 function PinnedPanels.IsTextPanel(p)
 	if not IsValid(p) then return false end
 	local c = p:GetClassName()
@@ -48,15 +46,17 @@ function PinnedPanels.ErrorLabel(parent, text, dock)
 	return lbl
 end
 
--- Builds a tool's ControlPanel into `scroll`. Some tools populate the panel
--- indirectly via controlpanel.Get()/PostReloadToolsMenu rather than the CPanel
--- passed to their function, so when the direct call adds nothing we briefly
--- alias controlpanel.Get to hand back our panel. `cpName` is the tool's
--- spawnmenu ItemName (the pin id minus its "PP_" prefix).
 function PinnedPanels.PopulateToolControls(scroll, cpFunc, cpName)
 	local ctrl = vgui.Create("ControlPanel", scroll)
 	ctrl:Dock(TOP)
 	ctrl:SetAutoSize(true)
+
+	-- Hide the ControlPanel's DForm header (the blue "Label" bar). It serves no
+	-- purpose here because the pinned frame already provides its own title bar.
+	if IsValid(ctrl.Header) then
+		ctrl.Header:SetVisible(false)
+		ctrl:SetHeaderHeight(0)
+	end
 
 	local beforeCount = #ctrl:GetChildren()
 	local ok, err = pcall(cpFunc, ctrl)

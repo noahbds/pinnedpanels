@@ -2,8 +2,6 @@
 local C = PinnedPanels.C
 
 -- ── Shared Scanning ──────────────────────────────────────────────────────────
--- A "category" is anything collapsible with a header (DCollapsibleCategory,
--- DForm, and lookalikes).
 local function IsCategory(p)
 	return isfunction(p.GetExpanded) and isfunction(p.SetExpanded) and IsValid(p.Header)
 end
@@ -48,9 +46,6 @@ local function SubtreeText(p, depth)
 end
 
 -- ── Collapse Memory ──────────────────────────────────────────────────────────
--- Remembers which sections the user collapsed, per pin, keyed by header text.
--- Only user toggles (OnToggle, fired from header clicks) are recorded, so
--- programmatic expansion (e.g. the filter) never pollutes the saved state.
 function PinnedPanels.ApplyCollapseMemory(id)
 	local pin = PinnedPanels.Pins[id]
 	if not pin or not IsValid(pin.content) then return end
@@ -253,9 +248,6 @@ function PinnedPanels.AttachFilterBar(id)
 		PinnedPanels.ApplyContentFilter(id, "")
 	end
 
-	-- groups: re-apply the query when the user switches tabs. Guard against
-	-- wrapping the same sheet twice (rebuilds make a fresh sheet, so the flag
-	-- naturally resets with it).
 	if pin.kind == "group" and IsValid(pin.sheet) and not pin.sheet._pp_filterHooked then
 		local sheet = pin.sheet
 		sheet._pp_filterHooked = true

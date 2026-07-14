@@ -1,6 +1,9 @@
 local CREATION_PIN_OPTS = PinnedPanels.CREATION_OPTS
 local C = PinnedPanels.C
 
+-- Browser for 'creation' tabs (props, entities, NPCs, saves, etc). 
+-- This is a separate panel from the main tool browser (browser.lua)
+-- but it basically does the same thing.
 function PinnedPanels.CreateCreationBrowser(parent)
 	local root = vgui.Create("DPanel", parent)
 	root.Paint = function() end

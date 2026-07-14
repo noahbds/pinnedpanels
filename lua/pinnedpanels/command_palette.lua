@@ -189,8 +189,6 @@ function PinnedPanels.OpenCommandPalette()
 	list:SetPos(8, HDR_H + 4)
 	list:SetSize(W - 16, H - HDR_H - FOOT_H - 8)
 
-	-- While the keyboard scrolls the list, rows slide under the stationary
-	-- mouse and fire OnCursorEntered; ignore those until the mouse really moves.
 	local guardX, guardY
 	local function ArmHoverGuard()
 		guardX, guardY = gui.MouseX(), gui.MouseY()

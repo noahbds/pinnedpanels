@@ -20,16 +20,34 @@ end, "PinnedPanels_KeyCVar")
 
 IM.SpawnMenuOpen = IsValid(g_SpawnMenu) and g_SpawnMenu:IsVisible() or false
 
+-- ── Click-Through Alt Override ───────────────────────────────────────────────
+function PinnedPanels.ClickThroughOverride()
+	return PinnedPanels.PanelsInteractive()
+		and (input.IsKeyDown(KEY_LALT) or input.IsKeyDown(KEY_RALT))
+end
+
+local _ctAltDown = false
+hook.Add("Think", "PinnedPanels_ClickThroughAlt", function()
+	if not PinnedPanels.PanelsInteractive() then
+		_ctAltDown = false
+		return
+	end
+	local down = input.IsKeyDown(KEY_LALT) or input.IsKeyDown(KEY_RALT)
+	if down ~= _ctAltDown then
+		_ctAltDown = down
+		PinnedPanels.UpdatePanelStates()
+	end
+end)
+
 -- ── Panel Input / Idle Opacity ───────────────────────────────────────────────
 function PinnedPanels.UpdatePanelStates()
 	local interactive = PinnedPanels.PanelsInteractive()
-	-- Keyboard nav lifts only the focused panel out of idle; the rest keep
-	-- their idle opacity so navigation doesn't flash every panel to full.
+	local ctOverride  = PinnedPanels.ClickThroughOverride()
 	local navActive = IM.NavigatingPanel or IM._navOpacityActive or IsValid(IM.ActiveMenu)
 	local focused   = IM.Focused
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) then
-			local wantMouse = interactive and not pin.clickThrough
+			local wantMouse = interactive and (not pin.clickThrough or ctOverride)
 			if pin.frame:IsMouseInputEnabled() ~= wantMouse then
 				pin.frame:SetMouseInputEnabled(wantMouse)
 			end
@@ -105,7 +123,7 @@ local hudW, hudKeyCode = -1, nil
 local function RebuildHud(bw)
 	hudW, hudKeyCode = bw, IM.KeyCode
 	local keyName = (IM.KeyCode and IM.KeyCode ~= KEY_NONE) and input.GetKeyName(IM.KeyCode) or "?"
-	local text = "CURSOR MODE  |  Drag to move, resize from the corner  |  Arrows to navigate  |  Press ["
+	local text = "CURSOR MODE  |  Drag edges to resize  |  Hold ALT for click-through panels  |  Press ["
 		.. string.upper(keyName) .. "] to exit"
 
 	local rt = GetRenderTarget("PinnedPanels_InteractHUD_RT", HUD_RT_W, HUD_RT_H)

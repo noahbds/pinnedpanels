@@ -22,9 +22,9 @@ function PinnedPanels.AutoArrange()
 			e.pin.maximized = false
 			e.pin.restoreBounds = nil
 		end
-		local w, h = e.frame:GetSize()
-		w = math.min(w, uw - margin * 2)
-		h = math.min(h, uh - margin * 2)
+		local ow, oh = e.frame:GetSize()
+		local w = math.min(ow, uw - margin * 2)
+		local h = math.min(oh, uh - margin * 2)
 
 		if x + w + margin > ux + uw and x > ux + margin then
 			x = ux + margin
@@ -36,6 +36,11 @@ function PinnedPanels.AutoArrange()
 		e.frame:SetSize(w, h)
 		e.frame:SetPos(x, y)
 		e.frame:MoveToFront()
+
+		if e.pin.crop and (w ~= ow or h ~= oh) and isfunction(e.frame.OnUserResized) then
+			e.frame._lastResizeZone = nil
+			e.frame.OnUserResized(e.frame:GetSize())
+		end
 
 		x = x + w + margin
 		if h > rowH then rowH = h end
@@ -71,8 +76,6 @@ local function ToggleQuickPanel(id)
 	end
 end
 
--- Assign (or clear, with KEY_NONE) a quick-slot key for a panel. A panel may
--- own at most one key, and a key at most one panel.
 function PinnedPanels.SetQuickSlot(keycode, id)
 	local S = PinnedPanels.Settings
 	S.quickSlots = S.quickSlots or {}
@@ -137,10 +140,6 @@ local function IsPeekable(id, pin)
 	return true
 end
 
--- Peek state is a snapshot of each panel's visibility and minimized state at the
--- moment the peek key was pressed. When the key is released, each panel is
--- restored to its original state, unless the minimized state changed mid-peek
--- (e.g. restored from the taskbar), in which case the new state wins over the snapshot.
 local function StartPeek()
 	peekState = {}
 	PinnedPanels._peeking = true

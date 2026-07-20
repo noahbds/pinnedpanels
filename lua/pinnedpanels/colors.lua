@@ -135,6 +135,9 @@ C.colorPopupBorder = Color(60, 140, 255, 100)
 -- ── Lock indicator ───────────────────────────────────────────────────────────
 C.lockIcon         = Color(255, 180, 60, 200)
 
+-- ── Crop indicator (layout editor) ───────────────────────────────────────────
+C.cropLabel        = Color(255, 210, 110, 230)
+
 -- ── Taskbar ─────────────────────────────────────────────────────────────────
 C.taskbarBg        = Color(20, 22, 30, 220)
 C.taskbarBorder    = Color(50, 55, 75, 180)

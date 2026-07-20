@@ -28,7 +28,6 @@ function KB.FocusedPin()
     return IM.Focused and PinnedPanels.Pins[IM.Focused] or nil
 end
 
--- Pure check – no side effects
 function PinnedPanels.IsKeyboardNavEnabled()
     if not IM.Active and not (PinnedPanels.Settings and PinnedPanels.Settings.keyboardNavOutsideCursorMode) then
         return false
@@ -49,7 +48,6 @@ function PinnedPanels.IsKeyboardNavEnabled()
     return false
 end
 
--- Ensures a valid focus when navigation is active
 function KB.EnsureFocusValid()
     if IM.Focused == "__TASKBAR__" then return end
 
@@ -63,7 +61,6 @@ function KB.EnsureFocusValid()
         end
     end
 
-    -- No visible panels, try taskbar
     if IM.Active then
         local minimized = PinnedPanels.GetMinimizedPanels()
         if #minimized > 0 and PinnedPanels.Settings.taskbar and PinnedPanels.Settings.taskbar.enabled ~= false then

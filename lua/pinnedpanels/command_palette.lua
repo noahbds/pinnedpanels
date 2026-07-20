@@ -16,7 +16,6 @@ local function BuildEntries()
 		list[#list + 1] = { cat = cat, text = text or "", sub = sub, icon = icon, run = run }
 	end
 
-	-- Global actions
 	add("Action", "Toggle Cursor Mode", "Show cursor to interact", "icon16/cursor.png",
 		function() PinnedPanels.CursorMode.Toggle() end)
 	add("Action", "Auto-Arrange Panels", "Tile visible panels", "icon16/application_tile_horizontal.png",
@@ -32,7 +31,6 @@ local function BuildEntries()
 	add("Action", "Unpin All Panels", "Remove every pinned panel", "icon16/cross.png",
 		function() PinnedPanels.UnpinAll() end)
 
-	-- Currently pinned panels
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) and (pin.kind == "group" or not PinnedPanels.GetGroupForPanel(id)) then
 			local pid = id
@@ -48,7 +46,6 @@ local function BuildEntries()
 		end
 	end
 
-	-- Click-through panels need a mouse-free way back to interactive
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if pin.clickThrough and IsValid(pin.frame) then
 			local pid = id
@@ -63,14 +60,12 @@ local function BuildEntries()
 		end
 	end
 
-	-- All tools (pin)
 	for _, t in ipairs(PinnedPanels.GetAllTools()) do
 		local itemName, nice, cp = t.itemName, t.niceName, t.cpFunc
 		add("Tool", nice, t.category, "icon16/wrench.png",
 			function() PinnedPanels.Pin("PP_" .. itemName, nice, cp) end)
 	end
 
-	-- All content browsers (pin)
 	for _, t in ipairs(PinnedPanels.GetAllCreationTabs()) do
 		local cid, label, fn = t.id, t.label, t.func
 		add("Content", label, "Content browser", t.icon or "icon16/application_view_list.png",
@@ -85,7 +80,6 @@ local function Score(hay, needle)
 	hay = hay:lower()
 	local idx = hay:find(needle, 1, true)
 	if idx then return idx end
-	-- subsequence fallback
 	local hi = 1
 	for i = 1, #needle do
 		local f = hay:find(needle:sub(i, i), hi, true)
@@ -148,7 +142,6 @@ function PinnedPanels.OpenCommandPalette()
 
 	frame.OnRemove = function()
 		PinnedPanels._palette = nil
-		-- Only release the cursor if nothing else still needs it.
 		if not PinnedPanels.PanelsInteractive() then
 			gui.EnableScreenClicker(false)
 		end
@@ -201,7 +194,6 @@ function PinnedPanels.OpenCommandPalette()
 		if not ok then ErrorNoHalt("[PinnedPanels] Palette action error: " .. tostring(err) .. "\n") end
 	end
 
-	-- Scroll just enough to keep the selection in view — no animated centering.
 	local function EnsureVisible()
 		local r = rows[sel]
 		if not IsValid(r) then return end

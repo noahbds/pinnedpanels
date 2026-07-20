@@ -130,6 +130,10 @@ local function AddPositionOptions(menu, id, pin, frame)
 			local sw, sh = ScrW(), ScrH()
 			frame:SetPos(math.Clamp(c.x, 0, sw - c.w), math.Clamp(c.y, 0, sh - c.h))
 			frame:SetSize(math.Clamp(c.w, 150, sw), math.Clamp(c.h, 100, sh))
+			if pin.crop and isfunction(frame.OnUserResized) then
+				frame._lastResizeZone = nil
+				frame.OnUserResized(frame:GetSize())
+			end
 			PinnedPanels.Save()
 		end
 	end)
@@ -137,8 +141,6 @@ local function AddPositionOptions(menu, id, pin, frame)
 	if not PinnedPanels._clipboard then pasteOpt:SetEnabled(false) end
 end
 
--- Custom context menu for pinned panels. 
--- Right-clicking a panel's header opens this menu or shift+enter when the panel is focused. 
 function PinnedPanels.OpenContextMenu(id, frame)
 	local pin = PinnedPanels.Pins[id]
 	if not pin then return end
@@ -171,6 +173,18 @@ function PinnedPanels.OpenContextMenu(id, frame)
 	menu:AddSpacer()
 
 	menu:AddOption("Auto Size", function() PinnedPanels.AutoSizePanel(id) end):SetIcon("icon16/arrow_inout.png")
+
+	if PinnedPanels.OpenCropEditor then
+		menu:AddOption(pin.crop and "Edit Crop..." or "Crop Panel...", function()
+			PinnedPanels.OpenCropEditor(id)
+		end):SetIcon("icon16/shape_handles.png")
+		if pin.crop then
+			menu:AddOption("Remove Crop", function()
+				PinnedPanels.ClearCrop(id)
+			end):SetIcon("icon16/shape_square_delete.png")
+		end
+	end
+
 	menu:AddOption("Change Colors...", function() PinnedPanels.OpenColorChanger(id) end):SetIcon("icon16/color_wheel.png")
 	menu:AddOption("Rename...", function() PinnedPanels.OpenRenamePopup(id) end):SetIcon("icon16/textfield_rename.png")
 
@@ -204,7 +218,7 @@ function PinnedPanels.OpenContextMenu(id, frame)
 			if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
 			if pin.clickThrough then
 				notification.AddLegacy(
-					"Panel now ignores the mouse. Re-enable via the command palette or keyboard nav (Shift+Enter).",
+					"Panel now ignores the mouse. Hold ALT to use it, or re-enable via the command palette or keyboard nav (Shift+Enter).",
 					NOTIFY_GENERIC, 6)
 			end
 		end)

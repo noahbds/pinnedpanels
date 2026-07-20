@@ -1,0 +1,468 @@
+local C = PinnedPanels.C
+local SUI = PinnedPanels.SettingsUI
+
+-- ── Settings Pages ───────────────────────────────────────────────────────────
+
+-- ── General ──────────────────────────────────────────────────────────────────
+local function BuildGeneral(parent, ctx)
+	local secBehavior = SUI.Card(parent, "Behavior")
+
+	SUI.CheckRow(secBehavior, "Auto-restore pinned panels when joining the server",
+		PinnedPanels.Settings.autoRestore, function(val)
+			PinnedPanels.Settings.autoRestore = val
+		end)
+
+	SUI.CheckRow(secBehavior, "Allow keyboard navigation outside cursor mode",
+		PinnedPanels.Settings.keyboardNavOutsideCursorMode, function(val)
+			PinnedPanels.Settings.keyboardNavOutsideCursorMode = val
+		end)
+
+	SUI.SliderRow(secBehavior, {
+		label     = "Panel opacity outside cursor mode (%)",
+		min       = 10,
+		max       = 100,
+		value     = math.Round((PinnedPanels.Settings.idleAlpha or 1) * 100),
+		saveTimer = "PinnedPanels_IdleAlphaSave",
+		onChange  = function(val)
+			PinnedPanels.Settings.idleAlpha = math.Clamp(val, 10, 100) / 100
+			if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
+		end,
+	})
+
+	local secSnap = SUI.Card(parent, "Window Snapping")
+
+	local snapBox = SUI.CheckRow(secSnap,
+		"Snap panels to screen edges and each other while dragging (hold Alt to bypass)",
+		PinnedPanels.Settings.snapEnabled ~= false, function(val)
+			PinnedPanels.Settings.snapEnabled = val
+		end)
+	snapBox:SetWrap(true)
+	snapBox:SetTall(34)
+
+	SUI.SliderRow(secSnap, {
+		label     = "Snap distance (px)",
+		min       = 0,
+		max       = 40,
+		value     = PinnedPanels.Settings.snapDistance or 12,
+		saveTimer = "PinnedPanels_SnapSave",
+		onChange  = function(val)
+			PinnedPanels.Settings.snapDistance = math.Clamp(val, 0, 64)
+		end,
+	})
+end
+
+-- ── Controls & Keys ──────────────────────────────────────────────────────────
+local function BuildControls(parent, ctx)
+	local secInteract = SUI.Card(parent, "Cursor Mode (Cursor Toggle)")
+
+	SUI.Help(secInteract,
+		"Press your bound key in-game to show the cursor and freely interact with your pinned panels. " ..
+		"The spawn menu always enables interaction while open.")
+
+	SUI.KeyControlRow(secInteract, {
+		bindTitle  = "Bind Interact Key",
+		get        = function() return PinnedPanels.CursorMode.KeyCode end,
+		set        = function(k)
+			PinnedPanels.CursorMode.KeyCode = k
+			RunConsoleCommand("pp_interact_key", tostring(k))
+		end,
+		ignore     = "cursor",
+		extraText  = "Toggle Now",
+		extraIcon  = "icon16/cursor.png",
+		extraClick = function() PinnedPanels.CursorMode.Toggle() end,
+	})
+
+	local secPeek = SUI.Card(parent, "Peek (Hold to Reveal)")
+
+	SUI.Help(secPeek,
+		"Hold this key to temporarily show every panel — hidden, minimized or faded — at full opacity. " ..
+		"Release to put everything back.")
+
+	SUI.KeyControlRow(secPeek, {
+		bindTitle = "Bind Peek Key",
+		get       = function() return PinnedPanels.GetPeekKey and PinnedPanels.GetPeekKey() or KEY_NONE end,
+		set       = function(k) PinnedPanels.SetPeekKey(k) end,
+		ignore    = "peek",
+	})
+
+	local secPalette = SUI.Card(parent, "Command Palette")
+
+	SUI.Help(secPalette,
+		"Open a searchable list of every tool, content browser, pinned panel and action. " ..
+		"Bind a key to open it anywhere in-game.")
+
+	SUI.KeyControlRow(secPalette, {
+		bindTitle  = "Bind Command Palette",
+		get        = function() return PinnedPanels.GetPaletteKey and PinnedPanels.GetPaletteKey() or KEY_NONE end,
+		set        = function(k) PinnedPanels.SetPaletteKey(k) end,
+		ignore     = "palette",
+		extraText  = "Open Now",
+		extraIcon  = "icon16/application_view_list.png",
+		extraClick = function() PinnedPanels.OpenCommandPalette() end,
+	})
+
+	local secKeys = SUI.Card(parent, "Keyboard Navigation")
+
+	SUI.Help(secKeys,
+		"Shortcuts work while cursor mode is on, and can also be enabled globally from General. " ..
+		"The focused panel is outlined; cycle focus, switch group tabs, or equip the focused tool.")
+
+	local function KeyName(code)
+		if not code or code == KEY_NONE then return "Not bound" end
+		return string.upper(input.GetKeyName(code) or "?")
+	end
+
+	local keyRefreshers = {}
+
+	for _, bind in ipairs(PinnedPanels.Keybinds or {}) do
+		local row = vgui.Create("DPanel", secKeys)
+		row:Dock(TOP)
+		row:SetTall(26)
+		row:DockMargin(0, 0, 0, 4)
+		row.Paint = function(_, w, h)
+			draw.RoundedBox(4, 0, 0, w, h, C.bgCardHdr)
+		end
+
+		local nameLbl = vgui.Create("DLabel", row)
+		nameLbl:SetText(bind.name)
+		nameLbl:SetTextColor(C.textLight)
+		nameLbl:Dock(LEFT)
+		nameLbl:DockMargin(8, 0, 0, 0)
+		nameLbl:SetWide(200)
+		nameLbl:SetMouseInputEnabled(false)
+
+		local keyLbl = vgui.Create("DLabel", row)
+		keyLbl:Dock(LEFT)
+		keyLbl:SetWide(90)
+		keyLbl:SetContentAlignment(5)
+
+		local function UpdateKey()
+			if not IsValid(keyLbl) then return end
+			local code = PinnedPanels.GetBind(bind.id)
+			keyLbl:SetText(KeyName(code))
+			keyLbl:SetTextColor((code and code ~= KEY_NONE) and C.keyBound or C.textMuted)
+		end
+		UpdateKey()
+		keyRefreshers[#keyRefreshers + 1] = UpdateKey
+
+		local resetBtn = vgui.Create("DButton", row)
+		resetBtn:SetText("Reset")
+		resetBtn:SetWide(52)
+		resetBtn:Dock(RIGHT)
+		resetBtn:DockMargin(0, 3, 6, 3)
+		SUI.StyleDarkButton(resetBtn)
+		resetBtn.DoClick = function()
+			PinnedPanels.ResetBind(bind.id)
+			UpdateKey()
+		end
+
+		local unbindBtn = vgui.Create("DButton", row)
+		unbindBtn:SetText("Unbind")
+		unbindBtn:SetWide(58)
+		unbindBtn:Dock(RIGHT)
+		unbindBtn:DockMargin(0, 3, 4, 3)
+		SUI.StyleDarkButton(unbindBtn)
+		unbindBtn.DoClick = function()
+			PinnedPanels.SetBind(bind.id, KEY_NONE)
+			UpdateKey()
+		end
+
+		local bindBtn = vgui.Create("DButton", row)
+		bindBtn:SetText("Bind")
+		bindBtn:SetWide(52)
+		bindBtn:Dock(RIGHT)
+		bindBtn:DockMargin(0, 3, 4, 3)
+		SUI.StyleDarkButton(bindBtn)
+		bindBtn.DoClick = function()
+			PinnedPanels.OpenKeyBindFrame({
+				title   = "Bind: " .. bind.name,
+				get     = function() return PinnedPanels.GetBind(bind.id) end,
+				set     = function(k) PinnedPanels.SetBind(bind.id, k) end,
+				onSaved = UpdateKey,
+				ignore  = "bind:" .. bind.id,
+			})
+		end
+	end
+
+	local keysBottom = SUI.Row(secKeys, 28)
+	keysBottom:DockMargin(0, 6, 0, 0)
+
+	SUI.Button(keysBottom, "Reset All to Default", "icon16/arrow_undo.png", 160, function()
+		PinnedPanels.ResetAllBinds()
+		for _, refresh in ipairs(keyRefreshers) do refresh() end
+	end)
+end
+
+-- ── Appearance ───────────────────────────────────────────────────────────────
+local function BuildAppearance(parent, ctx)
+	local secApp = SUI.Card(parent, "Panel Colors")
+
+	local colorEntries = {
+		{ label = "Panel Background", key = "bg" },
+		{ label = "Header Bar",       key = "header" },
+		{ label = "Header Text",      key = "text" },
+	}
+
+	for _, entry in ipairs(colorEntries) do
+		SUI.ColorRow(secApp, {
+			label      = entry.label,
+			popupTitle = entry.label,
+			get        = function() return PinnedPanels.Settings[entry.key] end,
+			set        = function(col) PinnedPanels.Settings[entry.key] = col end,
+			popups     = ctx.popups,
+			key        = "panel_" .. entry.key,
+		})
+	end
+
+	local resetRow = SUI.Row(secApp, 30)
+	resetRow:DockMargin(0, 8, 0, 0)
+
+	SUI.Button(resetRow, "Reset to Default", "icon16/arrow_undo.png", 160, function()
+		PinnedPanels.Settings.bg     = Color(235, 238, 242, 250)
+		PinnedPanels.Settings.header = Color(32, 35, 42, 255)
+		PinnedPanels.Settings.text   = Color(240, 245, 255, 255)
+		PinnedPanels.SaveSettings()
+		ctx.Rebuild()
+	end)
+
+	local previewCard = SUI.Card(parent, "Live Preview")
+
+	local preview = vgui.Create("DPanel", previewCard)
+	preview:Dock(TOP)
+	preview:SetTall(84)
+	preview.Paint = function(_, w, h)
+		local th = PinnedPanels.Settings
+		draw.RoundedBox(6, 0, 0, w, h, th.bg)
+		draw.RoundedBoxEx(6, 0, 0, w, 26, th.header, true, true, false, false)
+		draw.SimpleText("Example Panel Title", "DermaDefaultBold", 10, 13, th.text,
+			TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		C._previewHint.r = th.text.r
+		C._previewHint.g = th.text.g
+		C._previewHint.b = th.text.b
+		draw.SimpleText("(this is how your pinned panels will look)", "DermaDefault",
+			10, h - 10, C._previewHint,
+			TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+	end
+end
+
+-- ── Taskbar ──────────────────────────────────────────────────────────────────
+local function BuildTaskbar(parent, ctx)
+	local tb = PinnedPanels.Settings.taskbar
+
+	local secTaskbar = SUI.Card(parent, "Taskbar")
+
+	SUI.CheckRow(secTaskbar, "Enable taskbar (minimized panels appear in a bar)",
+		tb.enabled ~= false, function(val)
+			PinnedPanels.Settings.taskbar.enabled = val
+			if val then PinnedPanels.CreateTaskbar() else PinnedPanels.DestroyTaskbar() end
+		end)
+
+	local posRow = SUI.Row(secTaskbar, 28)
+	posRow:DockMargin(0, 0, 0, 8)
+
+	local posLbl = vgui.Create("DLabel", posRow)
+	posLbl:SetText("Position:")
+	posLbl:SetTextColor(C.textLabel)
+	posLbl:Dock(LEFT)
+	posLbl:SetWide(80)
+
+	local posCombo = vgui.Create("DComboBox", posRow)
+	posCombo:Dock(FILL)
+	posCombo:SetValue(string.upper((tb.position or "bottom"):sub(1, 1)) .. (tb.position or "bottom"):sub(2))
+	posCombo:AddChoice("Bottom", "bottom")
+	posCombo:AddChoice("Top", "top")
+	posCombo:AddChoice("Left", "left")
+	posCombo:AddChoice("Right", "right")
+	posCombo.OnSelect = function(_, _, _, data)
+		PinnedPanels.Settings.taskbar.position = data
+		PinnedPanels.SaveSettings()
+	end
+
+	SUI.SliderRow(secTaskbar, {
+		label     = "Bar thickness (px)",
+		min       = 20,
+		max       = 64,
+		value     = tb.height or 32,
+		saveTimer = "PinnedPanels_TaskbarHeightSave",
+		onChange  = function(val)
+			PinnedPanels.Settings.taskbar.height = math.Clamp(val, 20, 64)
+		end,
+	})
+
+	SUI.CheckRow(secTaskbar, "Reveal on hover (collapse until the cursor is near the bar)",
+		tb.revealOnHover == true, function(val)
+			PinnedPanels.Settings.taskbar.revealOnHover = val
+		end)
+
+	SUI.CheckRow(secTaskbar, "Show text labels on entries",
+		tb.showLabels ~= false, function(val)
+			PinnedPanels.Settings.taskbar.showLabels = val
+		end)
+
+	local secColors = SUI.Card(parent, "Taskbar Colors")
+
+	local tbColorEntries = {
+		{ label = "Background", key = "bgColor" },
+		{ label = "Text",       key = "textColor" },
+		{ label = "Accent",     key = "accentColor" },
+	}
+
+	for _, ce in ipairs(tbColorEntries) do
+		SUI.ColorRow(secColors, {
+			label      = ce.label,
+			popupTitle = "Taskbar: " .. ce.label,
+			get        = function() return PinnedPanels.Settings.taskbar[ce.key] end,
+			set        = function(col) PinnedPanels.Settings.taskbar[ce.key] = col end,
+			popups     = ctx.popups,
+			key        = "taskbar_" .. ce.key,
+		})
+	end
+
+	local resetRow = SUI.Row(secColors, 30)
+	resetRow:DockMargin(0, 8, 0, 0)
+
+	SUI.Button(resetRow, "Reset Taskbar to Default", "icon16/arrow_undo.png", 180, function()
+		PinnedPanels.Settings.taskbar = table.Copy(PinnedPanels.DEFAULT_TASKBAR)
+		PinnedPanels.SaveSettings()
+		PinnedPanels.CreateTaskbar()
+		ctx.Rebuild()
+	end)
+end
+
+-- ── Groups ───────────────────────────────────────────────────────────────────
+local function BuildGroups(parent, ctx)
+	local secGroups = SUI.Card(parent, "Panel Groups")
+
+	SUI.Help(secGroups,
+		"Grouped panels merge into one tabbed window. Create groups here or via right-click on panel headers.")
+
+	local listHolder = vgui.Create("DPanel", secGroups)
+	listHolder:Dock(TOP)
+	listHolder.Paint = function() end
+
+	local function RebuildGroups()
+		if not IsValid(listHolder) then return end
+		listHolder:Clear()
+
+		local groups = PinnedPanels.Settings.groups
+		if #groups == 0 then
+			local emptyLbl = vgui.Create("DLabel", listHolder)
+			emptyLbl:SetText("No groups yet.")
+			emptyLbl:SetTextColor(C.textMuted)
+			emptyLbl:Dock(TOP)
+			emptyLbl:DockMargin(0, 0, 0, 4)
+			listHolder:SetTall(24)
+			return
+		end
+
+		for _, g in ipairs(groups) do
+			local row = vgui.Create("DPanel", listHolder)
+			row:Dock(TOP)
+			row:SetTall(28)
+			row:DockMargin(0, 0, 0, 2)
+			row.Paint = function(self, w, h)
+				local bg = self:IsHovered() and C.bgRowHov or C.bgCardHdr
+				draw.RoundedBox(4, 0, 0, w, h, bg)
+				surface.SetDrawColor(g.color)
+				surface.DrawRect(0, 0, 4, h)
+			end
+
+			local nameLbl = vgui.Create("DLabel", row)
+			nameLbl:SetText(g.name .. " (" .. #g.ids .. " panels)")
+			nameLbl:SetTextColor(C.textLight)
+			nameLbl:Dock(FILL)
+			nameLbl:DockMargin(10, 0, 0, 0)
+			nameLbl:SetMouseInputEnabled(false)
+
+			local delBtn = vgui.Create("DButton", row)
+			delBtn:SetText("Delete")
+			delBtn:SetWide(55)
+			delBtn:Dock(RIGHT)
+			delBtn:DockMargin(0, 3, 4, 3)
+			delBtn:SetTextColor(C.unpinTxt)
+			delBtn.Paint = function(self, w, h)
+				draw.RoundedBox(3, 0, 0, w, h, self:IsHovered() and C.unpinBgHov or C.unpinBg)
+			end
+			delBtn.DoClick = function()
+				PinnedPanels.DeleteGroup(g.name)
+				RebuildGroups()
+			end
+		end
+
+		listHolder:SetTall(#groups * 30)
+	end
+
+	RebuildGroups()
+
+	hook.Add("PinnedPanels_StateChanged", listHolder, function(pnl)
+		if IsValid(pnl) then RebuildGroups() end
+	end)
+
+	local addRow = SUI.Row(secGroups, 28)
+	addRow:DockMargin(0, 6, 0, 0)
+
+	SUI.Button(addRow, "New Group...", "icon16/folder_add.png", 120, function()
+		PinnedPanels.PromptNewGroup(nil, RebuildGroups)
+	end)
+end
+
+-- ── Backup & Data ────────────────────────────────────────────────────────────
+local function BuildData(parent, ctx)
+	local secBackup = SUI.Card(parent, "Backup & Sharing")
+
+	SUI.Help(secBackup,
+		"Export your current layout (panels + groups) to a shareable code, or paste a code to import. " ..
+		"Importing replaces your current layout.")
+
+	local backupRow = SUI.Row(secBackup, 30)
+
+	SUI.Button(backupRow, "Export Layout...", "icon16/page_white_get.png", 160, function()
+		local code = PinnedPanels.ExportLayout()
+		if not code or code == "" then
+			Derma_Message("Nothing to export yet.", "Export Layout", "OK")
+			return
+		end
+		SUI.ShowCodePopup("Export Layout", code, nil)
+	end)
+
+	SUI.Button(backupRow, "Import Layout...", "icon16/page_white_put.png", 160, function()
+		SUI.ShowCodePopup("Import Layout", "", function(value)
+			local ok, err = PinnedPanels.ImportLayout(value)
+			if ok then
+				RunConsoleCommand("pp_reload")
+				Derma_Message("Layout imported successfully.", "Import Layout", "OK")
+			else
+				Derma_Message("Import failed: " .. tostring(err), "Import Layout", "OK")
+			end
+		end)
+	end)
+
+	local dangerCard = SUI.Card(parent, "Danger Zone")
+
+	local unpinAllBtn = vgui.Create("DButton", dangerCard)
+	unpinAllBtn:SetText("Unpin All Panels")
+	unpinAllBtn:Dock(TOP)
+	unpinAllBtn:SetTall(30)
+	unpinAllBtn.Paint = function(self, w, h)
+		local bg = self:IsHovered() and C.dangerBgHov or C.dangerBg
+		draw.RoundedBox(4, 0, 0, w, h, bg)
+		surface.SetDrawColor(C.dangerBorder)
+		surface.DrawOutlinedRect(0, 0, w, h, 1)
+		draw.SimpleText(self:GetText(), "DermaDefaultBold", w / 2, h / 2,
+			C.dangerTxt, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		return true
+	end
+	unpinAllBtn.DoClick = function()
+		PinnedPanels.UnpinAll()
+	end
+end
+
+-- ── Page Registry ────────────────────────────────────────────────────────────
+PinnedPanels.SettingsPages = {
+	{ id = "general",    name = "General",       icon = "icon16/cog.png",              build = BuildGeneral },
+	{ id = "controls",   name = "Controls",      icon = "icon16/keyboard.png",         build = BuildControls },
+	{ id = "appearance", name = "Appearance",    icon = "icon16/palette.png",          build = BuildAppearance },
+	{ id = "taskbar",    name = "Taskbar",       icon = "icon16/application_put.png",  build = BuildTaskbar },
+	{ id = "groups",     name = "Groups",        icon = "icon16/folder.png",           build = BuildGroups },
+	{ id = "data",       name = "Backup & Data", icon = "icon16/disk.png",             build = BuildData },
+}

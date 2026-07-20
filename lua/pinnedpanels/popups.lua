@@ -17,9 +17,6 @@ function PinnedPanels.OpenColorChanger(id)
 	frame:MakePopup()
 	PinnedPanels._colorFrame = frame
 
-	-- The keyboard-nav Think loop refuses to run while any panel holds
-	-- keyboard focus, so the popup must not keep it; only borrow it while a
-	-- text field inside (RGB wangs) is hovered or focused.
 	frame:SetKeyboardInputEnabled(false)
 	local IsTextPanel = PinnedPanels.IsTextPanel
 	frame.Think = function(self)
@@ -48,7 +45,6 @@ function PinnedPanels.OpenColorChanger(id)
 		end
 	end
 
-	-- nav focus ring (mirrors the pinned-frame PaintOver, popup-local)
 	frame.PaintOver = function(self, w, h)
 		if not IM or IM.NavPopup ~= self or not IM.NavigatingPanel then return end
 		local els = PinnedPanels.GetNavElements and PinnedPanels.GetNavElements() or {}
@@ -155,8 +151,6 @@ function PinnedPanels.OpenColorChanger(id)
 		frame:Close()
 	end
 
-	-- hand keyboard navigation to this popup while it is open (after the
-	-- controls exist, so the initial focus lands on the top-most element)
 	if PinnedPanels.SetNavPopup and PinnedPanels.IsKeyboardNavEnabled
 		and PinnedPanels.IsKeyboardNavEnabled() then
 		PinnedPanels.SetNavPopup(frame)

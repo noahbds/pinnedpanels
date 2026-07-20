@@ -25,7 +25,7 @@ function PinnedPanels.GetUsableBounds()
 			x, w = th, w - th
 		elseif pos == "right" then
 			w = w - th
-		else -- bottom
+		else
 			h = h - th
 		end
 	end

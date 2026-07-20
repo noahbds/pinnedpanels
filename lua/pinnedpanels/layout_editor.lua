@@ -42,7 +42,7 @@ function EDITOR:Create(parent)
 	self.root.Paint = function() end
 
 	local info = vgui.Create("DLabel", self.root)
-	info:SetText("Drag boxes to reposition panels. Drag ◢ to resize. Right-click for options. Grouped panels have a highlighted border and member badge. Changes apply live.")
+	info:SetText("Drag boxes to reposition panels. Drag any edge or corner to resize. Right-click for options. Grouped panels have a highlighted border and member badge. Changes apply live.")
 	info:SetWrap(true)
 	info:Dock(TOP)
 	info:DockMargin(6, 6, 6, 4)
@@ -105,33 +105,42 @@ function EDITOR:Create(parent)
 				end
 			end
 
-			draw.SimpleText("◢", "DermaDefault", bx + bw - 3, by + bh - 2,
-				color_white, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
-
 			local maxChars = math.max(3, math.floor(bw / 6))
 			local cx = bx + bw / 2
 
 			if box.isGroup and box.memberNames and #box.memberNames > 0 then
-				local lineH = 11
 				local names = box.memberNames
-				local extra = (box.memberCount and box.memberCount > #names) and 1 or 0
-				local blockH = 14 + (#names + extra) * lineH
-				local topY = by + bh / 2 - blockH / 2
+				local nameCount = #names
+				local totalCount = box.memberCount or nameCount
+				local hasExtra = totalCount > nameCount
 
-				draw.SimpleText(Fit(box.label, maxChars), "DermaDefaultBold", cx, topY,
-					color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+				local lineHeight = 11
+				local titleHeight = 14
+				local blockHeight = titleHeight + (nameCount + (hasExtra and 1 or 0)) * lineHeight
+				local topY = by + (bh - blockHeight) * 0.5
 
-				for mi, mname in ipairs(names) do
-					draw.SimpleText(Fit(mname, maxChars), "DermaDefault", cx, topY + 14 + (mi - 1) * lineH,
+				draw.SimpleText(Fit(box.label, maxChars), "DermaDefaultBold",
+					cx, topY, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+
+				for i = 1, nameCount do
+					draw.SimpleText(Fit(names[i], maxChars), "DermaDefault",
+						cx, topY + titleHeight + (i - 1) * lineHeight,
 						C.groupBadgeText, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 				end
-				if extra == 1 then
-					draw.SimpleText("+" .. (box.memberCount - #names) .. " more", "DermaDefault",
-						cx, topY + 14 + #names * lineH, C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+
+				if hasExtra then
+					draw.SimpleText(string.format("+%d more", totalCount - nameCount), "DermaDefault",
+						cx, topY + titleHeight + nameCount * lineHeight,
+						C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 				end
 			else
-				draw.SimpleText(Fit(box.label, maxChars), "DermaDefault", cx, by + bh / 2,
-					color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+				draw.SimpleText(Fit(box.label, maxChars), "DermaDefault",
+					cx, by + bh * 0.5, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
+
+			if box.cropped then
+				draw.SimpleText("CROPPED", "DermaDefaultBold",
+					bx + bw - 4, by + 2, C.cropLabel, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
 			end
 
 			draw.SimpleText(math.floor(box.px) .. "," .. math.floor(box.py)
@@ -154,7 +163,6 @@ function EDITOR:Create(parent)
 			surface.DrawLine(line[1], line[2], line[3], line[4])
 		end
 
-		-- Draw taskbar
 		local ts = PinnedPanels.Settings.taskbar
 		if ts and ts.enabled ~= false then
 			local tbH = math.floor((ts.height or 32) * self.scale)
@@ -167,7 +175,7 @@ function EDITOR:Create(parent)
 				tbx, tby, tbw, tbh = ox, oy, tbH, prevH
 			elseif ts.position == "right" then
 				tbx, tby, tbw, tbh = ox + prevW - tbH, oy, tbH, prevH
-			else -- bottom
+			else
 				tbx, tby, tbw, tbh = ox, oy + prevH - tbH, prevW, tbH
 			end
 
@@ -176,7 +184,6 @@ function EDITOR:Create(parent)
 			surface.SetDrawColor(C.taskbarBorder)
 			surface.DrawOutlinedRect(tbx, tby, tbw, tbh, 1)
 
-			-- Draw minimized entries inside the bar
 			local minimized = PinnedPanels.GetMinimizedPanels()
 			if #minimized > 0 then
 				local entryOff = 3
@@ -271,33 +278,48 @@ function EDITOR:Create(parent)
 	end
 
 	-- ── Apply live position/size to the underlying frame ─────────────────────
-	local function ApplyBoxToFrame(box)
+	local function ApplyBoxToFrame(box, zone)
 		local pin = PinnedPanels.Pins[box.id]
 		if pin and IsValid(pin.frame) then
 			pin.frame:SetPos(math.floor(box.px), math.floor(box.py))
 			pin.frame:SetSize(math.floor(box.pw), math.floor(box.ph))
+			if zone and pin.crop and isfunction(pin.frame.OnUserResized) then
+				pin.frame._lastResizeZone = zone
+				pin.frame.OnUserResized(pin.frame:GetSize())
+			end
 		end
+	end
+
+	local function BoxAt(px, py)
+		local ox2, oy2 = self.canvasOX, self.canvasOY
+		for i = #self.boxes, 1, -1 do
+			local box = self.boxes[i]
+			local bx = ox2 + math.floor(box.px * self.scale)
+			local by = oy2 + math.floor(box.py * self.scale)
+			local bw = math.max(MIN_BOX, math.floor(box.pw * self.scale))
+			local bh = math.max(MIN_BOX, math.floor(box.ph * self.scale))
+			if px >= bx and px <= bx + bw and py >= by and py <= by + bh then
+				return box, bx, by, bw, bh
+			end
+		end
+	end
+
+	local RESIZE_MARGIN = 6
+	local function ZoneAt(bx, by, bw, bh, px, py)
+		local zone = {
+			w = px <= bx + RESIZE_MARGIN,
+			e = px >= bx + bw - RESIZE_MARGIN,
+			n = py <= by + RESIZE_MARGIN,
+			s = py >= by + bh - RESIZE_MARGIN,
+		}
+		if zone.w or zone.e or zone.n or zone.s then return zone end
 	end
 
 	self.canvas.OnMousePressed = function(cv, mc)
 		local mx, my = cv:CursorPos()
-		local ox2, oy2 = self.canvasOX, self.canvasOY
-
-		local function boxAt(px, py)
-			for i = #self.boxes, 1, -1 do
-				local box = self.boxes[i]
-				local bx = ox2 + math.floor(box.px * self.scale)
-				local by = oy2 + math.floor(box.py * self.scale)
-				local bw = math.max(MIN_BOX, math.floor(box.pw * self.scale))
-				local bh = math.max(MIN_BOX, math.floor(box.ph * self.scale))
-				if px >= bx and px <= bx + bw and py >= by and py <= by + bh then
-					return box, bx, by, bw, bh
-				end
-			end
-		end
 
 		if mc == MOUSE_RIGHT then
-			local box = boxAt(mx, my)
+			local box = BoxAt(mx, my)
 			if box then
 				local pin = PinnedPanels.Pins[box.id]
 				if pin and IsValid(pin.frame) then
@@ -309,16 +331,21 @@ function EDITOR:Create(parent)
 
 		if mc ~= MOUSE_LEFT then return end
 
-		local box, bx, by, bw, bh = boxAt(mx, my)
+		local box, bx, by, bw, bh = BoxAt(mx, my)
 		if not box then return end
 
 		if IsBoxLocked(box) then return end
 
-		if mx >= bx + bw - 12 and my >= by + bh - 12 then
+		local zone = ZoneAt(bx, by, bw, bh, mx, my)
+		if zone then
+			local pin = PinnedPanels.Pins[box.id]
+			if pin then pin.maximized = false end
 			self.resizing = box
 			box.resizing = true
-			box.ox = (bx + bw) - mx
-			box.oy = (by + bh) - my
+			box.zone = zone
+			box.startPx, box.startPy = box.px, box.py
+			box.startPw, box.startPh = box.pw, box.ph
+			box.startMx, box.startMy = mx, my
 		else
 			self.dragging = box
 			box.dragging = true
@@ -338,9 +365,13 @@ function EDITOR:Create(parent)
 			box.resizing = false
 			self.resizing = nil
 			local pin = PinnedPanels.Pins[box.id]
-			if pin and IsValid(pin.frame) and isfunction(pin.frame.OnUserResized) then
-				pin.frame.OnUserResized(pin.frame:GetSize())
+			if pin and IsValid(pin.frame) then
+				pin.frame._lastResizeZone = box.zone
+				if isfunction(pin.frame.OnUserResized) then
+					pin.frame.OnUserResized(pin.frame:GetSize())
+				end
 			end
+			box.zone = nil
 		end
 		self.snapLines = {}
 		cv:MouseCapture(false)
@@ -354,44 +385,77 @@ function EDITOR:Create(parent)
 		if self.resizing then
 			local box = self.resizing
 			if IsBoxLocked(box) then return end
+			local zone = box.zone or {}
 
-			local bx = ox2 + math.floor(box.px * self.scale)
-			local by = oy2 + math.floor(box.py * self.scale)
-			local nW = (mx - bx + box.ox) / self.scale
-			local nH = (my - by + box.oy) / self.scale
+			local dxp = (mx - box.startMx) / self.scale
+			local dyp = (my - box.startMy) / self.scale
+			local left, top = box.startPx, box.startPy
+			local right, bottom = left + box.startPw, top + box.startPh
+
+			local pin = PinnedPanels.Pins[box.id]
+			local minW = (pin and pin.crop) and 60 or MIN_PANEL_W
+			local minH = (pin and pin.crop) and 60 or MIN_PANEL_H
+			local maxW, maxH = math.huge, math.huge
+			if pin and pin.crop and pin.cropBase then
+				maxW = zone.w and (pin.cropBase.w - pin.crop.r) or (pin.cropBase.w - pin.crop.l)
+				maxH = zone.n and (pin.cropBase.h - pin.crop.b) or (pin.cropBase.h - pin.crop.t)
+			end
 
 			local lines = {}
-
-			if math.abs((box.px + nW) - scrW) < SNAP_DIST then
-				nW = scrW - box.px
-				local lx = ox2 + math.floor(scrW * self.scale)
-				lines[#lines + 1] = { lx, oy2, lx, oy2 + math.floor(scrH * self.scale) }
-			end
-			if math.abs((box.py + nH) - scrH) < SNAP_DIST then
-				nH = scrH - box.py
-				local ly = oy2 + math.floor(scrH * self.scale)
-				lines[#lines + 1] = { ox2, ly, ox2 + math.floor(scrW * self.scale), ly }
-			end
-
-			for _, other in ipairs(self.boxes) do
-				if other ~= box then
-					if math.abs((box.px + nW) - (other.px + other.pw)) < SNAP_DIST then
-						nW = other.px + other.pw - box.px
-					elseif math.abs((box.px + nW) - other.px) < SNAP_DIST then
-						nW = other.px - box.px
-					end
-					if math.abs((box.py + nH) - (other.py + other.ph)) < SNAP_DIST then
-						nH = other.py + other.ph - box.py
-					elseif math.abs((box.py + nH) - other.py) < SNAP_DIST then
-						nH = other.py - box.py
+			local function SnapX(raw)
+				local refs = { 0, scrW }
+				for _, other in ipairs(self.boxes) do
+					if other ~= box then
+						refs[#refs + 1] = other.px
+						refs[#refs + 1] = other.px + other.pw
 					end
 				end
+				for _, r in ipairs(refs) do
+					if math.abs(raw - r) < SNAP_DIST then
+						local lx = ox2 + math.floor(r * self.scale)
+						lines[#lines + 1] = { lx, oy2, lx, oy2 + math.floor(scrH * self.scale) }
+						return r
+					end
+				end
+				return raw
+			end
+			local function SnapY(raw)
+				local refs = { 0, scrH }
+				for _, other in ipairs(self.boxes) do
+					if other ~= box then
+						refs[#refs + 1] = other.py
+						refs[#refs + 1] = other.py + other.ph
+					end
+				end
+				for _, r in ipairs(refs) do
+					if math.abs(raw - r) < SNAP_DIST then
+						local ly = oy2 + math.floor(r * self.scale)
+						lines[#lines + 1] = { ox2, ly, ox2 + math.floor(scrW * self.scale), ly }
+						return r
+					end
+				end
+				return raw
 			end
 
-			box.pw = math.Clamp(nW, MIN_PANEL_W, scrW - box.px)
-			box.ph = math.Clamp(nH, MIN_PANEL_H, scrH - box.py)
+			if zone.e then
+				local edge = math.Clamp(SnapX(right + dxp), left + minW, math.min(scrW, left + maxW))
+				box.pw = edge - left
+			elseif zone.w then
+				local edge = math.Clamp(SnapX(left + dxp), math.max(0, right - maxW), right - minW)
+				box.px = edge
+				box.pw = right - edge
+			end
+			if zone.s then
+				local edge = math.Clamp(SnapY(bottom + dyp), top + minH, math.min(scrH, top + maxH))
+				box.ph = edge - top
+			elseif zone.n then
+				local edge = math.Clamp(SnapY(top + dyp), math.max(0, bottom - maxH), bottom - minH)
+				box.py = edge
+				box.ph = bottom - edge
+			end
+
 			self.snapLines = lines
-			ApplyBoxToFrame(box)
+			ApplyBoxToFrame(box, zone)
 		elseif self.dragging then
 			local box = self.dragging
 			local bw = math.max(MIN_BOX, math.floor(box.pw * self.scale))
@@ -409,6 +473,26 @@ function EDITOR:Create(parent)
 			box.py = snapY
 			self.snapLines = lines
 			ApplyBoxToFrame(box)
+		else
+			local box, bx, by, bw, bh = BoxAt(mx, my)
+			if box and not IsBoxLocked(box) then
+				local zone = ZoneAt(bx, by, bw, bh, mx, my)
+				if zone then
+					if (zone.n and zone.w) or (zone.s and zone.e) then
+						cv:SetCursor("sizenwse")
+					elseif (zone.n and zone.e) or (zone.s and zone.w) then
+						cv:SetCursor("sizenesw")
+					elseif zone.e or zone.w then
+						cv:SetCursor("sizewe")
+					else
+						cv:SetCursor("sizens")
+					end
+				else
+					cv:SetCursor("sizeall")
+				end
+			else
+				cv:SetCursor("arrow")
+			end
 		end
 	end
 
@@ -432,6 +516,7 @@ function EDITOR:Create(parent)
 					local x, y = pin.frame:GetPos()
 					local w, h = pin.frame:GetSize()
 					box.px, box.py, box.pw, box.ph = x, y, w, h
+					box.cropped = pin.crop ~= nil
 				end
 			end
 		end
@@ -507,6 +592,7 @@ function EDITOR:Rebuild()
 			isGroup = isGroup,
 			memberCount = memberCount,
 			memberNames = memberNames,
+			cropped = entry.pin.crop ~= nil,
 		}
 	end
 end

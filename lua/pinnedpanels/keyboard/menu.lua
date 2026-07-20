@@ -1,9 +1,4 @@
 -- ── Keyboard Navigation: Context-Menu Keyboard Nav ───────────────────────────
---
--- Garry's Mod context menus are mouse-driven DMenus. To drive them by keyboard
--- we capture the items a trigger would have created, then render our own
--- keyboard-navigable replica (CreateKeyboardMenu) and dispatch the captured
--- callbacks ourselves.
 local KB = PinnedPanels._KB
 local IM = KB.IM
 local C  = KB.C
@@ -14,7 +9,7 @@ local ICON_SZ        = 16
 local PAD            = 6
 local FONT           = "DermaDefault"
 local MIN_W          = 160
-local PROBE_ATTEMPTS = 10 -- how many ancestors to probe for a right-click menu
+local PROBE_ATTEMPTS = 10
 
 -- ── Replica Menu Panel ───────────────────────────────────────────────────────
 local function CreateKeyboardMenu(items, x, y, parentMenu)

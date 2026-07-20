@@ -34,7 +34,6 @@ local function SubtreeText(p, depth)
 		local t = p:GetText()
 		if isstring(t) and t ~= "" then parts[#parts + 1] = t end
 	end
-	-- content icons (NPCs, entities, weapons…) label via m_NiceName, not GetText
 	if isstring(p.m_NiceName) and p.m_NiceName ~= "" then
 		parts[#parts + 1] = p.m_NiceName
 	end
@@ -107,9 +106,6 @@ local function RestoreFiltered(root, depth)
 	end
 end
 
--- Form containers (ControlPanel/DForm rows are DSizeToContents wrappers) size
--- themselves from every child regardless of visibility, so a hidden row must
--- also collapse to zero height — and stop auto-sizing back — to free its space.
 local function HideRow(p)
 	p._pp_filtered = true
 	p:SetVisible(false)
@@ -138,8 +134,6 @@ local function FilterContent(content, query)
 			return txt ~= "" and txt:lower():find(query, 1, true) ~= nil
 		end
 
-		-- rows usually live inside a single container (the ControlPanel) on
-		-- the canvas; descend into it so we filter rows, not the whole panel
 		local visKids = {}
 		for _, k in ipairs(root:GetChildren()) do
 			if IsValid(k) and k:IsVisible() then visKids[#visKids + 1] = k end
@@ -147,7 +141,6 @@ local function FilterContent(content, query)
 		if #visKids == 1 and #visKids[1]:GetChildren() > 0 then rowParent = visKids[1] end
 
 		for _, row in ipairs(rowParent:GetChildren()) do
-			-- never hide a form/category header; it drives expand & layout
 			if IsValid(row) and row:IsVisible() and row ~= rowParent.Header then
 				if IsCategory(row) then
 					local headerTxt = CategoryLabel(row) or ""
@@ -174,7 +167,6 @@ local function FilterContent(content, query)
 		end
 	end
 
-	-- relayout the whole chain so freed space is actually reclaimed
 	if IsValid(rowParent) and rowParent ~= root then rowParent:InvalidateLayout(true) end
 	root:InvalidateChildren(true)
 	root:InvalidateLayout(true)
@@ -186,8 +178,6 @@ function PinnedPanels.ApplyContentFilter(id, query)
 	local pin = PinnedPanels.Pins[id]
 	if not pin then return end
 
-	-- groups filter the active tab's content; other tabs get cleared so no
-	-- stale filtering lingers when the user switches
 	if pin.kind == "group" then
 		local activeId = PinnedPanels.GetActiveGroupMemberId(id)
 		for _, mid in ipairs(PinnedPanels.GetGroupPanels(pin.groupName or "")) do
@@ -218,7 +208,6 @@ function PinnedPanels.AttachFilterBar(id)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
 	end
 
-	-- only show the clear button when the user has typed something
 	local clearBtn = vgui.Create("DButton", bar)
 	clearBtn:Dock(RIGHT)
 	clearBtn:SetWide(22)

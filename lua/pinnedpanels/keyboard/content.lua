@@ -5,12 +5,11 @@ local IM = KB.IM
 local IsKeyDown = input.IsKeyDown
 
 -- ── Tunables ─────────────────────────────────────────────────────────────────
-local SCROLL_MARGIN    = 20 -- px of breathing room when scrolling an element into view
-local SPATIAL_EPSILON  = 2  -- min centre delta (px) to count movement in a direction
-local PERP_WEIGHT      = 4  -- how strongly off-axis distance is penalised
+local SCROLL_MARGIN    = 20
+local SPATIAL_EPSILON  = 2
+local PERP_WEIGHT      = 4
+local GAP_EPSILON      = 4
 
--- Remembers the last-focused element per panel so re-entering content nav lands
--- back where the user left off.
 local navMemory = {}
 
 -- ── Enter / Exit ─────────────────────────────────────────────────────────────
@@ -90,10 +89,6 @@ local function ElementRect(el)
 end
 
 -- ── Spatial Move ─────────────────────────────────────────────────────────────
--- Picks the best neighbouring element in the pressed direction. Elements whose
--- perpendicular span overlaps the focused element are preferred; otherwise the
--- nearest off-axis candidate wins (vertical moves only). Rects are read live so
--- navigation stays correct while panels scroll or animate.
 local function SpatialMove(elements, focusEl, key)
     local cls = focusEl.ClassName or focusEl:GetClassName()
     if cls == "DTree_Node_Button" then
@@ -113,8 +108,8 @@ local function SpatialMove(elements, focusEl, key)
     local fx, fy, fw, fh, fcx, fcy = ElementRect(focusEl)
     local horiz                    = (key == KEY_LEFT or key == KEY_RIGHT)
 
-    local bestOver, bestOverIdx    = math.huge, nil
-    local bestAny, bestAnyIdx      = math.huge, nil
+    local bestGap, bestPerp, bestOverIdx = math.huge, math.huge, nil
+    local bestAny, bestAnyIdx            = math.huge, nil
 
     for i, el in ipairs(elements) do
         if el ~= focusEl and IsValid(el) then
@@ -133,14 +128,26 @@ local function SpatialMove(elements, focusEl, key)
             end
 
             if valid then
-                local overlap = horiz and (ey < fy + fh) and (fy < ey + eh) or (ex < fx + fw) and (fx < ex + ew)
-                local score = horiz and (math.abs(dx) + math.abs(dy) * PERP_WEIGHT) or
-                    (math.abs(dy) + math.abs(dx) * PERP_WEIGHT)
+                local overlap, gap, perp
+                if horiz then
+                    overlap = (ey < fy + fh) and (fy < ey + eh)
+                    gap     = (key == KEY_LEFT) and (fx - (ex + ew)) or (ex - (fx + fw))
+                    perp    = math.abs(dy)
+                else
+                    overlap = (ex < fx + fw) and (fx < ex + ew)
+                    gap     = (key == KEY_UP) and (fy - (ey + eh)) or (ey - (fy + fh))
+                    perp    = math.abs(dx)
+                end
+                gap = math.max(gap, 0)
 
                 if overlap then
-                    if score < bestOver then bestOver, bestOverIdx = score, i end
-                elseif score < bestAny then
-                    bestAny, bestAnyIdx = score, i
+                    if gap < bestGap - GAP_EPSILON
+                        or (gap < bestGap + GAP_EPSILON and perp < bestPerp) then
+                        bestGap, bestPerp, bestOverIdx = gap, perp, i
+                    end
+                else
+                    local score = (horiz and math.abs(dx) or math.abs(dy)) + perp * PERP_WEIGHT
+                    if score < bestAny then bestAny, bestAnyIdx = score, i end
                 end
             end
         end

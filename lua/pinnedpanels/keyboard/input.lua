@@ -6,9 +6,8 @@ local IsKeyDown = input.IsKeyDown
 local NAV_KEYS  = KB.NAV_KEYS
 local BINDS     = KB.binds
 
--- Idle timeouts (seconds).
-local TASKBAR_IDLE     = 5 -- drop taskbar focus after this long with no input
-local NAV_OPACITY_IDLE = 2 -- fade the nav-activity opacity boost after this long
+local TASKBAR_IDLE     = 5
+local NAV_OPACITY_IDLE = 2
 
 -- ── Main Think Loop / Taskbar Handoff ────────────────────────────────────────
 hook.Add("Think", "PinnedPanels_KeyNav", function()
@@ -86,8 +85,6 @@ hook.Add("Think", "PinnedPanels_KeyNav", function()
 end)
 
 -- ── Input Suppression ────────────────────────────────────────────────────────
--- Maps a movement bind name to its IN_* button bit, so held nav keys that are
--- also bound to movement don't leak into the player's usercmd.
 local bindToButton = {
     ["+attack"]    = IN_ATTACK,
     ["+attack2"]   = IN_ATTACK2,

@@ -1,15 +1,4 @@
 -- ── Keyboard Navigation: Shared State & Key Repeat ────────────────────────────
---
--- This is the shared foundation of the keyboard/ modules. Every keyboard module
--- does `local KB = PinnedPanels._KB` and hangs its cross-file functions and state
--- on that table, so the system stays split across files without file-local
--- closures needing to see one another.
---
--- Live navigation state that OTHER addon modules read (Focused, NavigatingPanel,
--- NavPopup, SelectedIndex, NavFocusIndex, ActiveMenu, _navOpacityActive, ...)
--- deliberately stays on PinnedPanels.CursorMode (aliased IM): frame.lua,
--- popups.lua, taskbar.lua and cursor_mode.lua depend on those field names. Only
--- state that is private to keyboard navigation lives on KB.
 
 PinnedPanels._KB = PinnedPanels._KB or {}
 local KB = PinnedPanels._KB
@@ -32,7 +21,6 @@ KB.NAV_KEYS = {
 }
 
 -- ── Key Repeat ───────────────────────────────────────────────────────────────
--- Tracks hold-to-repeat timing for navigation keys.
 KB.repeatState = {}
 
 function KB.StartRepeat(key)
@@ -66,7 +54,6 @@ function KB.ShouldRepeat(key)
 end
 
 -- ── Nav Key State ────────────────────────────────────────────────────────────
--- Per-frame "is this nav key held" table, used to detect fresh presses.
 KB.navKeyDown = {}
 
 function KB.ResetNavKeyState()

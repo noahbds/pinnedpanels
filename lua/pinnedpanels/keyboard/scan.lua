@@ -15,7 +15,6 @@ local SKIP_CLASSES = {
     DHScrollBar  = true,
 }
 
--- Color controls that are containers of other pickers rather than a leaf swatch.
 local COLOR_CONTAINERS = {
     DColorMixer = true, CtrlColor = true, DColorCombo = true, DColorPalette = true,
 }
@@ -40,7 +39,6 @@ local CONTAINER_CLASSES = {
 }
 for k in pairs(COLOR_CONTAINERS) do CONTAINER_CLASSES[k] = true end
 
--- Exact classes that always count as an interactive leaf.
 local NAVIGABLE_EXACT = {
     DButton           = true,
     DImageButton      = true,
@@ -64,6 +62,23 @@ end
 local SCAN_MAX_DEPTH   = 20
 local MIN_ELEMENT_SIZE = 4
 local NAV_CACHE_TTL    = 0.15
+local MIN_CROP_VISIBLE = 8
+
+local function CropVisible(el, ew, eh)
+    local p = el:GetParent()
+    while IsValid(p) do
+        if p._pp_cropViewport then
+            local vx, vy = p:LocalToScreen(0, 0)
+            local vw, vh = p:GetSize()
+            local ex, ey = el:LocalToScreen(0, 0)
+            local visW = math.min(ex + ew, vx + vw) - math.max(ex, vx)
+            local visH = math.min(ey + eh, vy + vh) - math.max(ey, vy)
+            return visW >= MIN_CROP_VISIBLE and visH >= MIN_CROP_VISIBLE
+        end
+        p = p:GetParent()
+    end
+    return true
+end
 
 local BASE_OMP = (vgui.GetControlTable and vgui.GetControlTable("DPanel") or {}).OnMousePressed
 
@@ -108,7 +123,7 @@ function PinnedPanels.GetInteractiveElements(panel)
     for _, el in ipairs(list) do
         if IsValid(el) then
             local ew, eh = el:GetSize()
-            if ew > MIN_ELEMENT_SIZE and eh > MIN_ELEMENT_SIZE then
+            if ew > MIN_ELEMENT_SIZE and eh > MIN_ELEMENT_SIZE and CropVisible(el, ew, eh) then
                 result[#result + 1] = el
             end
         end
@@ -117,9 +132,6 @@ function PinnedPanels.GetInteractiveElements(panel)
 end
 
 -- ── Nav Cache ────────────────────────────────────────────────────────────────
--- The interactive element list is expensive to build (full VGUI subtree walk),
--- so it is cached per target frame for NAV_CACHE_TTL seconds. This is what keeps
--- navigation from rescanning the tree on every key event.
 local navCache = { frame = nil, expire = 0, list = {} }
 
 function PinnedPanels.GetNavElements()

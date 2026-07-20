@@ -1,8 +1,3 @@
--- Auto size a pinned panel to fit its content 
--- (Mostly broken and need to be reworked 
--- since it doesn't work with all types of panels, 
--- but works for most of the tools)
-
 local MIN_W, MIN_H   = 150, 100
 local MAX_W_FRAC     = 0.6
 local MAX_H_FRAC     = 0.92
@@ -30,7 +25,6 @@ PinnedPanels.FindCanvasPanel = FindCanvasPanel
 
 local function TextWidth(p)
 	if not isfunction(p.GetText) then return 0 end
-	-- wrapped labels reflow to any width; they must not force one
 	if isfunction(p.GetWrap) and p:GetWrap() then return 0 end
 	local txt = p:GetText()
 	if not isstring(txt) or txt == "" then return 0 end
@@ -51,7 +45,6 @@ local function TextWidth(p)
 	return tw
 end
 
--- Minimum useful widths for controls whose text alone under-measures them.
 local CLASS_MIN_W = {
 	DNumSlider  = 240,
 	DColorMixer = 240,
@@ -75,7 +68,6 @@ local function NaturalWidth(p, depth)
 				local cw
 				local dock = isfunction(child.GetDock) and child:GetDock() or NODOCK
 				if dock == NODOCK then
-					-- fixed placement: its actual footprint is meaningful
 					local cx = select(1, child:GetPos()) or 0
 					cw = cx + math.max(child:GetWide(), NaturalWidth(child, depth + 1))
 				else
@@ -125,9 +117,9 @@ end
 local function AutoSizePass(id, animate)
 	local pin = PinnedPanels.Pins[id]
 	if not pin or not IsValid(pin.frame) then return end
+	if pin.crop then return end
 	local frame = pin.frame
 
-	-- autosizing a maximized panel implies leaving maximized state
 	if pin.maximized then
 		pin.maximized = false
 		pin.restoreBounds = nil

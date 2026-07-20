@@ -49,9 +49,6 @@ end
 PinnedPanels._DeserializeColor = DeserializeColor
 
 -- ── Resolution-Independent Positions ─────────────────────────────────────────
--- Saved entries carry the screen size they were saved at; when restored on a
--- different resolution, positions are rescaled proportionally (sizes stay in
--- pixels — content doesn't scale with the screen — and just get clamped).
 function PinnedPanels.ScaleSavedPos(s)
 	local x, y = tonumber(s.x), tonumber(s.y)
 	local ssw, ssh = tonumber(s.sw), tonumber(s.sh)
@@ -168,6 +165,9 @@ function PinnedPanels.Save()
 				x, y = pin.restoreBounds.x, pin.restoreBounds.y
 				w, h = pin.restoreBounds.w, pin.restoreBounds.h
 			end
+			if istable(pin.crop) and istable(pin.cropBase) then
+				w, h = pin.cropBase.w, pin.cropBase.h
+			end
 			local entry = {
 				x = x, y = y, w = w, h = h,
 				sw = ScrW(), sh = ScrH(),
@@ -175,6 +175,7 @@ function PinnedPanels.Save()
 				kind  = pin.kind or "tool",
 			}
 			if pin.filterBar then entry.filterBar = true end
+			if istable(pin.crop) then entry.crop = pin.crop end
 			if pin.clickThrough then entry.clickThrough = true end
 			if istable(pin.collapsed) and next(pin.collapsed) then entry.collapsed = pin.collapsed end
 			if pin.customBg then entry.customBg = SerializeColor(pin.customBg) end
@@ -185,6 +186,9 @@ function PinnedPanels.Save()
 			if pin.minimized then entry.minimized = true end
 			if pin.kind == "group" and istable(pin.tabSizes) and next(pin.tabSizes) then
 				entry.tabSizes = pin.tabSizes
+			end
+			if pin.kind == "group" and istable(pin.tabCrops) and next(pin.tabCrops) then
+				entry.tabCrops = pin.tabCrops
 			end
 			data[id] = entry
 		end
@@ -220,7 +224,6 @@ function PinnedPanels.ExportLayout()
 	return packed and util.Base64Encode(packed, true) or ""
 end
 
--- Returns true on success, or false plus an error message.
 function PinnedPanels.ImportLayout(str)
 	if not isstring(str) or str == "" then return false, "Empty import string." end
 	str = string.Trim(str)

@@ -1,35 +1,6 @@
-local clientFiles = {
-	"autorun/client/cl_pinnedpanels.lua",
-	"pinnedpanels/colors.lua",
-	"pinnedpanels/core.lua",
-	"pinnedpanels/persistence.lua",
-	"pinnedpanels/helpers.lua",
-	"pinnedpanels/frame.lua",
-	"pinnedpanels/popups.lua",
-	"pinnedpanels/context_menu.lua",
-	"pinnedpanels/pin.lua",
-	"pinnedpanels/groups.lua",
-	"pinnedpanels/autosize.lua",
-	"pinnedpanels/content_tools.lua",
-	"pinnedpanels/layout_editor.lua",
-	"pinnedpanels/taskbar.lua",
-	"pinnedpanels/browser.lua",
-	"pinnedpanels/creation_browser.lua",
-	"pinnedpanels/pinned_list.lua",
-	"pinnedpanels/cursor_mode.lua",
-	"pinnedpanels/keyboard/state.lua",
-	"pinnedpanels/keyboard/focus.lua",
-	"pinnedpanels/keyboard/scan.lua",
-	"pinnedpanels/keyboard/controls.lua",
-	"pinnedpanels/keyboard/content.lua",
-	"pinnedpanels/keyboard/menu.lua",
-	"pinnedpanels/keyboard/keybinds.lua",
-	"pinnedpanels/keyboard/input.lua",
-	"pinnedpanels/actions.lua",
-	"pinnedpanels/command_palette.lua",
-	"pinnedpanels/settings_tab.lua",
-}
+AddCSLuaFile("autorun/client/cl_pinnedpanels.lua")
+AddCSLuaFile("pinnedpanels/filelist.lua")
 
-for _, filePath in ipairs(clientFiles) do
+for _, filePath in ipairs(include("pinnedpanels/filelist.lua")) do
 	AddCSLuaFile(filePath)
 end

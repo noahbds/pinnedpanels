@@ -108,13 +108,17 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	if not group then return end
 
 	local groupId = GetGroupId(groupName)
+	local oldPin = PinnedPanels.Pins[groupId]
+
+	if oldPin and oldPin.crop and PinnedPanels.ClearCrop then
+		PinnedPanels.ClearCrop(groupId, true)
+	end
 
 	for _, panelId in ipairs(group.ids) do
 		StowContent(PinnedPanels.Pins[panelId])
 	end
 
 	local oldX, oldY, oldW, oldH
-	local oldPin = PinnedPanels.Pins[groupId]
 	if oldPin and IsValid(oldPin.frame) then
 		oldX, oldY = oldPin.frame:GetPos()
 		oldW, oldH = oldPin.frame:GetSize()
@@ -161,7 +165,14 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	local sheet = vgui.Create("DPropertySheet", frame)
 	sheet:Dock(FILL)
 	sheet:DockMargin(2, 4, 2, 2)
-	sheet.Paint = function() end
+	sheet.Paint = function(self, w, h)
+		local ts = self.tabScroller
+		if not IsValid(ts) then return end
+		local _, ty = ts:GetPos()
+		local gCol = group.color
+		surface.SetDrawColor(gCol.r, gCol.g, gCol.b, 60)
+		surface.DrawRect(0, ty + ts:GetTall() - 1, w, 1)
+	end
 
 	local tabToMember = {}
 
@@ -220,15 +231,33 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 
 	for _, item in ipairs(sheet:GetItems()) do
 		local tab = item.Tab
+		tab:SetFont("DermaDefaultBold")
+
+		tab.GetTabHeight = function(self)
+			return self:IsActive() and 26 or 22
+		end
+
+		tab.UpdateColours = function(self)
+			if self:IsActive() then
+				return self:SetTextStyleColor(C.textBright)
+			end
+			return self:SetTextStyleColor(self:IsHovered() and C.textLight or C.textMuted)
+		end
+
 		tab.Paint = function(self, w, h)
-			local isActive = sheet:GetActiveTab() == self
-			local bg = isActive and C.bg or C.bgDarker
+			local isActive = self:IsActive()
+			local gCol = group.color
+			local bg = isActive and C.bgCard or C.bgDarker
 			if self:IsHovered() and not isActive then bg = C.bgHover end
-			draw.RoundedBoxEx(4, 0, 0, w, h, bg, true, true, false, false)
+			draw.RoundedBoxEx(5, 0, 0, w, h, bg, true, true, false, false)
 			if isActive then
-				local gCol = group.color
 				surface.SetDrawColor(gCol.r, gCol.g, gCol.b, 255)
-				surface.DrawRect(0, h - 2, w, 2)
+				surface.DrawRect(0, 0, w, 2)
+				surface.SetDrawColor(gCol.r, gCol.g, gCol.b, 20)
+				surface.DrawRect(0, 2, w, h - 2)
+			else
+				surface.SetDrawColor(gCol.r, gCol.g, gCol.b, 80)
+				surface.DrawRect(0, h - 1, w, 1)
 			end
 		end
 	end
@@ -244,6 +273,7 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		sheet        = sheet,
 		tabToMember  = tabToMember,
 		tabSizes     = (oldPin and oldPin.tabSizes) or (istable(s.tabSizes) and s.tabSizes) or {},
+		tabCrops     = (oldPin and oldPin.tabCrops) or (istable(s.tabCrops) and s.tabCrops) or {},
 		locked       = (oldPin and oldPin.locked) or s.locked or false,
 		minimized    = wantMinimized,
 		clickThrough = oldPin and oldPin.clickThrough or (oldPin == nil and s.clickThrough) or false,
@@ -258,6 +288,7 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 	local function ApplyTabSize(mid)
 		local gp = PinnedPanels.Pins[groupId]
 		if not gp or not IsValid(frame) then return end
+		if gp.crop then return end
 		local sz = mid and gp.tabSizes and gp.tabSizes[mid]
 		if not sz then return end
 		local sw2, sh2 = ScrW(), ScrH()
@@ -272,7 +303,8 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 
 	frame.OnUserResized = function(w, h)
 		local gp = PinnedPanels.Pins[groupId]
-		local mid = gp and PinnedPanels.GetActiveGroupMemberId(groupId)
+		if not gp or gp.crop then return end
+		local mid = PinnedPanels.GetActiveGroupMemberId(groupId)
 		if not mid then return end
 		gp.tabSizes = gp.tabSizes or {}
 		gp.tabSizes[mid] = { w = w, h = h }
@@ -280,7 +312,24 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 
 	sheet.OnActiveTabChanged = function(_, _, newTab)
 		if not IsValid(newTab) then return end
-		ApplyTabSize(tabToMember[newTab:GetPanel()])
+		local mid = tabToMember[newTab:GetPanel()]
+		local gp = PinnedPanels.Pins[groupId]
+
+		if gp and gp.crop and PinnedPanels.ClearCrop then
+			PinnedPanels.ClearCrop(groupId, true)
+		end
+		ApplyTabSize(mid)
+		local tabCrop = gp and mid and gp.tabCrops and gp.tabCrops[mid]
+		if tabCrop and PinnedPanels.ApplyCrop then
+			local want = table.Copy(tabCrop)
+			timer.Simple(0, function()
+				local gp2 = PinnedPanels.Pins[groupId]
+				if gp2 and IsValid(gp2.frame) and not gp2.crop
+					and PinnedPanels.GetActiveGroupMemberId(groupId) == mid then
+					PinnedPanels.ApplyCrop(groupId, want)
+				end
+			end)
+		end
 		PinnedPanels.Save()
 	end
 
@@ -295,6 +344,28 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 		frame:InvalidateLayout(true)
 		if IsValid(sheet) then sheet:InvalidateLayout(true) end
 	end)
+
+	local gpNew = PinnedPanels.Pins[groupId]
+	for mid in pairs(gpNew.tabCrops) do
+		local still = false
+		for _, m in ipairs(members) do
+			if m.id == mid then still = true break end
+		end
+		if not still then gpNew.tabCrops[mid] = nil end
+	end
+
+	local firstMid = members[1] and members[1].id
+	local wantCrop = (firstMid and gpNew.tabCrops[firstMid])
+		or (oldPin == nil and not istable(s.tabCrops) and istable(s.crop) and s.crop) or nil
+	if wantCrop and PinnedPanels.ApplyCrop then
+		timer.Simple(0.25, function()
+			local gp = PinnedPanels.Pins[groupId]
+			if gp and IsValid(gp.frame) and not gp.crop
+				and PinnedPanels.GetActiveGroupMemberId(groupId) == firstMid then
+				PinnedPanels.ApplyCrop(groupId, wantCrop)
+			end
+		end)
+	end
 
 	PinnedPanels.Save()
 end
@@ -328,6 +399,7 @@ function PinnedPanels.AddToGroup(groupName, panelId)
 	local pin = PinnedPanels.Pins[panelId]
 	if not pin then return false end
 	if pin.kind == "frame" or pin.kind == "group" then return false end
+	if pin.crop and PinnedPanels.ClearCrop then PinnedPanels.ClearCrop(panelId) end
 	StowContent(pin)
 	local oldGroup = PinnedPanels.GetGroupForPanel(panelId)
 	if oldGroup then
@@ -357,6 +429,13 @@ function PinnedPanels.RemoveFromGroup(groupName, panelId)
 					local pin = PinnedPanels.Pins[panelId]
 					local groupPin = PinnedPanels.Pins[GetGroupId(groupName)]
 					local groupFrame = groupPin and groupPin.frame or nil
+					if groupPin then
+						if groupPin.crop and pin and groupPin._cropContent == pin.content
+							and PinnedPanels.ClearCrop then
+							PinnedPanels.ClearCrop(GetGroupId(groupName), true)
+						end
+						if groupPin.tabCrops then groupPin.tabCrops[panelId] = nil end
+					end
 					StowContent(pin)
 					table.remove(g.ids, i)
 					PlaceUngrouped(panelId, groupFrame)

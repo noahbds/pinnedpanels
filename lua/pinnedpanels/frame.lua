@@ -1,6 +1,5 @@
 local C = PinnedPanels.C
 
--- Header button metrics (minimize / maximize / unpin)
 local HDR_BTN_W = 26
 local HDR_BTN_H = 18
 local HDR_BTN_N = 3
@@ -26,7 +25,9 @@ function PinnedPanels.GetFramePaint(title, pinId)
 
 		draw.RoundedBox(6, 0, 0, w, h, bgCol)
 		draw.RoundedBoxEx(6, 0, 0, w, 24, hdrCol, true, true, false, false)
-		local shownTitle = (pin and pin.clickThrough) and (title .. "  (click-through)") or title
+		local shownTitle = title
+		if pin and pin.clickThrough then shownTitle = shownTitle .. "  (click-through)" end
+		if pin and pin.crop then shownTitle = shownTitle .. "  (cropped)" end
 		draw.SimpleText(shownTitle, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if inIM then
@@ -173,9 +174,6 @@ local function SnapActive()
 	if input.IsKeyDown(KEY_LALT) or input.IsKeyDown(KEY_RALT) then return false end
 	return true
 end
-
--- Collect candidate snap coordinates from the screen and every other panel.
--- `axis` is "x" or "y". Returned list holds screen-space edge positions.
 local function SnapLines(id, axis, w, h)
 	local sw, sh = ScrW(), ScrH()
 	local lines
@@ -189,10 +187,10 @@ local function SnapLines(id, axis, w, h)
 			local px, py = pin.frame:GetPos()
 			local pw, ph = pin.frame:GetSize()
 			if axis == "x" then
-				lines[#lines + 1] = px            -- align left edges
-				lines[#lines + 1] = px + pw - w   -- align right edges
-				lines[#lines + 1] = px + pw       -- our left against their right
-				lines[#lines + 1] = px - w        -- our right against their left
+				lines[#lines + 1] = px 
+				lines[#lines + 1] = px + pw - w
+				lines[#lines + 1] = px + pw
+				lines[#lines + 1] = px - w
 			else
 				lines[#lines + 1] = py
 				lines[#lines + 1] = py + ph - h
@@ -215,23 +213,15 @@ local function SnapValue(id, axis, value, w, h)
 	return (bestD <= dist) and best or value
 end
 
--- Snap the top-left position during a drag.
 local function SnapDragPos(id, x, y, w, h)
 	if not SnapActive() then return x, y end
 	return SnapValue(id, "x", x, w, h), SnapValue(id, "y", y, w, h)
 end
 
--- Snap the bottom-right edge during a resize (position stays fixed).
-local function SnapResizeSize(id, x, y, w, h)
-	if not SnapActive() then return w, h end
-	local right  = SnapValue(id, "x", x + w, 0, h)
-	local bottom = SnapValue(id, "y", y + h, w, 0)
-	return math.max(150, right - x), math.max(100, bottom - y)
-end
-
 -- ── Build Wrapper Frame ──────────────────────────────────────────────────────
 local TITLE_HEIGHT = 24
 local CORNER_SIZE  = 16
+local EDGE_SIZE    = 5
 
 local IsTextPanel = PinnedPanels.IsTextPanel
 
@@ -253,16 +243,20 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	frame:MakePopup()
 	frame:SetKeyboardInputEnabled(false)
 
-	local titleOverlay, resizeOverlay, btnMin, btnMax, btnClose
+	local titleOverlay, btnMin, btnMax, btnClose
+	local resizeZones = {}
 	local ctGrip
 	local UpdateCTGrip
 
 	local function ApplyInteractState()
 		local pin = PinnedPanels.Pins[id]
-		local on = PinnedPanels.PanelsInteractive() and not (pin and pin.clickThrough)
+		local override = PinnedPanels.ClickThroughOverride and PinnedPanels.ClickThroughOverride() or false
+		local on = PinnedPanels.PanelsInteractive() and (not (pin and pin.clickThrough) or override)
 		frame:SetMouseInputEnabled(on)
-		if IsValid(titleOverlay)  then titleOverlay:SetMouseInputEnabled(on) end
-		if IsValid(resizeOverlay) then resizeOverlay:SetMouseInputEnabled(on) end
+		if IsValid(titleOverlay) then titleOverlay:SetMouseInputEnabled(on) end
+		for _, rz in ipairs(resizeZones) do
+			if IsValid(rz.panel) then rz.panel:SetMouseInputEnabled(on) end
+		end
 		if IsValid(btnMin)   then btnMin:SetMouseInputEnabled(on) end
 		if IsValid(btnMax)   then btnMax:SetMouseInputEnabled(on) end
 		if IsValid(btnClose) then btnClose:SetMouseInputEnabled(on) end
@@ -320,9 +314,9 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 
 	local imDrag = false
 	local imDragOffX, imDragOffY = 0, 0
-	local imResize = false
-	local imResizeSX, imResizeSY = 0, 0
-	local imResizeW, imResizeH   = 0, 0
+	local resizing = nil
+	local resizingPanel = nil
+	local rsMX, rsMY, rsX, rsY, rsW, rsH = 0, 0, 0, 0, 0, 0
 
 	titleOverlay = vgui.Create("DPanel", frame)
 	titleOverlay:SetPos(0, 0)
@@ -332,18 +326,39 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	titleOverlay:SetCursor("sizeall")
 	titleOverlay._pp_skipNav = true
 
-	resizeOverlay = vgui.Create("DPanel", frame)
-	resizeOverlay:SetPos(fw - CORNER_SIZE, fh - CORNER_SIZE)
-	resizeOverlay:SetSize(CORNER_SIZE, CORNER_SIZE)
-	resizeOverlay.Paint = function() end
-	resizeOverlay:SetMouseInputEnabled(false)
-	resizeOverlay:SetCursor("sizenwse")
-	resizeOverlay._pp_skipNav = true
-
 	local function UpdateOverlayPositions()
 		local fw2, fh2 = frame:GetSize()
 		titleOverlay:SetSize(math.max(20, fw2 - HDR_BTN_W * HDR_BTN_N - 4), TITLE_HEIGHT)
-		resizeOverlay:SetPos(fw2 - CORNER_SIZE, fh2 - CORNER_SIZE)
+		for _, rz in ipairs(resizeZones) do
+			local zn, z = rz.zone, rz.panel
+			if IsValid(z) then
+				if zn.n and zn.w then
+					z:SetPos(0, 0)
+					z:SetSize(CORNER_SIZE, CORNER_SIZE)
+				elseif zn.n and zn.e then
+					z:SetPos(fw2 - CORNER_SIZE, 0)
+					z:SetSize(CORNER_SIZE, CORNER_SIZE)
+				elseif zn.s and zn.w then
+					z:SetPos(0, fh2 - CORNER_SIZE)
+					z:SetSize(CORNER_SIZE, CORNER_SIZE)
+				elseif zn.s and zn.e then
+					z:SetPos(fw2 - CORNER_SIZE, fh2 - CORNER_SIZE)
+					z:SetSize(CORNER_SIZE, CORNER_SIZE)
+				elseif zn.n then
+					z:SetPos(CORNER_SIZE, 0)
+					z:SetSize(math.max(0, fw2 - CORNER_SIZE * 2), EDGE_SIZE)
+				elseif zn.s then
+					z:SetPos(CORNER_SIZE, fh2 - EDGE_SIZE)
+					z:SetSize(math.max(0, fw2 - CORNER_SIZE * 2), EDGE_SIZE)
+				elseif zn.w then
+					z:SetPos(0, CORNER_SIZE)
+					z:SetSize(EDGE_SIZE, math.max(0, fh2 - CORNER_SIZE * 2))
+				else
+					z:SetPos(fw2 - EDGE_SIZE, CORNER_SIZE)
+					z:SetSize(EDGE_SIZE, math.max(0, fh2 - CORNER_SIZE * 2))
+				end
+			end
+		end
 		if IsValid(btnMin)   then btnMin:SetPos(fw2 - HDR_BTN_W * 3 - 2, 3) end
 		if IsValid(btnMax)   then btnMax:SetPos(fw2 - HDR_BTN_W * 2 - 2, 3) end
 		if IsValid(btnClose) then btnClose:SetPos(fw2 - HDR_BTN_W - 2, 3) end
@@ -352,6 +367,118 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 	local function ToggleMaximize()
 		PinnedPanels.ToggleMaximizePanel(id)
 		UpdateOverlayPositions()
+	end
+
+	-- ── Resize zones (all edges and corners) ──────────────────────────────────
+	local function StartResize(zone, pnl)
+		if IsLocked(id) then return end
+		local pin = PinnedPanels.Pins[id]
+		if pin then pin.maximized = false end
+		resizing = zone
+		resizingPanel = pnl
+		frame._lastResizeZone = zone
+		rsMX, rsMY = gui.MouseX(), gui.MouseY()
+		rsX, rsY = frame:GetPos()
+		rsW, rsH = frame:GetSize()
+		pnl:MouseCapture(true)
+	end
+
+	local function DoResizeThink(pnl)
+		if not resizing or pnl ~= resizingPanel then return end
+		if IsLocked(id) then
+			resizing, resizingPanel = nil, nil
+			pnl:MouseCapture(false)
+			return
+		end
+
+		local mx, my = gui.MouseX(), gui.MouseY()
+		local dx, dy = mx - rsMX, my - rsMY
+		local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
+		local x, y, w, h = rsX, rsY, rsW, rsH
+		local right, bottom = rsX + rsW, rsY + rsH
+		local pin = PinnedPanels.Pins[id]
+		local minW = (pin and pin.crop) and 60 or 150
+		local minH = (pin and pin.crop) and 60 or 100
+		local maxW, maxH = math.huge, math.huge
+		if pin and pin.crop and pin.cropBase then
+			maxW = resizing.w and (pin.cropBase.w - pin.crop.r) or (pin.cropBase.w - pin.crop.l)
+			maxH = resizing.n and (pin.cropBase.h - pin.crop.b) or (pin.cropBase.h - pin.crop.t)
+		end
+
+		if resizing.e then
+			w = math.Clamp(rsW + dx, minW, math.min((ux + uw) - rsX, maxW))
+			if SnapActive() then
+				w = math.Clamp(SnapValue(id, "x", rsX + w, 0, h) - rsX, minW, maxW)
+			end
+		elseif resizing.w then
+			w = math.Clamp(rsW - dx, minW, math.min(right - ux, maxW))
+			if SnapActive() then
+				w = math.Clamp(right - SnapValue(id, "x", right - w, 0, h), minW, maxW)
+			end
+		end
+
+		if resizing.s then
+			h = math.Clamp(rsH + dy, minH, math.min((uy + uh) - rsY, maxH))
+			if SnapActive() then
+				h = math.Clamp(SnapValue(id, "y", rsY + h, w, 0) - rsY, minH, maxH)
+			end
+		elseif resizing.n then
+			h = math.Clamp(rsH - dy, minH, math.min(bottom - uy, maxH))
+			if SnapActive() then
+				h = math.Clamp(bottom - SnapValue(id, "y", bottom - h, w, 0), minH, maxH)
+			end
+		end
+
+		if resizing.w then x = right - w end
+		if resizing.n then y = bottom - h end
+
+		frame:SetPos(x, y)
+		frame:SetSize(w, h)
+
+		if pin and pin.crop and isfunction(frame.OnUserResized) then
+			frame.OnUserResized(w, h)
+		end
+
+		UpdateOverlayPositions()
+	end
+
+	local function EndResize(pnl)
+		if not resizing or pnl ~= resizingPanel then return end
+		resizing, resizingPanel = nil, nil
+		pnl:MouseCapture(false)
+		if isfunction(frame.OnUserResized) then
+			frame.OnUserResized(frame:GetSize())
+		end
+		PinnedPanels.Save()
+	end
+
+	local ZONE_CURSORS = {
+		n = "sizens", s = "sizens", e = "sizewe", w = "sizewe",
+		nw = "sizenwse", se = "sizenwse", ne = "sizenesw", sw = "sizenesw",
+	}
+
+	for _, name in ipairs({ "nw", "ne", "sw", "se", "n", "s", "e", "w" }) do
+		local zone = {
+			n = name:find("n", 1, true) ~= nil,
+			s = name:find("s", 1, true) ~= nil,
+			e = name:find("e", 1, true) ~= nil,
+			w = name:find("w", 1, true) ~= nil,
+		}
+		local z = vgui.Create("DPanel", frame)
+		z.Paint = function() end
+		z:SetCursor(ZONE_CURSORS[name])
+		z:SetMouseInputEnabled(false)
+		z._pp_skipNav = true
+		z.OnMousePressed = function(self, mc)
+			if mc == MOUSE_LEFT then
+				StartResize(zone, self)
+			elseif mc == MOUSE_RIGHT then
+				PinnedPanels.OpenContextMenu(id, frame)
+			end
+		end
+		z.OnMouseReleased = function(self) EndResize(self) end
+		z.Think = function(self) DoResizeThink(self) end
+		resizeZones[#resizeZones + 1] = { panel = z, zone = zone }
 	end
 
 	-- ── Header buttons (minimize / maximize / unpin) ──────────────────────────
@@ -414,23 +541,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		frame:SetPos(nx, ny)
 	end
 
-	resizeOverlay.Think = function(self)
-		if not imResize then return end
-		if IsLocked(id) then
-			imResize = false
-			self:MouseCapture(false)
-			return
-		end
-		local fpx, fpy = frame:GetPos()
-		local mx, my   = gui.MouseX(), gui.MouseY()
-		local ux, uy, uw, uh = PinnedPanels.GetUsableBounds()
-		local nw = math.min(math.max(150, imResizeW + mx - imResizeSX), (ux + uw) - fpx)
-		local nh = math.min(math.max(100, imResizeH + my - imResizeSY), (uy + uh) - fpy)
-		nw, nh = SnapResizeSize(id, fpx, fpy, nw, nh)
-		frame:SetSize(nw, nh)
-		UpdateOverlayPositions()
-	end
-
 	titleOverlay.OnMousePressed = function(self, mc)
 		if mc == MOUSE_LEFT then
 			if IsLocked(id) then return end
@@ -448,29 +558,6 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		if imDrag then
 			imDrag = false
 			self:MouseCapture(false)
-			PinnedPanels.Save()
-		end
-	end
-
-	resizeOverlay.OnMousePressed = function(self, mc)
-		if mc == MOUSE_LEFT then
-			if IsLocked(id) then return end
-			local pin = PinnedPanels.Pins[id]
-			if pin then pin.maximized = false end
-			imResize = true
-			imResizeSX, imResizeSY = gui.MouseX(), gui.MouseY()
-			imResizeW, imResizeH = frame:GetSize()
-			self:MouseCapture(true)
-		end
-	end
-
-	resizeOverlay.OnMouseReleased = function(self)
-		if imResize then
-			imResize = false
-			self:MouseCapture(false)
-			if isfunction(frame.OnUserResized) then
-				frame.OnUserResized(frame:GetSize())
-			end
 			PinnedPanels.Save()
 		end
 	end
@@ -497,7 +584,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 			surface.DrawRect(0, h - 2, w, 2)
 			draw.SimpleText(pin and pin.title or "", "DermaDefaultBold", 8, h / 2,
 				C.textLight, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-			draw.SimpleText("click-through · right-click for menu", "DermaDefault", w - 8, h / 2,
+			draw.SimpleText("click-through · hold ALT to use · right-click for menu", "DermaDefault", w - 8, h / 2,
 				C.textMuted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
 		end
 		ctGrip.OnMousePressed = function(self, mc)
@@ -530,6 +617,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 		local pin  = PinnedPanels.Pins[id]
 		local show = pin and pin.clickThrough and PinnedPanels.PanelsInteractive()
 			and IsValid(frame) and frame:IsVisible()
+			and not (PinnedPanels.ClickThroughOverride and PinnedPanels.ClickThroughOverride())
 		if not show then
 			if IsValid(ctGrip) then ctGrip:Remove() end
 			ctGrip = nil

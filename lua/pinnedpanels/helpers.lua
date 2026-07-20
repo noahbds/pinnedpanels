@@ -51,8 +51,6 @@ function PinnedPanels.PopulateToolControls(scroll, cpFunc, cpName)
 	ctrl:Dock(TOP)
 	ctrl:SetAutoSize(true)
 
-	-- Hide the ControlPanel's DForm header (the blue "Label" bar). It serves no
-	-- purpose here because the pinned frame already provides its own title bar.
 	if IsValid(ctrl.Header) then
 		ctrl.Header:SetVisible(false)
 		ctrl:SetHeaderHeight(0)

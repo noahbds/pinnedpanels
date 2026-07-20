@@ -1,21 +1,16 @@
 -- ── Keyboard Navigation: Control Activation & Value Adjustment ────────────────
---
--- Resolves how each control class responds to Enter (activate) and arrow keys
--- (adjust). Class-specific logic is dispatched through small resolver functions
--- and handler tables rather than one long if/elseif chain, so supporting a new
--- control means adding a resolver case or a handler entry.
 local KB = PinnedPanels._KB
 local IM = KB.IM
 
 -- ── Tunables ─────────────────────────────────────────────────────────────────
-local COLOR_DIG_DEPTH  = 5    -- how deep ColorTarget descends looking for a picker
-local OWNER_MIXER_DEPTH = 6   -- how far up an RGB picker looks for its mixer
-local HSV_MIN          = 0.05 -- treat sat/val below this as "unset" for hue drag
+local COLOR_DIG_DEPTH  = 5
+local OWNER_MIXER_DEPTH = 6
+local HSV_MIN          = 0.05
 local HUE_STEP         = 8
-local SV_STEP          = 0.04 -- saturation / value step
-local ALPHABAR_STEP    = 0.04 -- DAlphaBar (0-1)
-local COLOR_ALPHA_STEP = 10   -- mixer alpha (0-255)
-local SLIDER_STEPS     = 30   -- a slider spans its range in this many key steps
+local SV_STEP          = 0.04
+local ALPHABAR_STEP    = 0.04
+local COLOR_ALPHA_STEP = 10
+local SLIDER_STEPS     = 30
 
 -- ── Colour Control Resolution ────────────────────────────────────────────────
 local function ColorTarget(el)
@@ -61,10 +56,6 @@ local function OwnerMixer(el)
 end
 
 -- ── Adjust Kind ──────────────────────────────────────────────────────────────
--- Classifies how arrow keys drive a control while it is "selected":
---   "vert" – vertical picker (DRGBPicker / DAlphaBar)
---   "1d"   – single-axis (sliders, combo boxes)
---   "2d"   – colour field (saturation/value cube or mixer)
 function KB.AdjustKind(el)
     if not IsValid(el) then return nil end
     local cls = el.ClassName or el:GetClassName()
@@ -100,9 +91,9 @@ local function AdjustColorCube(tgt, key)
         Color(255, 255, 255)
     local h, s, v = ColorToHSV(col)
     if key == KEY_LEFT then
-        s = math.Clamp(s - SV_STEP, 0, 1)
-    elseif key == KEY_RIGHT then
         s = math.Clamp(s + SV_STEP, 0, 1)
+    elseif key == KEY_RIGHT then
+        s = math.Clamp(s - SV_STEP, 0, 1)
     elseif key == KEY_UP then
         v = math.Clamp(v + SV_STEP, 0, 1)
     elseif key == KEY_DOWN then
@@ -122,9 +113,9 @@ local function AdjustColorMixer(tgt, key)
 
     if shift then
         if key == KEY_LEFT then
-            s = math.Clamp(s - SV_STEP, 0, 1)
-        elseif key == KEY_RIGHT then
             s = math.Clamp(s + SV_STEP, 0, 1)
+        elseif key == KEY_RIGHT then
+            s = math.Clamp(s - SV_STEP, 0, 1)
         elseif key == KEY_UP then
             a = math.Clamp(a + COLOR_ALPHA_STEP, 0, 255)
         elseif key == KEY_DOWN then
@@ -147,7 +138,6 @@ local function AdjustColorMixer(tgt, key)
     if isfunction(tgt.SetColor) then tgt:SetColor(nc) end
 end
 
--- Terminal (non-colour) adjust handlers, keyed by resolved control kind.
 local AdjustHandlers = {
     slider = function(el, key, dir)
         local mn, mx = tonumber(el:GetMin()) or 0, tonumber(el:GetMax()) or 100
@@ -182,8 +172,6 @@ function KB.AdjustValue(el, key)
     local cls = el.ClassName or el:GetClassName()
     local dir = (key == KEY_RIGHT) and 1 or -1
 
-    -- Colour controls resolve first, mirroring the original precedence:
-    -- vertical pickers, then hue/sat/val fields, then simple 1-D controls.
     if cls == "DRGBPicker" then
         AdjustRGBPicker(el, key)
         return
@@ -228,7 +216,6 @@ local ActivateHandlers = {
         end
         IM.SelectedIndex = nil
     end,
-    -- Note: intentionally does NOT clear SelectedIndex, matching original behavior.
     checkbox = function(el)
         if el.Toggle then el:Toggle() elseif el.SetValue then el:SetValue(not el:GetChecked()) end
     end,
@@ -254,8 +241,6 @@ function KB.ActivateElement(el)
     end
     IM.SelectedIndex = IM.NavFocusIndex
 
-    -- Adjustable controls (sliders, combos, colour fields) stay selected so the
-    -- arrow keys drive their value; nothing else to do on Enter.
     if KB.AdjustKind(el) then
         return
     end
@@ -267,7 +252,6 @@ function KB.ActivateElement(el)
         return
     end
 
-    -- Generic clickable fallback (buttons, custom interactive panels).
     if isfunction(el.DoClick) then
         el:DoClick()
         IM.SelectedIndex = nil

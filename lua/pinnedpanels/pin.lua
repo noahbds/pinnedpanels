@@ -108,6 +108,15 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 		end)
 	end
 
+	if istable(s.crop) and PinnedPanels.ApplyCrop then
+		timer.Simple(0.5, function()
+			local p = PinnedPanels.Pins[id]
+			if p and IsValid(p.frame) and not p.crop and not PinnedPanels.GetGroupForPanel(id) then
+				PinnedPanels.ApplyCrop(id, s.crop)
+			end
+		end)
+	end
+
 	if not noSave then PinnedPanels.Save() end
 
 	if PinnedPanels.Pins[id] and PinnedPanels.Pins[id].minimized then
@@ -142,6 +151,7 @@ function PinnedPanels.ToggleMaximizePanel(id)
 		end
 		pin.maximized = false
 	else
+		if pin.crop and PinnedPanels.ClearCrop then PinnedPanels.ClearCrop(id) end
 		local x, y = frame:GetPos()
 		local w, h = frame:GetSize()
 		pin.restoreBounds = { x = x, y = y, w = w, h = h }
@@ -282,8 +292,6 @@ end
 PinnedPanels._closedStack = PinnedPanels._closedStack or {}
 local CLOSED_MAX = 15
 
--- Only tool/creation panels can be recreated later (frames wrap a live panel
--- that is gone once closed, so they are not recorded).
 local function RecordClosed(id, pin)
 	if not pin or (pin.kind ~= "tool" and pin.kind ~= "creation") then return end
 	local entry = { id = id, title = pin.title, kind = pin.kind }
@@ -333,7 +341,6 @@ function PinnedPanels.ReopenLastClosed()
 		end
 	end
 
-	-- Source no longer available (tool uninstalled, etc.) — drop it and try older.
 	table.remove(stack, #stack)
 	PinnedPanels.ReopenLastClosed()
 end

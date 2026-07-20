@@ -1,33 +1,8 @@
 if not CLIENT then return end
 
-include("pinnedpanels/colors.lua")
-include("pinnedpanels/core.lua")
-include("pinnedpanels/persistence.lua")
-include("pinnedpanels/helpers.lua")
-include("pinnedpanels/frame.lua")
-include("pinnedpanels/popups.lua")
-include("pinnedpanels/context_menu.lua")
-include("pinnedpanels/pin.lua")
-include("pinnedpanels/groups.lua")
-include("pinnedpanels/autosize.lua")
-include("pinnedpanels/content_tools.lua")
-include("pinnedpanels/layout_editor.lua")
-include("pinnedpanels/taskbar.lua")
-include("pinnedpanels/browser.lua")
-include("pinnedpanels/creation_browser.lua")
-include("pinnedpanels/pinned_list.lua")
-include("pinnedpanels/cursor_mode.lua")
-include("pinnedpanels/keyboard/state.lua")
-include("pinnedpanels/keyboard/focus.lua")
-include("pinnedpanels/keyboard/scan.lua")
-include("pinnedpanels/keyboard/controls.lua")
-include("pinnedpanels/keyboard/content.lua")
-include("pinnedpanels/keyboard/menu.lua")
-include("pinnedpanels/keyboard/keybinds.lua")
-include("pinnedpanels/keyboard/input.lua")
-include("pinnedpanels/actions.lua")
-include("pinnedpanels/command_palette.lua")
-include("pinnedpanels/settings_tab.lua")
+for _, filePath in ipairs(include("pinnedpanels/filelist.lua")) do
+	include(filePath)
+end
 
 local C = PinnedPanels.C
 

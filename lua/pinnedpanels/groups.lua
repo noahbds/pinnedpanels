@@ -213,7 +213,7 @@ function PinnedPanels.RebuildGroupFrame(groupName)
 			end)
 		else
 			local lbl = vgui.Create("DLabel", tabPanel)
-			lbl:SetText("No control panel available.")
+			lbl:SetText(PinnedPanels.L("group_no_cp"))
 			lbl:SetWrap(true)
 			lbl:Dock(FILL)
 			lbl:DockMargin(8, 8, 8, 8)
@@ -372,14 +372,14 @@ end
 
 -- ── Group Membership ─────────────────────────────────────────────────────────
 function PinnedPanels.PromptNewGroup(panelId, onCreated)
-	Derma_StringRequest("New Group", "Enter a name for the new group:", "",
+	Derma_StringRequest(PinnedPanels.L("new_group_title"), PinnedPanels.L("new_group_desc"), "",
 		function(name)
 			name = name and string.Trim(name) or ""
 			if name == "" then return end
 			PinnedPanels.CreateGroup(name)
 			if panelId then PinnedPanels.AddToGroup(name, panelId) end
 			if isfunction(onCreated) then onCreated(name) end
-		end, function() end, "Create", "Cancel")
+		end, function() end, PinnedPanels.L("btn_create"), PinnedPanels.L("btn_cancel"))
 end
 
 function PinnedPanels.CreateGroup(name)

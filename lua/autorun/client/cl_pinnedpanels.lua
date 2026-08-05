@@ -34,7 +34,7 @@ local function CreatePinnedPanelsTab()
 	icon:SetPos(20, 20)
 
 	local title = vgui.Create("DLabel", header)
-	title:SetText("Pinned Tool Panels")
+	title:SetText(PinnedPanels.L("app_title"))
 	title:SetFont("DermaLarge")
 	title:SetTextColor(C.textBright)
 	title:Dock(LEFT)
@@ -43,7 +43,7 @@ local function CreatePinnedPanelsTab()
 	title:SizeToContentsX()
 
 	local subtitle = vgui.Create("DLabel", header)
-	subtitle:SetText("Manage and customize your on-screen tool menus")
+	subtitle:SetText(PinnedPanels.L("app_subtitle"))
 	subtitle:SetFont("DermaDefault")
 	subtitle:SetTextColor(C.textSubtle)
 	subtitle:Dock(LEFT)
@@ -67,7 +67,7 @@ local function CreatePinnedPanelsTab()
 				n = n + 1
 			end
 		end
-		pinCount:SetText(n .. " panel" .. (n == 1 and "" or "s") .. " pinned")
+		pinCount:SetText(PinnedPanels.Lf(n == 1 and "pin_count_one" or "pin_count_many", n))
 	end
 	UpdatePinCount()
 	hook.Add("PinnedPanels_StateChanged", pinCount, function()
@@ -82,23 +82,23 @@ local function CreatePinnedPanelsTab()
 	sheet.Paint = function() end
 
 	local browserPanel = PinnedPanels.CreateBrowser(nil)
-	sheet:AddSheet("Tools", browserPanel, "icon16/wrench.png")
+	sheet:AddSheet(PinnedPanels.L("tab_tools"), browserPanel, "icon16/wrench.png")
 
 	local contentPanel = PinnedPanels.CreateCreationBrowser(nil)
-	sheet:AddSheet("Content", contentPanel, "icon16/application_view_list.png")
+	sheet:AddSheet(PinnedPanels.L("tab_content"), contentPanel, "icon16/application_view_list.png")
 
 	local pinnedPanel = PinnedPanels.CreatePinnedList(nil)
-	sheet:AddSheet("Pinned", pinnedPanel, "icon16/lock.png")
+	sheet:AddSheet(PinnedPanels.L("tab_pinned"), pinnedPanel, "icon16/lock.png")
 
 	local editorHost = vgui.Create("DPanel")
 	editorHost.Paint = function(self, w, h)
 		draw.RoundedBox(0, 0, 0, w, h, C.bg)
 	end
 	local editor = PinnedPanels.CreateLayoutEditor(editorHost)
-	sheet:AddSheet("Layout", editorHost, "icon16/application_view_columns.png")
+	sheet:AddSheet(PinnedPanels.L("tab_layout"), editorHost, "icon16/application_view_columns.png")
 
 	local settingsPanel = PinnedPanels.CreateSettingsTab(nil)
-	sheet:AddSheet("Settings", settingsPanel, "icon16/cog.png")
+	sheet:AddSheet(PinnedPanels.L("tab_settings"), settingsPanel, "icon16/cog.png")
 
 	for _, item in ipairs(sheet:GetItems()) do
 		local tab = item.Tab

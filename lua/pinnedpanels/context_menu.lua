@@ -26,12 +26,12 @@ function PinnedPanels.EquipToolgun(toolClass)
 end
 
 local function AddGroupSubmenu(menu, id)
-	local groupSub, groupParent = menu:AddSubMenu("Group")
+	local groupSub, groupParent = menu:AddSubMenu(PinnedPanels.L("ctx_group"))
 	if groupParent then groupParent:SetIcon("icon16/folder.png") end
 	local currentGroup = PinnedPanels.GetGroupForPanel(id)
 
 	if currentGroup then
-		groupSub:AddOption("Remove from \"" .. currentGroup.name .. "\"", function()
+		groupSub:AddOption(PinnedPanels.Lf("ctx_remove_from", currentGroup.name), function()
 			PinnedPanels.RemoveFromGroup(currentGroup.name, id)
 		end):SetIcon("icon16/folder_delete.png")
 		groupSub:AddSpacer()
@@ -46,7 +46,7 @@ local function AddGroupSubmenu(menu, id)
 	end
 
 	groupSub:AddSpacer()
-	groupSub:AddOption("New Group...", function() PinnedPanels.PromptNewGroup(id) end):SetIcon("icon16/folder_add.png")
+	groupSub:AddOption(PinnedPanels.L("ctx_new_group"), function() PinnedPanels.PromptNewGroup(id) end):SetIcon("icon16/folder_add.png")
 end
 
 local function AddGroupFrameOptions(menu, id, gName)
@@ -56,29 +56,29 @@ local function AddGroupFrameOptions(menu, id, gName)
 	local activePin = activeId and PinnedPanels.Pins[activeId]
 	local suffix    = activePin and (" (" .. activePin.title .. ")") or ""
 
-	local ungroupOpt = menu:AddOption("Ungroup Active Tab" .. suffix, function()
+	local ungroupOpt = menu:AddOption(PinnedPanels.L("ctx_ungroup_active") .. suffix, function()
 		if activeId then PinnedPanels.RemoveFromGroup(gName, activeId) end
 	end)
 	ungroupOpt:SetIcon("icon16/folder_go.png")
 	if not activeId then ungroupOpt:SetEnabled(false) end
 
-	local tabOpt = menu:AddOption("Unpin Active Tab" .. suffix, function()
+	local tabOpt = menu:AddOption(PinnedPanels.L("ctx_unpin_active") .. suffix, function()
 		if activeId then PinnedPanels.Unpin(activeId) end
 	end)
 	tabOpt:SetIcon("icon16/tab_delete.png")
 	if not activeId then tabOpt:SetEnabled(false) end
 
-	menu:AddOption("Unpin All In Group", function()
+	menu:AddOption(PinnedPanels.L("ctx_unpin_all_group"), function()
 		PinnedPanels.Unpin(id)
 	end):SetIcon("icon16/cross.png")
 
-	menu:AddOption("Dissolve Group (keep panels)", function()
+	menu:AddOption(PinnedPanels.L("ctx_dissolve"), function()
 		PinnedPanels.DeleteGroup(gName)
 	end):SetIcon("icon16/folder_delete.png")
 end
 
 local function AddOpacitySubmenu(menu, pin)
-	local opSub, opParent = menu:AddSubMenu("Idle Opacity")
+	local opSub, opParent = menu:AddSubMenu(PinnedPanels.L("ctx_idle_opacity"))
 	if opParent then opParent:SetIcon("icon16/contrast.png") end
 
 	local function SetIdleOpacity(frac)
@@ -88,7 +88,7 @@ local function AddOpacitySubmenu(menu, pin)
 	end
 
 	local globalPct = math.Round((PinnedPanels.Settings.idleAlpha or 1) * 100)
-	local gOpt = opSub:AddOption("Use Global (" .. globalPct .. "%)", function() SetIdleOpacity(nil) end)
+	local gOpt = opSub:AddOption(PinnedPanels.Lf("ctx_use_global", globalPct), function() SetIdleOpacity(nil) end)
 	if pin.idleAlpha == nil then gOpt:SetIcon("icon16/tick.png") end
 
 	for _, pct in ipairs({ 100, 75, 50, 25 }) do
@@ -97,26 +97,26 @@ local function AddOpacitySubmenu(menu, pin)
 	end
 
 	opSub:AddSpacer()
-	opSub:AddOption("Custom...", function()
+	opSub:AddOption(PinnedPanels.L("ctx_custom"), function()
 		local current = math.Round((pin.idleAlpha or PinnedPanels.Settings.idleAlpha or 1) * 100)
-		Derma_StringRequest("Custom Idle Opacity",
-			"Enter opacity in percent (10-100):", tostring(current),
+		Derma_StringRequest(PinnedPanels.L("custom_idle_title"),
+			PinnedPanels.L("custom_idle_desc"), tostring(current),
 			function(txt)
 				local pct = tonumber(txt)
 				if pct then SetIdleOpacity(math.Clamp(pct, 10, 100) / 100) end
-			end, function() end, "Apply", "Cancel")
+			end, function() end, PinnedPanels.L("btn_apply"), PinnedPanels.L("btn_cancel"))
 	end):SetIcon("icon16/pencil.png")
 end
 
 local function AddPositionOptions(menu, id, pin, frame)
-	local lockText = pin.locked and "Unlock Position" or "Lock Position"
+	local lockText = pin.locked and PinnedPanels.L("ctx_unlock") or PinnedPanels.L("ctx_lock")
 	local lockIcon = pin.locked and "icon16/lock_open.png" or "icon16/lock.png"
 	menu:AddOption(lockText, function()
 		pin.locked = not pin.locked
 		PinnedPanels.Save()
 	end):SetIcon(lockIcon)
 
-	menu:AddOption("Copy Position", function()
+	menu:AddOption(PinnedPanels.L("ctx_copy_pos"), function()
 		if IsValid(frame) then
 			local x, y = frame:GetPos()
 			local w, h = frame:GetSize()
@@ -124,7 +124,7 @@ local function AddPositionOptions(menu, id, pin, frame)
 		end
 	end):SetIcon("icon16/page_copy.png")
 
-	local pasteOpt = menu:AddOption("Paste Position", function()
+	local pasteOpt = menu:AddOption(PinnedPanels.L("ctx_paste_pos"), function()
 		if PinnedPanels._clipboard and IsValid(frame) and not pin.locked then
 			local c = PinnedPanels._clipboard
 			local sw, sh = ScrW(), ScrH()
@@ -149,52 +149,52 @@ function PinnedPanels.OpenContextMenu(id, frame)
 
 	local toolClass, toolTitle = PinnedPanels.GetPinTool(id)
 	if toolClass then
-		menu:AddOption("Equip Tool: " .. toolTitle, function()
+		menu:AddOption(PinnedPanels.Lf("ctx_equip", toolTitle), function()
 			PinnedPanels.EquipToolgun(toolClass)
 		end):SetIcon("icon16/wrench.png")
 		menu:AddSpacer()
 	end
 
-	menu:AddOption("Bring to Front", function()
+	menu:AddOption(PinnedPanels.L("ctx_bring_front"), function()
 		if IsValid(frame) then
 			frame:MoveToFront()
 			frame:SetVisible(true)
 		end
 	end):SetIcon("icon16/arrow_up.png")
 
-	menu:AddOption("Minimize to Taskbar", function()
+	menu:AddOption(PinnedPanels.L("ctx_minimize"), function()
 		PinnedPanels.MinimizeToTaskbar(id)
 	end):SetIcon("icon16/application_put.png")
 
-	menu:AddOption("Hide Panel", function()
+	menu:AddOption(PinnedPanels.L("ctx_hide_panel"), function()
 		if IsValid(frame) then frame:SetVisible(false) end
 	end):SetIcon("icon16/eye.png")
 
 	menu:AddSpacer()
 
-	menu:AddOption("Auto Size", function() PinnedPanels.AutoSizePanel(id) end):SetIcon("icon16/arrow_inout.png")
+	menu:AddOption(PinnedPanels.L("ctx_autosize"), function() PinnedPanels.AutoSizePanel(id) end):SetIcon("icon16/arrow_inout.png")
 
 	if PinnedPanels.OpenCropEditor then
-		menu:AddOption(pin.crop and "Edit Crop..." or "Crop Panel...", function()
+		menu:AddOption(pin.crop and PinnedPanels.L("ctx_edit_crop") or PinnedPanels.L("ctx_crop_panel"), function()
 			PinnedPanels.OpenCropEditor(id)
 		end):SetIcon("icon16/shape_handles.png")
 		if pin.crop then
-			menu:AddOption("Remove Crop", function()
+			menu:AddOption(PinnedPanels.L("ctx_remove_crop"), function()
 				PinnedPanels.ClearCrop(id)
 			end):SetIcon("icon16/shape_square_delete.png")
 		end
 	end
 
-	menu:AddOption("Change Colors...", function() PinnedPanels.OpenColorChanger(id) end):SetIcon("icon16/color_wheel.png")
-	menu:AddOption("Rename...", function() PinnedPanels.OpenRenamePopup(id) end):SetIcon("icon16/textfield_rename.png")
+	menu:AddOption(PinnedPanels.L("ctx_change_colors"), function() PinnedPanels.OpenColorChanger(id) end):SetIcon("icon16/color_wheel.png")
+	menu:AddOption(PinnedPanels.L("ctx_rename"), function() PinnedPanels.OpenRenamePopup(id) end):SetIcon("icon16/textfield_rename.png")
 
 	if PinnedPanels.SetQuickSlot then
 		local qKey = PinnedPanels.GetQuickSlotFor(id)
-		local qLabel = qKey and ("Quick Key: [ " .. string.upper(input.GetKeyName(qKey) or "?") .. " ]")
-			or "Assign Quick Key..."
+		local qLabel = qKey and PinnedPanels.Lf("ctx_quick_key", string.upper(input.GetKeyName(qKey) or "?"))
+			or PinnedPanels.L("ctx_assign_quick")
 		local qOpt = menu:AddOption(qLabel, function()
 			PinnedPanels.OpenKeyBindFrame({
-				title  = "Quick Key: " .. pin.title,
+				title  = PinnedPanels.Lf("quick_key_title", pin.title),
 				get    = function() return PinnedPanels.GetQuickSlotFor(id) or KEY_NONE end,
 				set    = function(k) PinnedPanels.SetQuickSlot(k, id) end,
 				ignore = "quick:" .. id,
@@ -204,21 +204,21 @@ function PinnedPanels.OpenContextMenu(id, frame)
 	end
 
 	if pin.kind ~= "frame" and PinnedPanels.ToggleFilterBar then
-		local fOpt = menu:AddOption(pin.filterBar and "Hide Filter Bar" or "Show Filter Bar", function()
+		local fOpt = menu:AddOption(pin.filterBar and PinnedPanels.L("ctx_hide_filter") or PinnedPanels.L("ctx_show_filter"), function()
 			PinnedPanels.ToggleFilterBar(id)
 		end)
 		fOpt:SetIcon(pin.filterBar and "icon16/zoom_out.png" or "icon16/zoom.png")
 	end
 
 	local ctOpt = menu:AddOption(
-		pin.clickThrough and "Disable Click-Through" or "Click-Through (Reference Mode)",
+		pin.clickThrough and PinnedPanels.L("ctx_disable_ct") or PinnedPanels.L("ctx_clickthrough"),
 		function()
 			pin.clickThrough = not pin.clickThrough
 			PinnedPanels.Save()
 			if PinnedPanels.UpdatePanelStates then PinnedPanels.UpdatePanelStates() end
 			if pin.clickThrough then
 				notification.AddLegacy(
-					"Panel now ignores the mouse. Hold ALT to use it, or re-enable via the command palette or keyboard nav (Shift+Enter).",
+					PinnedPanels.L("clickthrough_notify"),
 					NOTIFY_GENERIC, 6)
 			end
 		end)
@@ -237,7 +237,7 @@ function PinnedPanels.OpenContextMenu(id, frame)
 
 	if pin.kind ~= "group" then
 		menu:AddSpacer()
-		menu:AddOption("Unpin", function() PinnedPanels.Unpin(id) end):SetIcon("icon16/cross.png")
+		menu:AddOption(PinnedPanels.L("ctx_unpin"), function() PinnedPanels.Unpin(id) end):SetIcon("icon16/cross.png")
 	end
 
 	menu:Open(gui.MouseX(), gui.MouseY())

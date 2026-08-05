@@ -27,7 +27,7 @@ local function BuildToolContent(frame, cpFunc, id)
 		PinnedPanels.PopulateToolControls(scroll, cpFunc, id:sub(4))
 	else
 		local lbl = vgui.Create("DLabel", scroll)
-		lbl:SetText("This tool has no control panel.")
+		lbl:SetText(PinnedPanels.L("pin_no_cp"))
 		lbl:SetWrap(true)
 		lbl:Dock(TOP)
 		lbl:DockMargin(8, 8, 8, 8)
@@ -420,7 +420,7 @@ function PinnedPanels.ScanFrames()
 			titleText = p.lblTitle:GetText() or ""
 		end
 		if titleText == "" then
-			titleText = (name ~= "" and name) or ("Frame " .. (tostring(p):match("%d+$") or tostring(p)))
+			titleText = (name ~= "" and name) or PinnedPanels.Lf("frame_default", tostring(p):match("%d+$") or tostring(p))
 		end
 
 		results[#results + 1] = {

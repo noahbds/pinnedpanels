@@ -156,20 +156,6 @@ C.paletteFooterBg  = Color(16, 18, 24, 255)
 -- ── Preview hint ─────────────────────────────────────────────────────────────
 C._previewHint     = Color(0, 0, 0, 120)
 
--- ── Localization (unimplemented) ─────────────────────────────────────────────────────────────
-PinnedPanels.Lang = PinnedPanels.Lang or {
-	["en"] = {
-		["no_pinned"]      = "No Pinned Panels",
-		["no_pinned_desc"] = "You have no valid pinned panels right now.",
-		["no_pinned_hint"] = "Pin tools from the 'Tools' tab, or content browsers from the 'Content' tab.",
-		["rename_title"]   = "Rename Panel",
-		["rename_desc"]    = "Enter a custom name for this pinned panel:",
-		["no_tools"]       = "No tools found.",
-	}
-}
-
-function PinnedPanels.L(key, default)
-	local lang = GetConVar("gmod_language") and GetConVar("gmod_language"):GetString() or "en"
-	local tbl = PinnedPanels.Lang[lang] or PinnedPanels.Lang["en"]
-	return tbl[key] or default or key
-end
+-- ── Localization ─────────────────────────────────────────────────────────────
+-- Strings and the L()/Lf() helpers live in pinnedpanels/localization.lua,
+-- which loads before this file.

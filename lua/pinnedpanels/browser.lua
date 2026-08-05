@@ -12,7 +12,7 @@ function PinnedPanels.CreateBrowser(parent)
 
 	local searchBox = vgui.Create("DTextEntry", searchPanel)
 	searchBox:Dock(FILL)
-	searchBox:SetPlaceholderText("Search tools...")
+	searchBox:SetPlaceholderText(PinnedPanels.L("search_tools"))
 	searchBox.Paint = function(self, w, h)
 		draw.RoundedBox(4, 0, 0, w, h, C.searchBg)
 		surface.SetDrawColor(C.searchBorder)
@@ -83,7 +83,7 @@ function PinnedPanels.CreateBrowser(parent)
 			local bgNorm  = pinned and C.unpinBtnBg or C.pinBtnBg
 			local bgHov   = pinned and C.unpinBtnBgHov or C.pinBtnBgHov
 			local txtCol  = pinned and C.unpinBtnTxt or C.pinBtnTxt
-			local btnText = pinned and "Unpin" or "Pin"
+			local btnText = pinned and PinnedPanels.L("btn_unpin") or PinnedPanels.L("btn_pin")
 			local bg = self:IsHovered() and bgHov or bgNorm
 			draw.RoundedBox(4, 0, 0, w, h, bg)
 			surface.SetDrawColor(pinned and C.unpinBtnOut or C.pinBtnOut)
@@ -95,7 +95,7 @@ function PinnedPanels.CreateBrowser(parent)
 			if not IsValid(row) then return end
 			local pin    = PinnedPanels.Pins[id]
 			local pinned = pin and IsValid(pin.frame)
-			pinBtn:SetTooltip(pinned and "Remove this tool from screen" or "Pin this tool to screen")
+			pinBtn:SetTooltip(pinned and PinnedPanels.L("tip_unpin") or PinnedPanels.L("tip_pin"))
 		end
 		Refresh()
 
@@ -164,7 +164,7 @@ function PinnedPanels.CreateBrowser(parent)
 				noToolsLbl:DockMargin(10, 10, 10, 0)
 			end
 		end
-		countLbl:SetText(isFiltering and (count .. " / " .. total) or (total .. " tools"))
+		countLbl:SetText(isFiltering and (count .. " / " .. total) or PinnedPanels.Lf("count_tools", total))
 	end
 
 	hook.Add("PinnedPanels_StateChanged", root, function()

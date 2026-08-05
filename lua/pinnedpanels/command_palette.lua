@@ -16,25 +16,25 @@ local function BuildEntries()
 		list[#list + 1] = { cat = cat, text = text or "", sub = sub, icon = icon, run = run }
 	end
 
-	add("Action", "Toggle Cursor Mode", "Show cursor to interact", "icon16/cursor.png",
+	add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_toggle_cursor"), PinnedPanels.L("sub_show_cursor"), "icon16/cursor.png",
 		function() PinnedPanels.CursorMode.Toggle() end)
-	add("Action", "Auto-Arrange Panels", "Tile visible panels", "icon16/application_tile_horizontal.png",
+	add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_auto_arrange"), PinnedPanels.L("sub_tile_visible"), "icon16/application_tile_horizontal.png",
 		function() PinnedPanels.AutoArrange() end)
-	add("Action", "Auto-Size All Panels", "Fit every panel to its content", "icon16/arrow_inout.png",
+	add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_auto_size_all"), PinnedPanels.L("sub_fit_content"), "icon16/arrow_inout.png",
 		function() RunConsoleCommand("pp_autosize_all") end)
 	if PinnedPanels.HasClosedPanels and PinnedPanels.HasClosedPanels() then
-		add("Action", "Reopen Last Closed Panel", "Undo the last unpin", "icon16/arrow_undo.png",
+		add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_reopen"), PinnedPanels.L("sub_undo_unpin"), "icon16/arrow_undo.png",
 			function() PinnedPanels.ReopenLastClosed() end)
 	end
-	add("Action", "Restore All Minimized", "Bring back minimized panels", "icon16/application_get.png",
+	add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_restore_all"), PinnedPanels.L("sub_bring_back"), "icon16/application_get.png",
 		function() PinnedPanels.RestoreAllFromTaskbar() end)
-	add("Action", "Unpin All Panels", "Remove every pinned panel", "icon16/cross.png",
+	add(PinnedPanels.L("cat_action"), PinnedPanels.L("act_unpin_all"), PinnedPanels.L("sub_remove_every"), "icon16/cross.png",
 		function() PinnedPanels.UnpinAll() end)
 
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if IsValid(pin.frame) and (pin.kind == "group" or not PinnedPanels.GetGroupForPanel(id)) then
 			local pid = id
-			add("Pinned", pin.title or id, "Show / bring to front", "icon16/application_double.png",
+			add(PinnedPanels.L("cat_pinned"), pin.title or id, PinnedPanels.L("sub_show_front"), "icon16/application_double.png",
 				function()
 					local p = PinnedPanels.Pins[pid]
 					if not p or not IsValid(p.frame) then return end
@@ -49,7 +49,7 @@ local function BuildEntries()
 	for id, pin in pairs(PinnedPanels.Pins) do
 		if pin.clickThrough and IsValid(pin.frame) then
 			local pid = id
-			add("Action", "Restore Interaction: " .. (pin.title or id), "Disable click-through", "icon16/cursor.png",
+			add(PinnedPanels.L("cat_action"), PinnedPanels.Lf("act_restore_inter", pin.title or id), PinnedPanels.L("sub_disable_ct"), "icon16/cursor.png",
 				function()
 					local p = PinnedPanels.Pins[pid]
 					if not p then return end
@@ -62,13 +62,13 @@ local function BuildEntries()
 
 	for _, t in ipairs(PinnedPanels.GetAllTools()) do
 		local itemName, nice, cp = t.itemName, t.niceName, t.cpFunc
-		add("Tool", nice, t.category, "icon16/wrench.png",
+		add(PinnedPanels.L("cat_tool"), nice, t.category, "icon16/wrench.png",
 			function() PinnedPanels.Pin("PP_" .. itemName, nice, cp) end)
 	end
 
 	for _, t in ipairs(PinnedPanels.GetAllCreationTabs()) do
 		local cid, label, fn = t.id, t.label, t.func
-		add("Content", label, "Content browser", t.icon or "icon16/application_view_list.png",
+		add(PinnedPanels.L("cat_content"), label, PinnedPanels.L("sub_content_browser"), t.icon or "icon16/application_view_list.png",
 			function() PinnedPanels.Pin(cid, label, fn, false, PinnedPanels.CREATION_OPTS) end)
 	end
 
@@ -156,10 +156,10 @@ function PinnedPanels.OpenCommandPalette()
 		surface.DrawRect(0, HDR_H - 1, w, 1)
 
 		draw.RoundedBoxEx(8, 0, h - FOOT_H, w, FOOT_H, C.paletteFooterBg, false, false, true, true)
-		draw.SimpleText("Up / Down: navigate    Enter: run    Esc: close", "PP_PaletteSub",
+		draw.SimpleText(PinnedPanels.L("palette_nav"), "PP_PaletteSub",
 			14, h - FOOT_H / 2, C.textMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-		local countTxt = (#rows >= resultTotal) and (#rows .. " results")
-			or (#rows .. " of " .. resultTotal .. " results")
+		local countTxt = (#rows >= resultTotal) and PinnedPanels.Lf("palette_results", #rows)
+			or PinnedPanels.Lf("palette_results_of", #rows, resultTotal)
 		draw.SimpleText(countTxt, "PP_PaletteSub",
 			w - 14, h - FOOT_H / 2, C.textInfo, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
 
@@ -171,7 +171,7 @@ function PinnedPanels.OpenCommandPalette()
 	search:SetPos(16, 10)
 	search:SetSize(W - 32, 28)
 	search:SetFont("PP_PaletteQuery")
-	search:SetPlaceholderText("Search tools, panels & actions…")
+	search:SetPlaceholderText(PinnedPanels.L("palette_search"))
 	search:SetUpdateOnType(true)
 	search:SetPaintBackground(false)
 	search:SetTextColor(C.textBright)
@@ -234,7 +234,7 @@ function PinnedPanels.OpenCommandPalette()
 			local empty = vgui.Create("DLabel", list)
 			empty:Dock(TOP)
 			empty:DockMargin(12, 14, 12, 0)
-			empty:SetText("No matches.")
+			empty:SetText(PinnedPanels.L("palette_no_matches"))
 			empty:SetFont("PP_PaletteItem")
 			empty:SetContentAlignment(5)
 			empty:SetTextColor(C.textMuted)

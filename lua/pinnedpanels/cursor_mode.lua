@@ -157,21 +157,21 @@ function PinnedPanels.GetKeyConflicts(code, ignoreTag)
 
 	local gameBind = input.LookupKeyBinding(code)
 	if isstring(gameBind) and gameBind ~= "" then
-		out[#out + 1] = "Game bind: " .. gameBind
+		out[#out + 1] = PinnedPanels.Lf("conflict_game_bind", gameBind)
 	end
 
 	if ignoreTag ~= "cursor" and IM.KeyCode == code then
-		out[#out + 1] = "PinnedPanels: Cursor Mode key"
+		out[#out + 1] = PinnedPanels.L("conflict_cursor")
 	end
 	if ignoreTag ~= "peek" and PinnedPanels.GetPeekKey and PinnedPanels.GetPeekKey() == code then
-		out[#out + 1] = "PinnedPanels: Peek key"
+		out[#out + 1] = PinnedPanels.L("conflict_peek")
 	end
 	if ignoreTag ~= "palette" and PinnedPanels.GetPaletteKey and PinnedPanels.GetPaletteKey() == code then
-		out[#out + 1] = "PinnedPanels: Command Palette key"
+		out[#out + 1] = PinnedPanels.L("conflict_palette")
 	end
 	for _, b in ipairs(PinnedPanels.Keybinds or {}) do
 		if b.key == code and ignoreTag ~= ("bind:" .. b.id) then
-			out[#out + 1] = "PinnedPanels: " .. b.name
+			out[#out + 1] = PinnedPanels.Lf("conflict_bind", b.name)
 		end
 	end
 	for kStr, pid in pairs(PinnedPanels.Settings.quickSlots or {}) do
@@ -192,7 +192,7 @@ function PinnedPanels.OpenKeyBindFrame(opts)
 	if IsValid(PinnedPanels._bindFrame) then PinnedPanels._bindFrame:Remove() end
 
 	local frame = vgui.Create("DFrame")
-	frame:SetTitle(opts.title or "Bind Key")
+	frame:SetTitle(opts.title or PinnedPanels.L("bind_key_title"))
 	frame:SetSize(320, 180)
 	frame:Center()
 	frame:SetDraggable(true)
@@ -209,7 +209,7 @@ function PinnedPanels.OpenKeyBindFrame(opts)
 	end
 
 	local instrLabel = vgui.Create("DLabel", frame)
-	instrLabel:SetText("Click the button below to listen for a key.\nEscape = cancel  |  Backspace = clear binding.")
+	instrLabel:SetText(PinnedPanels.L("bind_instr"))
 	instrLabel:SetWrap(true)
 	instrLabel:Dock(TOP)
 	instrLabel:DockMargin(12, 10, 12, 8)
@@ -225,11 +225,11 @@ function PinnedPanels.OpenKeyBindFrame(opts)
 
 	captureBtn.Think = function(self)
 		if self:HasFocus() then
-			self:SetText(">> Press a key <<")
+			self:SetText(PinnedPanels.L("bind_press_key"))
 		else
 			local code = getKey()
-			local keyName = (code and code ~= KEY_NONE) and input.GetKeyName(code) or "None"
-			self:SetText("Click to bind  (Current: " .. string.upper(keyName) .. ")")
+			local keyName = (code and code ~= KEY_NONE) and input.GetKeyName(code) or PinnedPanels.L("key_none")
+			self:SetText(PinnedPanels.Lf("bind_click_current", string.upper(keyName)))
 		end
 	end
 
@@ -266,12 +266,10 @@ function PinnedPanels.OpenKeyBindFrame(opts)
 		if #conflicts > 0 then
 			local keyName = string.upper(input.GetKeyName(newKey) or "?")
 			Derma_Query(
-				"[ " .. keyName .. " ] is already used by:\n\n- "
-					.. table.concat(conflicts, "\n- ")
-					.. "\n\nEverything bound to this key will trigger together.\nBind it anyway?",
-				"Key Already In Use",
-				"Bind Anyway", apply,
-				"Cancel", function() end)
+				PinnedPanels.Lf("conflict_query", keyName, table.concat(conflicts, "\n- ")),
+				PinnedPanels.L("conflict_title"),
+				PinnedPanels.L("conflict_bind_anyway"), apply,
+				PinnedPanels.L("btn_cancel"), function() end)
 		else
 			apply()
 		end

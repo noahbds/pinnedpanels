@@ -229,16 +229,16 @@ function SUI.KeyControlRow(parent, opts)
 		if not IsValid(keyDisplay) then return end
 		local code = opts.get()
 		if not code or code == KEY_NONE then
-			keyDisplay:SetText("Current key: [ Not bound ]")
+			keyDisplay:SetText(PinnedPanels.L("current_key_none"))
 			keyDisplay:SetTextColor(C.errorRed)
 		else
-			keyDisplay:SetText("Current key: [ " .. string.upper(input.GetKeyName(code) or "?") .. " ]")
+			keyDisplay:SetText(PinnedPanels.Lf("current_key", string.upper(input.GetKeyName(code) or "?")))
 			keyDisplay:SetTextColor(C.keyBound)
 		end
 	end
 	UpdateDisplay()
 
-	SUI.Button(row, "Change Key...", "icon16/keyboard.png", 130, function()
+	SUI.Button(row, PinnedPanels.L("btn_change_key"), "icon16/keyboard.png", 130, function()
 		PinnedPanels.OpenKeyBindFrame({
 			title   = opts.bindTitle,
 			get     = opts.get,
@@ -288,7 +288,7 @@ function SUI.ShowCodePopup(title, code, onApply)
 
 	if onApply then
 		local applyBtn = vgui.Create("DButton", bar)
-		applyBtn:SetText("Import & Reload")
+		applyBtn:SetText(PinnedPanels.L("btn_import_reload"))
 		applyBtn:Dock(RIGHT)
 		applyBtn:SetWide(140)
 		SUI.StyleDarkButton(applyBtn)
@@ -304,7 +304,7 @@ function SUI.ShowCodePopup(title, code, onApply)
 		local hintLbl = vgui.Create("DLabel", bar)
 		hintLbl:Dock(FILL)
 		hintLbl:DockMargin(10, 0, 0, 0)
-		hintLbl:SetText("Copy this code (Ctrl+C) and share it.")
+		hintLbl:SetText(PinnedPanels.L("code_hint"))
 		hintLbl:SetTextColor(C.textMuted)
 	end
 

@@ -6,10 +6,7 @@ function PinnedPanels.CreateCreationBrowser(parent)
 	root.Paint = function() end
 
 	local info = vgui.Create("DLabel", root)
-	info:SetText(
-		"Pin GMod's built-in content browsers as floating panels — props, entities, NPCs, saves, and more. " ..
-		"Requires the sandbox gamemode."
-	)
+	info:SetText(PinnedPanels.L("creation_info"))
 	info:SetWrap(true)
 	info:Dock(TOP)
 	info:DockMargin(10, 10, 10, 4)
@@ -34,7 +31,7 @@ function PinnedPanels.CreateCreationBrowser(parent)
 
 		if #allTabs == 0 then
 			local lbl = vgui.Create("DLabel", scroll)
-			lbl:SetText("No creation tabs found. Make sure you are playing on a sandbox-based gamemode.")
+			lbl:SetText(PinnedPanels.L("creation_none"))
 			lbl:SetWrap(true)
 			lbl:Dock(TOP)
 			lbl:DockMargin(10, 12, 10, 0)
@@ -92,7 +89,7 @@ function PinnedPanels.CreateCreationBrowser(parent)
 				if not IsValid(pinBtn) then return end
 				local pin    = PinnedPanels.Pins[id]
 				local pinned = pin and IsValid(pin.frame)
-				pinBtn:SetText(pinned and "Unpin" or "Pin")
+				pinBtn:SetText(pinned and PinnedPanels.L("btn_unpin") or PinnedPanels.L("btn_pin"))
 				pinBtn:SetIcon(pinned and "icon16/lock_open.png" or "icon16/lock_add.png")
 			end
 			Refresh()

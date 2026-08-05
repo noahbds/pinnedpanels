@@ -225,14 +225,14 @@ function PinnedPanels.ExportLayout()
 end
 
 function PinnedPanels.ImportLayout(str)
-	if not isstring(str) or str == "" then return false, "Empty import string." end
+	if not isstring(str) or str == "" then return false, PinnedPanels.L("import_empty") end
 	str = string.Trim(str)
 	local packed = util.Base64Decode(str)
-	if not packed or packed == "" then return false, "Could not decode string." end
+	if not packed or packed == "" then return false, PinnedPanels.L("import_decode") end
 	local json = util.Decompress(packed)
-	if not json or json == "" then return false, "Corrupt or invalid data." end
+	if not json or json == "" then return false, PinnedPanels.L("import_corrupt") end
 	local t = util.JSONToTable(json)
-	if not istable(t) or not istable(t.pins) then return false, "Not a valid layout." end
+	if not istable(t) or not istable(t.pins) then return false, PinnedPanels.L("import_invalid") end
 
 	file.Write(SAVEF, util.TableToJSON(t.pins, true))
 

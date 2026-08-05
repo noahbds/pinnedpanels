@@ -42,7 +42,7 @@ function EDITOR:Create(parent)
 	self.root.Paint = function() end
 
 	local info = vgui.Create("DLabel", self.root)
-	info:SetText("Drag boxes to reposition panels. Drag any edge or corner to resize. Right-click for options. Grouped panels have a highlighted border and member badge. Changes apply live.")
+	info:SetText(PinnedPanels.L("layout_info"))
 	info:SetWrap(true)
 	info:Dock(TOP)
 	info:DockMargin(6, 6, 6, 4)
@@ -76,7 +76,7 @@ function EDITOR:Create(parent)
 		surface.SetDrawColor(C.canvasBorder)
 		surface.DrawOutlinedRect(ox, oy, prevW, prevH, 1)
 
-		draw.SimpleText("SCREEN  " .. scrW .. "×" .. scrH, "DermaDefault",
+		draw.SimpleText(PinnedPanels.L("layout_screen") .. "  " .. scrW .. "×" .. scrH, "DermaDefault",
 			ox + prevW / 2, oy + 8, C.canvasLabel, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 
 		for _, box in ipairs(self.boxes) do
@@ -129,7 +129,7 @@ function EDITOR:Create(parent)
 				end
 
 				if hasExtra then
-					draw.SimpleText(string.format("+%d more", totalCount - nameCount), "DermaDefault",
+					draw.SimpleText(PinnedPanels.Lf("layout_more", totalCount - nameCount), "DermaDefault",
 						cx, topY + titleHeight + nameCount * lineHeight,
 						C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 				end
@@ -139,7 +139,7 @@ function EDITOR:Create(parent)
 			end
 
 			if box.cropped then
-				draw.SimpleText("CROPPED", "DermaDefaultBold",
+				draw.SimpleText(PinnedPanels.L("layout_cropped"), "DermaDefaultBold",
 					bx + bw - 4, by + 2, C.cropLabel, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
 			end
 
@@ -150,7 +150,7 @@ function EDITOR:Create(parent)
 
 			if box.isGroup then
 				surface.SetFont("DermaDefault")
-				local badge = "[ " .. (box.memberCount or 0) .. " panels ]"
+				local badge = PinnedPanels.Lf("layout_badge", box.memberCount or 0)
 				local tw = surface.GetTextSize(badge)
 				draw.RoundedBox(3, bx + 2, by + 2, tw + 8, 15, C.groupBadgeBg)
 				draw.SimpleText(badge, "DermaDefault", bx + 6, by + 3, C.groupBadgeText,
@@ -210,14 +210,14 @@ function EDITOR:Create(parent)
 				end
 			end
 
-			draw.SimpleText("TASKBAR", "DermaDefault",
+			draw.SimpleText(PinnedPanels.L("layout_taskbar"), "DermaDefault",
 				tbx + tbw / 2, tby + tbh / 2,
 				Color(C.taskbarText.r, C.taskbarText.g, C.taskbarText.b, #minimized > 0 and 60 or 120),
 				TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 
 		if #self.boxes == 0 then
-			draw.SimpleText("No pinned panels. Pin tools from the Tools tab.",
+			draw.SimpleText(PinnedPanels.L("layout_empty"),
 				"DermaDefault", w / 2, h / 2, C.emptyText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 	end

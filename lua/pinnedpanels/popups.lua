@@ -36,11 +36,11 @@ function PinnedPanels.OpenColorChanger(id)
 		draw.RoundedBoxEx(6, 0, 0, w, 28, C.colorPopupHdr, true, true, false, false)
 		surface.SetDrawColor(C.colorPopupBorder)
 		surface.DrawOutlinedRect(0, 0, w, h, 1)
-		draw.SimpleText("Panel Colors: " .. pin.title, "DermaDefaultBold", 10, 14,
+		draw.SimpleText(PinnedPanels.Lf("color_popup_title", pin.title), "DermaDefaultBold", 10, 14,
 			C.textBright, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if IM and IM.NavPopup == self and IM.NavigatingPanel then
-			draw.SimpleText("Arrows: move / adjust   Enter: select   Backspace: back",
+			draw.SimpleText(PinnedPanels.L("nav_hint_popup"),
 				"DermaDefault", w / 2, h - 10, C.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 	end
@@ -101,7 +101,7 @@ function PinnedPanels.OpenColorChanger(id)
 		end
 
 		local clearBtn = vgui.Create("DButton", row)
-		clearBtn:SetText("Reset")
+		clearBtn:SetText(PinnedPanels.L("btn_reset"))
 		clearBtn:SetWide(50)
 		clearBtn:Dock(RIGHT)
 		clearBtn:DockMargin(4, 2, 0, 2)
@@ -130,12 +130,12 @@ function PinnedPanels.OpenColorChanger(id)
 		end
 	end
 
-	AddColorRow("Background", "customBg", PinnedPanels.Settings.bg)
-	AddColorRow("Header", "customHeader", PinnedPanels.Settings.header)
-	AddColorRow("Text", "customText", PinnedPanels.Settings.text)
+	AddColorRow(PinnedPanels.L("color_bg"), "customBg", PinnedPanels.Settings.bg)
+	AddColorRow(PinnedPanels.L("color_header"), "customHeader", PinnedPanels.Settings.header)
+	AddColorRow(PinnedPanels.L("color_text_swatch"), "customText", PinnedPanels.Settings.text)
 
 	local resetAll = vgui.Create("DButton", scroll)
-	resetAll:SetText("Reset All to Global")
+	resetAll:SetText(PinnedPanels.L("btn_reset_global"))
 	resetAll:SetIcon("icon16/arrow_undo.png")
 	resetAll:Dock(TOP)
 	resetAll:SetTall(28)
@@ -177,7 +177,7 @@ function PinnedPanels.OpenRenamePopup(id)
 			end
 		end,
 		function() end,
-		"OK",
-		"Cancel"
+		PinnedPanels.L("btn_ok"),
+		PinnedPanels.L("btn_cancel")
 	)
 end

@@ -54,7 +54,7 @@ function PinnedPanels.GetFramePaintOver(pinId)
 
 		if not IM.NavigatingPanel or not PinnedPanels.GetNavElements then return end
 
-		local hint = "Backspace: back | Enter: use | Arrows: move | Shift+Enter: context menu"
+		local hint = PinnedPanels.L("nav_hint_panel")
 		local selEl = IM.SelectedIndex and PinnedPanels.GetNavElements()[IM.SelectedIndex]
 		if IsValid(selEl) then
 			local sc = selEl.ClassName or selEl:GetClassName()
@@ -63,17 +63,17 @@ function PinnedPanels.GetFramePaintOver(pinId)
 				colorTgt, colorCls = PinnedPanels._ColorTarget(selEl)
 			end
 			if sc == "DRGBPicker" then
-				hint = "Arrows: Hue | Enter or Backspace: done"
+				hint = PinnedPanels.L("nav_hint_hue")
 			elseif sc == "DAlphaBar" then
-				hint = "Arrows: Alpha | Enter or Backspace: done"
+				hint = PinnedPanels.L("nav_hint_alpha")
 			elseif colorTgt then
 				if colorCls and colorCls:find("ColorCube") then
-					hint = "Arrows: Saturation / Value | Enter or Backspace: done"
+					hint = PinnedPanels.L("nav_hint_satval")
 				else
-					hint = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done"
+					hint = PinnedPanels.L("nav_hint_huevalue")
 				end
 			elseif sc:find("Slider") or sc == "DComboBox" then
-				hint = "Left / Right: adjust | Enter or Backspace: done"
+				hint = PinnedPanels.L("nav_hint_slider")
 			end
 		end
 		surface.SetFont("DermaDefault")
@@ -584,7 +584,7 @@ local function BuildWrapperFrame(title, id, fw, fh, fx, fy)
 			surface.DrawRect(0, h - 2, w, 2)
 			draw.SimpleText(pin and pin.title or "", "DermaDefaultBold", 8, h / 2,
 				C.textLight, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-			draw.SimpleText("click-through · hold ALT to use · right-click for menu", "DermaDefault", w - 8, h / 2,
+			draw.SimpleText(PinnedPanels.L("clickthrough_bar"), "DermaDefault", w - 8, h / 2,
 				C.textMuted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
 		end
 		ctGrip.OnMousePressed = function(self, mc)

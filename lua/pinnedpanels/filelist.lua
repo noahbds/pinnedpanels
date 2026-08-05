@@ -1,5 +1,15 @@
 -- ── File List ───────────────────────────────────────────────
 return {
+    "pinnedpanels/localization.lua",
+    "pinnedpanels/lang/en.lua",
+    "pinnedpanels/lang/ru.lua",
+    "pinnedpanels/lang/es.lua",
+    "pinnedpanels/lang/fr.lua",
+    "pinnedpanels/lang/de.lua",
+    "pinnedpanels/lang/pt.lua",
+    "pinnedpanels/lang/pl.lua",
+    "pinnedpanels/lang/tr.lua",
+    "pinnedpanels/lang/zh.lua",
     "pinnedpanels/colors.lua",
     "pinnedpanels/core.lua",
     "pinnedpanels/persistence.lua",

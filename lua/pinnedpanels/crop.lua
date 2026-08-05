@@ -393,7 +393,7 @@ function PinnedPanels.OpenCropEditor(id)
 			surface.DrawRect(p[1] - hs / 2, p[2] - hs / 2, hs, hs)
 		end
 
-		draw.SimpleText("Drag edges · move inside · draw in dark area · right-click cancels",
+		draw.SimpleText(PinnedPanels.L("crop_hint"),
 			"DermaDefault", w / 2, 4, C.textBright, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 	end
 
@@ -416,7 +416,7 @@ function PinnedPanels.OpenCropEditor(id)
 		return btn
 	end
 
-	MakeBtn("Apply", 0, function()
+	MakeBtn(PinnedPanels.L("btn_apply"), 0, function()
 		local l = sel.x - cx
 		local t = sel.y - cy
 		local r = (cx + cw) - (sel.x + sel.w)
@@ -433,11 +433,11 @@ function PinnedPanels.OpenCropEditor(id)
 		end
 	end)
 
-	MakeBtn("Full", 1, function()
+	MakeBtn(PinnedPanels.L("crop_full"), 1, function()
 		sel.x, sel.y, sel.w, sel.h = cx, cy, cw, ch
 	end)
 
-	MakeBtn("Cancel", 2, Cancel)
+	MakeBtn(PinnedPanels.L("btn_cancel"), 2, Cancel)
 
 	hook.Add("PinnedPanels_CursorModeChanged", ov, function(pnl)
 		if not IsValid(pnl) then return end

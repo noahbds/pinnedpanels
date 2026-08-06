@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["de"] = {
 	app_title        = "Angeheftete Panels",
+	spawn_tab        = "Angeheftete Panels",
 	app_subtitle     = "Verwalte und passe deine Werkzeugmenüs auf dem Bildschirm an",
 	pin_count_one    = "%d Panel angeheftet",
 	pin_count_many   = "%d Panels angeheftet",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["de"] = {
 	nav_hint_huevalue  = "Pfeile: Farbton / Helligkeit | Umschalt+Pfeile: Sättigung / Alpha | Enter oder Rücktaste: fertig",
 	nav_hint_slider    = "Links / Rechts: anpassen | Enter oder Rücktaste: fertig",
 	clickthrough_bar   = "Klick-Durchlass · ALT halten zum Benutzen · Rechtsklick für Menü",
+	ind_clickthrough   = "(Klick-Durchlass)",
+	ind_cropped        = "(zugeschnitten)",
+	tb_enter_restore   = "Enter zum Wiederherstellen",
 
 	crop_hint = "Kanten ziehen · innen bewegen · im dunklen Bereich zeichnen · Rechtsklick bricht ab",
 	crop_full = "Voll",

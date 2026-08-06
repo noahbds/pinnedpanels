@@ -81,24 +81,31 @@ local function CreatePinnedPanelsTab()
 	sheet:DockMargin(8, 8, 8, 8)
 	sheet.Paint = function() end
 
+	local sheetItems = {}
+	local function AddSheet(key, panel, icon)
+		local item = sheet:AddSheet(PinnedPanels.L(key), panel, icon)
+		sheetItems[#sheetItems + 1] = { item = item, key = key }
+		return item
+	end
+
 	local browserPanel = PinnedPanels.CreateBrowser(nil)
-	sheet:AddSheet(PinnedPanels.L("tab_tools"), browserPanel, "icon16/wrench.png")
+	AddSheet("tab_tools", browserPanel, "icon16/wrench.png")
 
 	local contentPanel = PinnedPanels.CreateCreationBrowser(nil)
-	sheet:AddSheet(PinnedPanels.L("tab_content"), contentPanel, "icon16/application_view_list.png")
+	AddSheet("tab_content", contentPanel, "icon16/application_view_list.png")
 
 	local pinnedPanel = PinnedPanels.CreatePinnedList(nil)
-	sheet:AddSheet(PinnedPanels.L("tab_pinned"), pinnedPanel, "icon16/lock.png")
+	AddSheet("tab_pinned", pinnedPanel, "icon16/lock.png")
 
 	local editorHost = vgui.Create("DPanel")
 	editorHost.Paint = function(self, w, h)
 		draw.RoundedBox(0, 0, 0, w, h, C.bg)
 	end
 	local editor = PinnedPanels.CreateLayoutEditor(editorHost)
-	sheet:AddSheet(PinnedPanels.L("tab_layout"), editorHost, "icon16/application_view_columns.png")
+	AddSheet("tab_layout", editorHost, "icon16/application_view_columns.png")
 
 	local settingsPanel = PinnedPanels.CreateSettingsTab(nil)
-	sheet:AddSheet(PinnedPanels.L("tab_settings"), settingsPanel, "icon16/cog.png")
+	AddSheet("tab_settings", settingsPanel, "icon16/cog.png")
 
 	for _, item in ipairs(sheet:GetItems()) do
 		local tab = item.Tab
@@ -116,6 +123,28 @@ local function CreatePinnedPanelsTab()
 		end
 	end
 
+	hook.Add("PinnedPanels_LanguageChanged", root, function()
+		if not IsValid(root) then return end
+		if IsValid(title) then
+			title:SetText(PinnedPanels.L("app_title"))
+			title:SizeToContentsX()
+		end
+		if IsValid(subtitle) then
+			subtitle:SetText(PinnedPanels.L("app_subtitle"))
+			subtitle:SizeToContentsX()
+		end
+		UpdatePinCount()
+		for _, si in ipairs(sheetItems) do
+			if si.item and IsValid(si.item.Tab) then
+				si.item.Tab:SetText(PinnedPanels.L(si.key))
+				si.item.Tab:InvalidateLayout()
+			end
+		end
+		if IsValid(sheet) then sheet:InvalidateLayout() end
+		if IsValid(pinnedPanel) and pinnedPanel.Rebuild then pinnedPanel:Rebuild() end
+		if editor and IsValid(editorHost) and editor.Rebuild then editor:Rebuild() end
+	end)
+
 	sheet.OnActiveTabChanged = function(self, old, new)
 		if not IsValid(new) then return end
 		local newPanel = new:GetPanel()
@@ -130,7 +159,17 @@ local function CreatePinnedPanelsTab()
 	return root
 end
 
-spawnmenu.AddCreationTab("Pinned Panels", CreatePinnedPanelsTab, "icon16/lock.png", 9999)
+local SPAWN_TAB_PHRASE = "pinnedpanels.spawntab"
+
+local function RegisterSpawnTabPhrase()
+	language.Add(SPAWN_TAB_PHRASE, PinnedPanels.L("spawn_tab"))
+end
+RegisterSpawnTabPhrase()
+
+spawnmenu.AddCreationTab("#" .. SPAWN_TAB_PHRASE, CreatePinnedPanelsTab, "icon16/lock.png", 9999)
+
+cvars.AddChangeCallback("gmod_language", RegisterSpawnTabPhrase, "PinnedPanels_SpawnTabLang")
+hook.Add("PinnedPanels_LanguageChanged", "PinnedPanels_SpawnTabLang", RegisterSpawnTabPhrase)
 
 concommand.Add("pp_clearall", function()
 	PinnedPanels.UnpinAll()

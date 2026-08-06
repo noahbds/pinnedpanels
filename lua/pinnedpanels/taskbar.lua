@@ -310,7 +310,7 @@ local function BuildTaskbar()
 
 		local entry = TB.entries[idx]
 		surface.SetFont("PP_TaskbarFontBold")
-		local label = entry.title .. "   ·   Enter to restore"
+		local label = entry.title .. "   ·   " .. PinnedPanels.L("tb_enter_restore")
 		local tw, th = surface.GetTextSize(label)
 		local pad = 7
 		local bw = tw + pad * 2

@@ -1,23 +1,18 @@
 -- ── Localization ─────────────────────────────────────────────────────────────
--- Lookup helpers for the strings defined in pinnedpanels/lang/<code>.lua.
---   PinnedPanels.L(key[, default])  → plain text
---   PinnedPanels.Lf(key, ...)       → string.format-style with arguments
---
--- The active language follows the gmod_language convar; region-suffixed codes
--- (es-ES, pt-BR, zh-CN) fall back to their base language table, and any missing
--- key falls back to English, then the supplied default, then the key itself.
 
 PinnedPanels      = PinnedPanels or {}
 PinnedPanels.Lang = PinnedPanels.Lang or {}
-
--- Resolve the active language from the gmod_language convar. The result is
--- cached against the raw convar string so L() stays cheap inside Paint hooks;
--- the cache refreshes automatically if the player changes language.
 local cachedRaw, cachedLang
 
 function PinnedPanels.ResolveLang()
-	local cv  = GetConVar("gmod_language")
-	local raw = cv and cv:GetString() or "en"
+	local override = PinnedPanels.Settings and PinnedPanels.Settings.language
+	local raw
+	if isstring(override) and override ~= "" then
+		raw = override
+	else
+		local cv = GetConVar("gmod_language")
+		raw = cv and cv:GetString() or "en"
+	end
 	if raw == cachedRaw and cachedLang and PinnedPanels.Lang[cachedLang] then
 		return cachedLang
 	end
@@ -41,9 +36,14 @@ function PinnedPanels.L(key, default)
 	return tbl[key] or en[key] or default or key
 end
 
--- Format-string variant. Guarded so a bad %-specifier or argument-count mismatch
--- in any translation degrades to the raw template instead of erroring out the
--- calling UI/Paint code.
+function PinnedPanels.SetLanguage(code)
+	PinnedPanels.Settings = PinnedPanels.Settings or {}
+	PinnedPanels.Settings.language = code
+	cachedRaw, cachedLang = nil, nil
+	if PinnedPanels.SaveSettings then PinnedPanels.SaveSettings() end
+	hook.Run("PinnedPanels_LanguageChanged", code)
+end
+
 function PinnedPanels.Lf(key, ...)
 	local str = PinnedPanels.L(key)
 	local ok, res = pcall(string.format, str, ...)

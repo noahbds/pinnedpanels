@@ -53,10 +53,12 @@ function PinnedPanels.RestoreAll(noSave)
 	for id, s in pairs(saved) do
 		local kind = s.kind or "tool"
 		if kind == "tool" and toolMap[id] then
-			PinnedPanels.Pin(id, s.title or toolMap[id].niceName, toolMap[id].cpFunc, noSave)
+			local title = (s.customTitle and s.title) or toolMap[id].niceName
+			PinnedPanels.Pin(id, title, toolMap[id].cpFunc, noSave)
 		elseif kind == "creation" and creationMap[id] then
 			local t = creationMap[id]
-			PinnedPanels.Pin(id, s.title or t.label, t.func, noSave, PinnedPanels.CREATION_OPTS)
+			local title = (s.customTitle and s.title) or t.label
+			PinnedPanels.Pin(id, title, t.func, noSave, PinnedPanels.CREATION_OPTS)
 		end
 	end
 

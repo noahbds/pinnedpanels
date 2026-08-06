@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["fr"] = {
 	app_title        = "Panneaux épinglés",
+	spawn_tab        = "Panneaux épinglés",
 	app_subtitle     = "Gérez et personnalisez vos menus d'outils à l'écran",
 	pin_count_one    = "%d panneau épinglé",
 	pin_count_many   = "%d panneaux épinglés",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["fr"] = {
 	nav_hint_huevalue  = "Flèches : teinte / valeur | Maj+Flèches : saturation / alpha | Entrée ou Retour arrière : terminé",
 	nav_hint_slider    = "Gauche / Droite : ajuster | Entrée ou Retour arrière : terminé",
 	clickthrough_bar   = "clic traversant · maintenez ALT pour l'utiliser · clic droit pour le menu",
+	ind_clickthrough   = "(clic traversant)",
+	ind_cropped        = "(rogné)",
+	tb_enter_restore   = "Entrée pour restaurer",
 
 	crop_hint = "Tirez les bords · déplacez à l'intérieur · dessinez dans la zone sombre · clic droit annule",
 	crop_full = "Entier",

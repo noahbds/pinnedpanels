@@ -75,6 +75,7 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	PinnedPanels.Pins[id] = {
 		frame        = frame,
 		title        = title,
+		customTitle  = s.customTitle or false,
 		cpFunc       = cpFunc,
 		kind         = opts.kind or "tool",
 		content      = contentPanel,
@@ -126,6 +127,55 @@ function PinnedPanels.Pin(id, title, cpFunc, noSave, opts)
 	hook.Run("PinnedPanels_StateChanged")
 	return frame
 end
+
+-- ── Localized Title Refresh ──────────────────────────────────────────────────
+function PinnedPanels.RefreshLocalizedTitles()
+	local toolMap, creationMap = {}, {}
+	for _, t in ipairs(PinnedPanels.GetAllTools()) do toolMap["PP_" .. t.itemName] = t end
+	for _, t in ipairs(PinnedPanels.GetAllCreationTabs()) do creationMap[t.id] = t end
+
+	local changed = false
+	for id, pin in pairs(PinnedPanels.Pins) do
+		if not pin.customTitle then
+			local newTitle
+			if pin.kind == "creation" then
+				local t = creationMap[id]
+				newTitle = t and t.label
+			elseif pin.kind == nil or pin.kind == "tool" then
+				local t = toolMap[id]
+				newTitle = t and t.niceName
+			end
+
+			if isstring(newTitle) and newTitle ~= "" and newTitle ~= pin.title then
+				pin.title = newTitle  -- header/taskbar/lists read pin.title live
+				changed = true
+			end
+		end
+	end
+
+	if not changed then return end
+
+	if PinnedPanels.RebuildGroupFrame and PinnedPanels.Settings then
+		for _, g in ipairs(PinnedPanels.Settings.groups or {}) do
+			local gp = PinnedPanels.Pins["PPG_" .. g.name]
+			if gp and IsValid(gp.frame) then
+				PinnedPanels.RebuildGroupFrame(g.name)
+			end
+		end
+	end
+
+	PinnedPanels.Save()
+	hook.Run("PinnedPanels_StateChanged")
+end
+
+local function ScheduleTitleRefresh()
+	timer.Create("PinnedPanels_TitleRefresh", 0.1, 1, function()
+		PinnedPanels.RefreshLocalizedTitles()
+	end)
+end
+
+cvars.AddChangeCallback("gmod_language", ScheduleTitleRefresh, "PinnedPanels_TitleLang")
+hook.Add("PinnedPanels_LanguageChanged", "PinnedPanels_TitleRefresh", ScheduleTitleRefresh)
 
 -- ── Minimize / Restore ──────────────────────────────────────────────────────
 function PinnedPanels.MinimizeToTaskbar(id)
@@ -294,7 +344,7 @@ local CLOSED_MAX = 15
 
 local function RecordClosed(id, pin)
 	if not pin or (pin.kind ~= "tool" and pin.kind ~= "creation") then return end
-	local entry = { id = id, title = pin.title, kind = pin.kind }
+	local entry = { id = id, title = pin.title, kind = pin.kind, customTitle = pin.customTitle }
 	if IsValid(pin.frame) then
 		local x, y = pin.frame:GetPos()
 		local w, h = pin.frame:GetSize()
@@ -328,14 +378,14 @@ function PinnedPanels.ReopenLastClosed()
 	if e.kind == "tool" then
 		for _, t in ipairs(PinnedPanels.GetAllTools()) do
 			if "PP_" .. t.itemName == e.id then
-				finish(PinnedPanels.Pin(e.id, e.title, t.cpFunc))
+				finish(PinnedPanels.Pin(e.id, (e.customTitle and e.title) or t.niceName, t.cpFunc))
 				return
 			end
 		end
 	elseif e.kind == "creation" then
 		for _, t in ipairs(PinnedPanels.GetAllCreationTabs()) do
 			if t.id == e.id then
-				finish(PinnedPanels.Pin(e.id, e.title, t.func, false, PinnedPanels.CREATION_OPTS))
+				finish(PinnedPanels.Pin(e.id, (e.customTitle and e.title) or t.label, t.func, false, PinnedPanels.CREATION_OPTS))
 				return
 			end
 		end

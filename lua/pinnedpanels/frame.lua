@@ -25,9 +25,9 @@ function PinnedPanels.GetFramePaint(title, pinId)
 
 		draw.RoundedBox(6, 0, 0, w, h, bgCol)
 		draw.RoundedBoxEx(6, 0, 0, w, 24, hdrCol, true, true, false, false)
-		local shownTitle = title
-		if pin and pin.clickThrough then shownTitle = shownTitle .. "  (click-through)" end
-		if pin and pin.crop then shownTitle = shownTitle .. "  (cropped)" end
+		local shownTitle = (pin and pin.title) or title
+		if pin and pin.clickThrough then shownTitle = shownTitle .. "  " .. PinnedPanels.L("ind_clickthrough") end
+		if pin and pin.crop then shownTitle = shownTitle .. "  " .. PinnedPanels.L("ind_cropped") end
 		draw.SimpleText(shownTitle, "DermaDefaultBold", 10, 12, txtCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 		if inIM then

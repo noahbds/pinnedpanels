@@ -177,6 +177,13 @@ function PinnedPanels.CreateBrowser(parent)
 		end
 	end)
 
+	hook.Add("PinnedPanels_LanguageChanged", root, function()
+		if not IsValid(root) then return end
+		if IsValid(searchBox) then searchBox:SetPlaceholderText(PinnedPanels.L("search_tools")) end
+		if IsValid(noToolsLbl) then noToolsLbl:SetText(PinnedPanels.L("no_tools")) end
+		FilterList(IsValid(searchBox) and searchBox:GetValue() or "")
+	end)
+
 	root.OnRemove = function()
 		hook.Remove("PinnedPanels_StateChanged", root)
 	end

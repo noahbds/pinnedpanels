@@ -169,6 +169,7 @@ function PinnedPanels.OpenRenamePopup(id)
 		function(newName)
 			if newName and newName ~= "" then
 				pin.title = newName
+				pin.customTitle = true
 				if IsValid(pin.frame) then
 					pin.frame.Paint = PinnedPanels.GetFramePaint(newName, id)
 				end

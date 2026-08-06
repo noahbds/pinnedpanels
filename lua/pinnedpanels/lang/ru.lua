@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["ru"] = {
 	app_title        = "Закреплённые панели",
+	spawn_tab        = "Закреплённые панели",
 	app_subtitle     = "Управляйте и настраивайте экранные меню инструментов",
 	pin_count_one    = "%d панель закреплена",
 	pin_count_many   = "%d панелей закреплено",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["ru"] = {
 	nav_hint_huevalue  = "Стрелки: оттенок / яркость | Shift+Стрелки: насыщенность / прозрачность | Enter или Backspace: готово",
 	nav_hint_slider    = "Влево / Вправо: менять | Enter или Backspace: готово",
 	clickthrough_bar   = "сквозной клик · удерживайте ALT для использования · правый клик — меню",
+	ind_clickthrough   = "(сквозной клик)",
+	ind_cropped        = "(обрезано)",
+	tb_enter_restore   = "Enter — восстановить",
 
 	crop_hint = "Тяните за края · двигайте внутри · рисуйте в тёмной области · правый клик — отмена",
 	crop_full = "Полностью",

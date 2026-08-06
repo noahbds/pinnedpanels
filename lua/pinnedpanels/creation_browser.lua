@@ -115,6 +115,12 @@ function PinnedPanels.CreateCreationBrowser(parent)
 		for _, refresh in ipairs(refreshers) do refresh() end
 	end)
 
+	hook.Add("PinnedPanels_LanguageChanged", root, function()
+		if not IsValid(root) then return end
+		if IsValid(info) then info:SetText(PinnedPanels.L("creation_info")) end
+		Populate()
+	end)
+
 	root.OnRemove = function()
 		hook.Remove("PinnedPanels_StateChanged", root)
 	end

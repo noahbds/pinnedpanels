@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["zh"] = {
 	app_title        = "固定面板",
+	spawn_tab        = "固定面板",
 	app_subtitle     = "管理并自定义你的屏幕工具菜单",
 	pin_count_one    = "已固定 %d 个面板",
 	pin_count_many   = "已固定 %d 个面板",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["zh"] = {
 	nav_hint_huevalue  = "方向键：色相 / 明度 | Shift+方向键：饱和度 / 透明度 | Enter 或 Backspace：完成",
 	nav_hint_slider    = "左 / 右：调整 | Enter 或 Backspace：完成",
 	clickthrough_bar   = "点击穿透 · 按住 ALT 以使用 · 右键打开菜单",
+	ind_clickthrough   = "(点击穿透)",
+	ind_cropped        = "(已裁剪)",
+	tb_enter_restore   = "按 Enter 恢复",
 
 	crop_hint = "拖动边缘 · 在内部移动 · 在暗区绘制 · 右键取消",
 	crop_full = "完整",

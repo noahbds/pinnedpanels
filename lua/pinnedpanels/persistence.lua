@@ -88,6 +88,7 @@ function PinnedPanels.SaveSettings()
 		idleAlpha   = PinnedPanels.Settings.idleAlpha,
 		snapEnabled  = PinnedPanels.Settings.snapEnabled,
 		snapDistance = PinnedPanels.Settings.snapDistance,
+		language     = PinnedPanels.Settings.language,
 		quickSlots   = PinnedPanels.Settings.quickSlots or {},
 		groups      = groups,
 		taskbar     = taskbarData,
@@ -111,6 +112,10 @@ function PinnedPanels.LoadSettings()
 
 	if t.snapEnabled ~= nil then S.snapEnabled = tobool(t.snapEnabled) end
 	S.snapDistance = math.Clamp(tonumber(t.snapDistance) or 12, 0, 64)
+
+	if isstring(t.language) and PinnedPanels.Lang and PinnedPanels.Lang[t.language] then
+		S.language = t.language
+	end
 	S.quickSlots = {}
 	if istable(t.quickSlots) then
 		for k, v in pairs(t.quickSlots) do
@@ -174,6 +179,7 @@ function PinnedPanels.Save()
 				title = pin.title,
 				kind  = pin.kind or "tool",
 			}
+			if pin.customTitle then entry.customTitle = true end
 			if pin.filterBar then entry.filterBar = true end
 			if istable(pin.crop) then entry.crop = pin.crop end
 			if pin.clickThrough then entry.clickThrough = true end

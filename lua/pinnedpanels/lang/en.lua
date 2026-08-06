@@ -5,6 +5,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 PinnedPanels.Lang["en"] = {
 	-- ── App shell ──
 	app_title        = "Pinned Tool Panels",
+	spawn_tab        = "Pinned Panels",
 	app_subtitle     = "Manage and customize your on-screen tool menus",
 	pin_count_one    = "%d panel pinned",
 	pin_count_many   = "%d panels pinned",
@@ -177,6 +178,9 @@ PinnedPanels.Lang["en"] = {
 	opt_autorestore   = "Auto-restore pinned panels when joining the server",
 	opt_kbnav_outside = "Allow keyboard navigation outside cursor mode",
 	opt_idle_alpha    = "Panel opacity outside cursor mode (%)",
+	card_language     = "Language",
+	opt_language      = "Language:",
+	opt_language_default = "Default (%s)",
 	card_snapping     = "Window Snapping",
 	opt_snap          = "Snap panels to screen edges and each other while dragging (hold Alt to bypass)",
 	opt_snap_dist     = "Snap distance (px)",
@@ -277,6 +281,9 @@ PinnedPanels.Lang["en"] = {
 	nav_hint_huevalue  = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done",
 	nav_hint_slider    = "Left / Right: adjust | Enter or Backspace: done",
 	clickthrough_bar   = "click-through · hold ALT to use · right-click for menu",
+	ind_clickthrough   = "(click-through)",
+	ind_cropped        = "(cropped)",
+	tb_enter_restore   = "Enter to restore",
 
 	-- ── Crop editor ──
 	crop_hint = "Drag edges · move inside · draw in dark area · right-click cancels",

@@ -49,6 +49,63 @@ local function BuildGeneral(parent, ctx)
 			PinnedPanels.Settings.snapDistance = math.Clamp(val, 0, 64)
 		end,
 	})
+
+	-- Language switcher
+	local secLang = SUI.Card(parent, PinnedPanels.L("card_language"))
+
+	local langRow = SUI.Row(secLang, 28)
+
+	local langLbl = vgui.Create("DLabel", langRow)
+	langLbl:SetText(PinnedPanels.L("opt_language"))
+	langLbl:SetTextColor(C.textLabel)
+	langLbl:Dock(LEFT)
+	langLbl:SetWide(120)
+	langLbl:SetContentAlignment(4)
+
+	local langCombo = vgui.Create("DComboBox", langRow)
+	langCombo:Dock(FILL)
+
+	local langNames = {
+		en = "English",
+		de = "Deutsch",
+		es = "Español",
+		fr = "Français",
+		pl = "Polski",
+		pt = "Português",
+		ru = "Русский",
+		tr = "Türkçe",
+		zh = "中文",
+	}
+
+	local supported = { "en", "de", "es", "fr", "pl", "pt", "ru", "tr", "zh" }
+
+	local function GameLangName()
+		local cv   = GetConVar("gmod_language")
+		local raw  = string.lower(cv and cv:GetString() or "en")
+		local base = string.match(raw, "^(%a+)") or "en"
+		local code = PinnedPanels.Lang[raw] and raw
+			or (PinnedPanels.Lang[base] and base) or "en"
+		return langNames[code] or code
+	end
+
+	local DEFAULT_DATA = ""
+	local override     = PinnedPanels.Settings.language
+	local hasOverride  = isstring(override) and override ~= "" and PinnedPanels.Lang[override] ~= nil
+
+	langCombo:AddChoice(PinnedPanels.Lf("opt_language_default", GameLangName()),
+		DEFAULT_DATA, not hasOverride)
+
+	for _, code in ipairs(supported) do
+		langCombo:AddChoice(langNames[code] or code, code, hasOverride and code == override)
+	end
+
+	langCombo.OnSelect = function(_, _, _, data)
+		if data == nil or data == DEFAULT_DATA then
+			PinnedPanels.SetLanguage(nil)
+		else
+			PinnedPanels.SetLanguage(data)
+		end
+	end
 end
 
 -- ── Controls & Keys ──────────────────────────────────────────────────────────
@@ -455,10 +512,10 @@ end
 
 -- ── Page Registry ────────────────────────────────────────────────────────────
 PinnedPanels.SettingsPages = {
-	{ id = "general",    name = PinnedPanels.L("page_general"),    icon = "icon16/cog.png",              build = BuildGeneral },
-	{ id = "controls",   name = PinnedPanels.L("page_controls"),   icon = "icon16/keyboard.png",         build = BuildControls },
-	{ id = "appearance", name = PinnedPanels.L("page_appearance"), icon = "icon16/palette.png",          build = BuildAppearance },
-	{ id = "taskbar",    name = PinnedPanels.L("page_taskbar"),    icon = "icon16/application_put.png",  build = BuildTaskbar },
-	{ id = "groups",     name = PinnedPanels.L("page_groups"),     icon = "icon16/folder.png",           build = BuildGroups },
-	{ id = "data",       name = PinnedPanels.L("page_data"),       icon = "icon16/disk.png",             build = BuildData },
+	{ id = "general",    nameKey = "page_general",    icon = "icon16/cog.png",              build = BuildGeneral },
+	{ id = "controls",   nameKey = "page_controls",   icon = "icon16/keyboard.png",         build = BuildControls },
+	{ id = "appearance", nameKey = "page_appearance", icon = "icon16/palette.png",          build = BuildAppearance },
+	{ id = "taskbar",    nameKey = "page_taskbar",    icon = "icon16/application_put.png",  build = BuildTaskbar },
+	{ id = "groups",     nameKey = "page_groups",     icon = "icon16/folder.png",           build = BuildGroups },
+	{ id = "data",       nameKey = "page_data",       icon = "icon16/disk.png",             build = BuildData },
 }

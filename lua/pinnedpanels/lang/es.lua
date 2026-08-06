@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["es"] = {
 	app_title        = "Paneles fijados",
+	spawn_tab        = "Paneles fijados",
 	app_subtitle     = "Gestiona y personaliza tus menús de herramientas en pantalla",
 	pin_count_one    = "%d panel fijado",
 	pin_count_many   = "%d paneles fijados",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["es"] = {
 	nav_hint_huevalue  = "Flechas: tono / valor | Shift+Flechas: saturación / alfa | Enter o Retroceso: listo",
 	nav_hint_slider    = "Izquierda / Derecha: ajustar | Enter o Retroceso: listo",
 	clickthrough_bar   = "clic pasante · mantén ALT para usar · clic derecho para el menú",
+	ind_clickthrough   = "(clic pasante)",
+	ind_cropped        = "(recortado)",
+	tb_enter_restore   = "Enter para restaurar",
 
 	crop_hint = "Arrastra los bordes · mueve dentro · dibuja en el área oscura · clic derecho cancela",
 	crop_full = "Completo",

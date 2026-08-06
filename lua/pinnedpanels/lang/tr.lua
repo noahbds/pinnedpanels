@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["tr"] = {
 	app_title        = "Sabitlenmiş paneller",
+	spawn_tab        = "Sabitlenmiş paneller",
 	app_subtitle     = "Ekrandaki araç menülerini yönet ve özelleştir",
 	pin_count_one    = "%d panel sabitlendi",
 	pin_count_many   = "%d panel sabitlendi",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["tr"] = {
 	nav_hint_huevalue  = "Oklar: ton / değer | Shift+Oklar: doygunluk / alfa | Enter ya da Backspace: bitti",
 	nav_hint_slider    = "Sol / Sağ: ayarla | Enter ya da Backspace: bitti",
 	clickthrough_bar   = "tıklama geçişi · kullanmak için ALT'ı basılı tut · menü için sağ tıkla",
+	ind_clickthrough   = "(tıklama geçişi)",
+	ind_cropped        = "(kırpılmış)",
+	tb_enter_restore   = "Geri yüklemek için Enter",
 
 	crop_hint = "Kenarları çek · içeride taşı · koyu alanda çiz · sağ tık iptal eder",
 	crop_full = "Tam",

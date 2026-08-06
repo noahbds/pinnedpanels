@@ -4,6 +4,7 @@ PinnedPanels.Lang = PinnedPanels.Lang or {}
 
 PinnedPanels.Lang["pl"] = {
 	app_title        = "Przypięte panele",
+	spawn_tab        = "Przypięte panele",
 	app_subtitle     = "Zarządzaj i dostosowuj menu narzędzi na ekranie",
 	pin_count_one    = "Przypięto %d panel",
 	pin_count_many   = "Przypięto %d paneli",
@@ -252,6 +253,9 @@ PinnedPanels.Lang["pl"] = {
 	nav_hint_huevalue  = "Strzałki: barwa / jasność | Shift+Strzałki: nasycenie / alfa | Enter lub Backspace: gotowe",
 	nav_hint_slider    = "Lewo / Prawo: dostosuj | Enter lub Backspace: gotowe",
 	clickthrough_bar   = "klik-przelotowy · przytrzymaj ALT, aby używać · prawy klik = menu",
+	ind_clickthrough   = "(klik-przelotowy)",
+	ind_cropped        = "(przycięte)",
+	tb_enter_restore   = "Enter, aby przywrócić",
 
 	crop_hint = "Ciągnij krawędzie · przesuwaj w środku · rysuj w ciemnym obszarze · prawy klik anuluje",
 	crop_full = "Pełny",

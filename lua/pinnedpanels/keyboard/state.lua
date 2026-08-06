@@ -10,6 +10,18 @@ KB.C  = PinnedPanels.C
 KB.KEY_REPEAT_DELAY    = 0.35
 KB.KEY_REPEAT_INTERVAL = 0.055
 
+-- ── HTML Panel Detection ─────────────────────────────────────────────────────
+-- NOTE: RunJavascript/SetHTML live on the base Panel metatable, so a capability
+-- check on those matches every panel. QueueJavascript/OnDocumentReady are Lua
+-- methods defined only in the DHTML control table, so they reliably identify
+-- DHTML and its subclasses (e.g. DCodeViewer, whose class name has no "HTML").
+function KB.IsHTMLPanel(p)
+    if not IsValid(p) then return false end
+    if isfunction(p.QueueJavascript) and isfunction(p.OnDocumentReady) then return true end
+    local cls = p.ClassName or p:GetClassName()
+    return isstring(cls) and (cls:find("HTML") ~= nil or cls == "Awesomium")
+end
+
 -- ── Navigation Keys ──────────────────────────────────────────────────────────
 KB.NAV_KEYS = {
     [KEY_UP]        = true,

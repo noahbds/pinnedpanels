@@ -112,11 +112,30 @@ function PinnedPanels.CreateBrowser(parent)
 		return row, Refresh
 	end
 
+	local headerCache = {}
+
+	local function MakeHeader(catName)
+		local header = vgui.Create("DPanel", rowHolder)
+		header:SetTall(24)
+		header.Paint = function(self, w, h)
+			draw.RoundedBox(3, 0, 0, w, h, C.bgCardHdr)
+			surface.SetDrawColor(C.accent)
+			surface.DrawRect(0, 0, 3, h)
+			draw.SimpleText(catName:upper(), "DermaDefaultBold", 12, h / 2, C.textLabel, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		end
+		return header
+	end
+
 	local inScroll = {}
 
 	local function FilterList(filter)
 		if #allTools == 0 then
 			allTools = PinnedPanels.GetAllTools()
+			table.sort(allTools, function(a, b)
+				local ca, cb = (a.category or ""):lower(), (b.category or ""):lower()
+				if ca ~= cb then return ca < cb end
+				return a.niceName:lower() < b.niceName:lower()
+			end)
 			for _, t in ipairs(allTools) do
 				local id = "PP_" .. t.itemName
 				if not rowCache[id] then
@@ -133,12 +152,16 @@ function PinnedPanels.CreateBrowser(parent)
 			end
 			inScroll[id] = nil
 		end
+		for _, header in pairs(headerCache) do
+			if IsValid(header) then header:SetParent(rowHolder) end
+		end
 		if IsValid(noToolsLbl) then noToolsLbl:SetParent(rowHolder) end
 
 		local lFilter     = filter and filter:lower() or ""
 		local isFiltering = lFilter ~= ""
 		local count       = 0
 		local total       = #allTools
+		local shownCat    = nil
 
 		for _, t in ipairs(allTools) do
 			local id   = "PP_" .. t.itemName
@@ -147,6 +170,19 @@ function PinnedPanels.CreateBrowser(parent)
 				local visible = not isFiltering or data.nameLower:find(lFilter, 1, true)
 
 				if visible then
+					local cat = t.category or ""
+					if cat ~= shownCat then
+						shownCat = cat
+						local header = headerCache[cat]
+						if not IsValid(header) then
+							header = MakeHeader(cat)
+							headerCache[cat] = header
+						end
+						header:SetParent(scroll)
+						header:Dock(TOP)
+						header:DockMargin(2, count == 0 and 1 or 6, 2, 2)
+					end
+
 					data.panel:SetParent(scroll)
 					data.panel:Dock(TOP)
 					data.panel:DockMargin(2, 1, 2, 0)

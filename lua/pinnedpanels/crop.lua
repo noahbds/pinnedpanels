@@ -66,6 +66,8 @@ function PinnedPanels.ApplyCrop(id, crop)
 	local viewport = vgui.Create("DPanel", host)
 	viewport:Dock(FILL)
 	viewport:DockMargin(ml, mt2, mr, mb)
+	viewport:SetMouseInputEnabled(false)
+	viewport:SetKeyboardInputEnabled(false)
 	viewport.Paint = function() end
 	viewport._pp_cropViewport = true
 
@@ -74,6 +76,7 @@ function PinnedPanels.ApplyCrop(id, crop)
 
 	content:SetParent(viewport)
 	content:Dock(NODOCK)
+	content:SetMouseInputEnabled(true)
 	content:SetSize(cw, ch)
 	content:SetPos(-l, -t)
 

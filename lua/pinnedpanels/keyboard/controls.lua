@@ -55,10 +55,33 @@ local function OwnerMixer(el)
     return nil
 end
 
+-- ── HTML Panel Scrolling ─────────────────────────────────────────────────────
+-- DHTML/HTML panels (Panel:SetHTML) carry no VBar, so scroll them via JS. The
+-- scroll container varies: DCodeViewer overflows a ".viewport" div, while a
+-- plain page scrolls the document, so target whichever actually scrolls.
+local SCROLL_JS = "(function(){var v=document.querySelector('.viewport')||" ..
+    "document.scrollingElement||document.documentElement||document.body;" ..
+    "if(v){v.scrollTop+=(%d);v.scrollLeft+=(%d);}})();"
+
+function KB.ScrollHTML(html, key)
+    if not KB.IsHTMLPanel(html) or not isfunction(html.RunJavascript) then return end
+    local w, h = html:GetSize()
+    local stepV = math.max(40, math.floor(h * 0.12))
+    local stepH = math.max(40, math.floor(w * 0.12))
+    local dy, dx = 0, 0
+    if key == KEY_DOWN then dy = stepV
+    elseif key == KEY_UP then dy = -stepV
+    elseif key == KEY_RIGHT then dx = stepH
+    elseif key == KEY_LEFT then dx = -stepH
+    else return end
+    html:RunJavascript(SCROLL_JS:format(dy, dx))
+end
+
 -- ── Adjust Kind ──────────────────────────────────────────────────────────────
 function KB.AdjustKind(el)
     if not IsValid(el) then return nil end
     local cls = el.ClassName or el:GetClassName()
+    if KB.IsHTMLPanel(el) then return "scroll" end
     if cls == "DRGBPicker" or cls == "DAlphaBar" then return "vert" end
     if cls:find("Slider") or cls == "DComboBox" then return "1d" end
     if ColorTarget(el) then return "2d" end
@@ -171,6 +194,11 @@ end
 function KB.AdjustValue(el, key)
     local cls = el.ClassName or el:GetClassName()
     local dir = (key == KEY_RIGHT) and 1 or -1
+
+    if KB.IsHTMLPanel(el) then
+        KB.ScrollHTML(el, key)
+        return
+    end
 
     if cls == "DRGBPicker" then
         AdjustRGBPicker(el, key)

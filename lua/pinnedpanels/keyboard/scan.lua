@@ -99,6 +99,13 @@ function PinnedPanels.GetInteractiveElements(panel)
         local class = p.ClassName or p:GetClassName()
         if SKIP_CLASSES[class] or class:find("ScrollBar") or class:find("Grip") then return 0 end
 
+        -- HTML/DHTML panels (Panel:SetHTML) have no VBar and no navigable
+        -- children; expose the panel itself so it can be focused and scrolled.
+        if KB.IsHTMLPanel(p) then
+            list[#list + 1] = p
+            return 1
+        end
+
         if IsNavigableLeaf(class) then
             list[#list + 1] = p
             return 1

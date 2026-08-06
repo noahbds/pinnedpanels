@@ -280,6 +280,7 @@ PinnedPanels.Lang["en"] = {
 	nav_hint_satval    = "Arrows: Saturation / Value | Enter or Backspace: done",
 	nav_hint_huevalue  = "Arrows: Hue / Value | Shift+Arrows: Saturation / Alpha | Enter or Backspace: done",
 	nav_hint_slider    = "Left / Right: adjust | Enter or Backspace: done",
+	nav_hint_scroll    = "Up / Down: scroll | Enter or Backspace: done",
 	clickthrough_bar   = "click-through · hold ALT to use · right-click for menu",
 	ind_clickthrough   = "(click-through)",
 	ind_cropped        = "(cropped)",

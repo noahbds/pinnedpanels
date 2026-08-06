@@ -68,6 +68,11 @@ function PinnedPanels.CreateCreationBrowser(parent)
 			lbl:SetContentAlignment(4)
 			lbl:SetMouseInputEnabled(false)
 
+			local pinBtn = vgui.Create("DButton", row)
+			pinBtn:SetWide(70)
+			pinBtn:Dock(RIGHT)
+			pinBtn:DockMargin(0, 6, 6, 6)
+
 			if isstring(tab.tooltip) and tab.tooltip ~= "" then
 				local tooltipLbl = vgui.Create("DLabel", row)
 				tooltipLbl:SetText(tab.tooltip)
@@ -79,11 +84,6 @@ function PinnedPanels.CreateCreationBrowser(parent)
 				tooltipLbl:SetMouseInputEnabled(false)
 				tooltipLbl:SizeToContentsX()
 			end
-
-			local pinBtn = vgui.Create("DButton", row)
-			pinBtn:SetWide(70)
-			pinBtn:Dock(RIGHT)
-			pinBtn:DockMargin(0, 6, 6, 6)
 
 			local function Refresh()
 				if not IsValid(pinBtn) then return end

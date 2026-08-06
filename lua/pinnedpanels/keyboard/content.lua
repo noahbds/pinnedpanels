@@ -88,12 +88,48 @@ local function ElementRect(el)
     return x, y, w, h, x + w / 2, y + h / 2
 end
 
+-- ── HTML Panel Scrolling ─────────────────────────────────────────────────────
+-- Fallback for panels that are pure HTML with no navigable elements at all:
+-- locate a contained HTML/DHTML panel so arrow keys can scroll it directly.
+-- (When the panel also has other nav elements, the HTML panel is instead a
+-- focusable "scroll" target handled through KB.AdjustKind/AdjustValue.)
+local HTML_SCAN_DEPTH = 20
+
+local function FindHTMLPanel(root)
+    if not IsValid(root) then return nil end
+    local found
+    local function scan(p, depth)
+        if found or not IsValid(p) or depth > HTML_SCAN_DEPTH or not p:IsVisible() then return end
+        if KB.IsHTMLPanel(p) then
+            local w, h = p:GetSize()
+            if w > 8 and h > 8 then found = p end
+            return
+        end
+        for _, c in ipairs(p:GetChildren()) do scan(c, depth + 1) end
+    end
+    scan(root, 0)
+    return found
+end
+
 -- ── Spatial Move ─────────────────────────────────────────────────────────────
+local function NodeExpandable(node)
+    if isfunction(node.HasChildren) then return node:HasChildren() end
+    if isfunction(node.GetChildNodes) then
+        local ch = node:GetChildNodes()
+        return istable(ch) and #ch > 0
+    end
+    return false
+end
+
 local function SpatialMove(elements, focusEl, key)
     local cls = focusEl.ClassName or focusEl:GetClassName()
     if cls == "DTree_Node_Button" then
         local p = focusEl:GetParent()
-        if IsValid(p) and (p.ClassName == "DTree_Node" or p:GetClassName() == "DTree_Node") then
+        if IsValid(p) and (p.ClassName == "DTree_Node" or p:GetClassName() == "DTree_Node")
+            and NodeExpandable(p) then
+            -- Only intercept for expand/collapse when the node actually has
+            -- children; leaf nodes fall through to spatial nav so focus can
+            -- reach a neighbouring panel (e.g. a code/HTML viewer).
             if key == KEY_RIGHT and not p:GetExpanded() then
                 p:SetExpanded(true)
                 return
@@ -178,6 +214,17 @@ function KB.HandleContentNav()
     local selectedEl = IM.SelectedIndex and elements[IM.SelectedIndex] or nil
     local oldIndex = IM.NavFocusIndex
 
+    -- No navigable elements: fall back to scrolling a contained HTML panel.
+    local htmlPanel
+    if #elements == 0 then
+        local target = IsValid(IM.NavPopup) and IM.NavPopup or nil
+        if not target then
+            local pin = KB.FocusedPin()
+            target = pin and IsValid(pin.frame) and pin.frame or nil
+        end
+        htmlPanel = target and FindHTMLPanel(target) or nil
+    end
+
     for key in pairs(KB.NAV_KEYS) do
         local down = IsKeyDown(key)
         local wasDown = KB.navKeyDown[key] or false
@@ -200,9 +247,11 @@ function KB.HandleContentNav()
             if not wasDown or KB.ShouldRepeat(key) then
                 if IM.SelectedIndex and IsValid(selectedEl) then
                     local kind = KB.AdjustKind(selectedEl)
-                    local consume = (kind == "2d" or kind == "vert") or
+                    local consume = (kind == "2d" or kind == "vert" or kind == "scroll") or
                         (kind == "1d" and (key == KEY_LEFT or key == KEY_RIGHT))
                     if consume then KB.AdjustValue(selectedEl, key) else IM.SelectedIndex = nil end
+                elseif htmlPanel then
+                    KB.ScrollHTML(htmlPanel, key)
                 else
                     if IsValid(focusedEl) then
                         SpatialMove(elements, focusedEl, key)

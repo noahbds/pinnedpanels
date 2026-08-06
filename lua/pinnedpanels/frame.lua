@@ -74,6 +74,8 @@ function PinnedPanels.GetFramePaintOver(pinId)
 				end
 			elseif sc:find("Slider") or sc == "DComboBox" then
 				hint = PinnedPanels.L("nav_hint_slider")
+			elseif PinnedPanels._KB and PinnedPanels._KB.IsHTMLPanel and PinnedPanels._KB.IsHTMLPanel(selEl) then
+				hint = PinnedPanels.L("nav_hint_scroll")
 			end
 		end
 		surface.SetFont("DermaDefault")
@@ -102,6 +104,15 @@ function PinnedPanels.GetFramePaintOver(pinId)
 		local ex, ey = el:LocalToScreen(0, 0)
 		local lx, ly = self:ScreenToLocal(ex, ey)
 		local ew, eh = el:GetSize()
+
+		-- HTML panels have no discrete controls; highlight only a scrollbar-like
+		-- strip on the right edge instead of engulfing the whole panel.
+		if PinnedPanels._KB and PinnedPanels._KB.IsHTMLPanel and PinnedPanels._KB.IsHTMLPanel(el) then
+			local SB_W = 14
+			lx = lx + ew - SB_W
+			ew = SB_W
+		end
+
 		local ringCol = (IM.SelectedIndex == IM.NavFocusIndex) and C.navSelected or C.navElement
 
 		surface.SetDrawColor(0, 0, 0, 255)

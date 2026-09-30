@@ -9,6 +9,7 @@ local MIN_BOX = 24
 local EDGE = 6
 local MIN_W, MIN_H, MIN_CROPPED = 150, 100, 60
 local PADDING = 40
+local TITLE_H, LINE_H, MAX_NAMES = 14, 11, 15
 
 local COLORS = {
 	Color(80, 160, 255), Color(80, 220, 120), Color(255, 170, 60), Color(220, 80, 80),
@@ -18,9 +19,10 @@ local SCREEN_BG, SCREEN_FILL, SCREEN_BORDER = Color(8, 8, 16), Color(20, 20, 34)
 local LABEL, SHADOW, COORDS, GUIDE = Color(60, 80, 130), Color(0, 0, 0, 100), Color(255, 255, 255, 80), Color(255, 200, 60, 180)
 local CROP_LABEL = Color(255, 210, 110, 230)
 
+-- Counts characters, not bytes, so translated titles aren't cut inside a character.
 local function fit(text, chars)
-	if #text > chars then return text:sub(1, math.max(1, chars - 2)) .. ".." end
-	return text
+	if (utf8.len(text) or #text) <= chars then return text end
+	return text:sub(1, (utf8.offset(text, math.max(1, chars - 2) + 1) or #text + 1) - 1) .. ".."
 end
 
 local function snapping()
@@ -57,7 +59,19 @@ end
 -- Labels and coordinates for one box at its current rect.
 function CANVAS:Describe(box)
 	box.cx, box.cy, box.cw, box.ch = self:ToCanvas(box.x, box.y, box.w, box.h)
-	box.label = fit(box.title, math.max(3, math.floor(box.cw / 6)))
+	local chars = math.max(3, math.floor(box.cw / 6))
+	box.label = fit(box.title, chars)
+	-- Multi-tab windows list their tabs under the title, as many as fit, then "+N more" (v1).
+	if box.tabNames then
+		local room = math.min(math.floor((box.ch - TITLE_H - 24) / LINE_H), MAX_NAMES)
+		local names = #box.tabNames
+		local shown = names > room and math.max(room - 1, 0) or names
+		box.lines = {}
+		for i = 1, shown do box.lines[i] = fit(box.tabNames[i], chars) end
+		box.more = shown < names and PP.L("layout.more", names - shown) or nil
+		local rows = shown + (box.more and 1 or 0)
+		box.blockY = box.cy + math.floor((box.ch - TITLE_H - rows * LINE_H) / 2)
+	end
 	box.coords = math.floor(box.x) .. "," .. math.floor(box.y) .. "  " .. math.floor(box.w) .. "×" .. math.floor(box.h)
 end
 
@@ -73,6 +87,10 @@ function CANVAS:Prepare()
 				locked = rec.locked, cropped = tab and tab.crop ~= nil and rec.state ~= "maximized",
 				badge = #rec.tabs > 1 and PP.L("layout.badge", #rec.tabs) or nil,
 			}
+			if #rec.tabs > 1 then
+				box.tabNames = {}
+				for j, t in ipairs(rec.tabs) do box.tabNames[j] = Layout.TabTitle(t) end
+			end
 			self:Describe(box)
 			boxes[#boxes + 1] = box
 		end
@@ -276,7 +294,18 @@ function CANVAS:Paint(w, h)
 		surface.DrawRect(b.cx, b.cy, b.cw, b.ch)
 		surface.SetDrawColor(c.r, c.g, c.b, 255)
 		surface.DrawOutlinedRect(b.cx, b.cy, b.cw, b.ch, strong and 2 or 1)
-		draw.SimpleText(b.label, "DermaDefault", b.cx + b.cw / 2, b.cy + b.ch / 2, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		local mid = b.cx + b.cw / 2
+		if b.lines then
+			draw.SimpleText(b.label, "DermaDefaultBold", mid, b.blockY, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+			local y = b.blockY + TITLE_H
+			for _, name in ipairs(b.lines) do
+				draw.SimpleText(name, "DermaDefault", mid, y, T.groupAccent, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+				y = y + LINE_H
+			end
+			if b.more then draw.SimpleText(b.more, "DermaDefault", mid, y, T.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP) end
+		else
+			draw.SimpleText(b.label, "DermaDefault", mid, b.cy + b.ch / 2, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		end
 		draw.SimpleText(b.coords, "DermaDefault", b.cx + b.cw / 2, b.cy + b.ch - 10, COORDS, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
 		if b.badge then draw.SimpleText(b.badge, "DermaDefault", b.cx + 4, b.cy + 3, T.groupAccent, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP) end
 		if b.cropped then draw.SimpleText(self.croppedText, "DermaDefaultBold", b.cx + b.cw - 4, b.cy + 2, CROP_LABEL, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP) end

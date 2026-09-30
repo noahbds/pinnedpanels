@@ -158,7 +158,7 @@ function ROWS.color(page, parent, def)
 			return
 		end
 		local popup = vgui.Create("DFrame")
-		popup:SetTitle(PP.L(def.label))
+		popup:SetTitle(def.page == "taskbar" and PP.L("taskbar.color_pfx", PP.L(def.label)) or PP.L(def.label))
 		popup:SetSize(260, 220)
 		local sx, sy = swatch:LocalToScreen(0, 0)
 		popup:SetPos(math.Clamp(sx + 50, 0, ScrW() - 260), math.Clamp(sy - 60, 0, ScrH() - 220))
@@ -262,14 +262,41 @@ PAGES[#PAGES + 1] = { id = "general", label = "page.general", icon = "icon16/cog
 	sectionCard(page, parent, "general", "snapping")
 end }
 
+-- As v1: cursor mode, peek and the palette each get a card with their help, then navigation, then the
+-- other actions.
+local OWN_CARD = { keyCursor = true, keyPeek = true, keyPalette = true }
+
+local function keyCard(page, parent, titleKey, helpKey, setting)
+	local c = card(parent, titleKey)
+	help(c, helpKey)
+	ROWS.key(page, c, Settings.defs[setting])
+	return c
+end
+
 PAGES[#PAGES + 1] = { id = "controls", label = "page.controls", icon = "icon16/keyboard.png", build = function(page, parent)
-	local c = card(parent, "card.keys")
-	help(c, "help.cursor_mode")
-	help(c, "help.keys")
-	addRows(page, c, "controls")
-	local r = row(c, 30)
+	local cursor = keyCard(page, parent, "card.cursor_mode", "help.cursor_mode", "keyCursor")
+	local r = row(cursor, 30)
 	r:DockMargin(0, 8, 0, 0)
 	button(r, "btn.toggle_now", "icon16/cursor.png", 130, function() Input.SetCursorMode(not Input.cursorMode) end)
+
+	keyCard(page, parent, "card.peek", "help.peek", "keyPeek")
+
+	local palette = keyCard(page, parent, "card.palette", "help.palette", "keyPalette")
+	r = row(palette, 30)
+	r:DockMargin(0, 8, 0, 0)
+	button(r, "btn.open_now", "icon16/application_view_list.png", 130, function() PP.Palette.Toggle() end)
+
+	local nav = card(parent, "card.kbnav")
+	help(nav, "help.kbnav")
+	addRows(page, nav, "controls", "nav")
+
+	local c = card(parent, "card.keys")
+	help(c, "help.keys")
+	for _, def in ipairs(settingsOf("controls")) do
+		if not def.section and not OWN_CARD[def.key] then ROWS.key(page, c, def) end
+	end
+	r = row(c, 30)
+	r:DockMargin(0, 8, 0, 0)
 	button(r, "btn.reset_all_def", "icon16/arrow_undo.png", 170, function()
 		for _, def in ipairs(settingsOf("controls")) do Settings.Reset(def.key) end
 	end)
@@ -383,6 +410,10 @@ local function codeDialog(titleKey)
 end
 
 local function openExport()
+	if #Layout.Windows() == 0 then
+		Derma_Message(PP.L("export.nothing"), PP.L("export.title"), PP.L("btn.ok"))
+		return
+	end
 	local code = Storage.Export(Layout.Document())
 	SetClipboardText(code) -- G37
 	local frame, entry, bar = codeDialog("export.title")
@@ -401,6 +432,7 @@ local function applyImport(doc, page)
 	Layout.Replace(doc)
 	Desktop.ShowHeld()
 	page:ShowPage("data")
+	notification.AddLegacy(PP.L("import.success"), NOTIFY_GENERIC, 5)
 end
 
 local function openImport(page)

@@ -20,6 +20,7 @@ Actions.byId = {}
 --   run(ctx), release(ctx)? (bindable keys only),
 -- }
 -- ctx = { id, window, index, tab, menu = "window" | "tab" | "taskbar" | nil }
+-- icon may also be function(ctx) → path, for toggles whose icon shows their state (menus only).
 
 function Actions.Add(def)
 	Actions.byId[def.id] = def
@@ -107,7 +108,9 @@ local function fill(menu, where, ctx)
 			option = menu:AddOption(label, function() def.run(ctx) end)
 			if def.enabled and not def.enabled(ctx) then option:SetEnabled(false) end
 		end
-		if def.icon then option:SetIcon(def.icon) end
+		local icon = def.icon
+		if isfunction(icon) then icon = icon(ctx) end
+		if icon then option:SetIcon(icon) end
 	end
 end
 
@@ -424,14 +427,15 @@ Actions.Add({
 
 Actions.Add({
 	id = "filter", scope = "window", name = "ctx.show_filter",
-	icon = "icon16/zoom.png",
+	icon = function(ctx) return ctx.window.filterBar and "icon16/zoom_out.png" or "icon16/zoom.png" end,
 	label = function(ctx) return PP.L(ctx.window.filterBar and "ctx.hide_filter" or "ctx.show_filter") end,
 	menu = { group = "style", window = 43 },
 	run = function(ctx) Layout.SetFilterBar(ctx.id, not ctx.window.filterBar) end,
 })
 
 Actions.Add({
-	id = "clickthrough", scope = "window", icon = "icon16/shape_square_go.png", name = "ctx.clickthrough",
+	id = "clickthrough", scope = "window", name = "ctx.clickthrough",
+	icon = function(ctx) return ctx.window.clickThrough and "icon16/shape_square.png" or "icon16/shape_square_go.png" end,
 	label = function(ctx) return PP.L(ctx.window.clickThrough and "ctx.disable_ct" or "ctx.clickthrough") end,
 	menu = { group = "style", window = 44 },
 	run = function(ctx)
@@ -469,7 +473,7 @@ Actions.Add({
 			PP.Dialogs.Text(PP.L("new.group_title"), PP.L("new.group_desc"), "", function(name)
 				local g = Layout.NewGroup(name)
 				if g then mergeInto(ctx.id, g) end
-			end)
+			end, "btn.create")
 		end }
 		return items
 	end,
@@ -548,14 +552,15 @@ Actions.Add({
 			PP.Dialogs.Text(PP.L("custom.idle_title"), PP.L("custom.idle_desc"), tostring(pct), function(value)
 				local n = tonumber(value)
 				if n then Layout.SetOpacity(ctx.id, math.Clamp(n, 10, 100) / 100) end
-			end)
+			end, "btn.apply")
 		end }
 		return items
 	end,
 })
 
 Actions.Add({
-	id = "lock", scope = "window", icon = "icon16/lock.png", name = "ctx.lock",
+	id = "lock", scope = "window", name = "ctx.lock",
+	icon = function(ctx) return ctx.window.locked and "icon16/lock_open.png" or "icon16/lock.png" end,
 	label = function(ctx) return PP.L(ctx.window.locked and "ctx.unlock" or "ctx.lock") end,
 	menu = { group = "position", window = 70 },
 	run = function(ctx) Layout.SetLocked(ctx.id, not ctx.window.locked) end,

@@ -117,9 +117,9 @@ local function dialog(title, w, h)
 	return frame
 end
 
--- A one-line text prompt (rename, new group, custom opacity).
-function Dialogs.Text(title, prompt, default, onOk)
-	Derma_StringRequest(title, prompt, default or "", onOk, function() end, PP.L("btn.ok"), PP.L("btn.cancel"))
+-- A one-line text prompt (rename, new group, custom opacity); okKey names the confirm button (default OK).
+function Dialogs.Text(title, prompt, default, onOk, okKey)
+	Derma_StringRequest(title, prompt, default or "", onOk, function() end, PP.L(okKey or "btn.ok"), PP.L("btn.cancel"))
 end
 
 -- Captures a key with the stock DBinder (G19) and lists conflicts before applying (F26, E15, E30).

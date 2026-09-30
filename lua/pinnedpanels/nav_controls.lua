@@ -35,13 +35,13 @@ function Nav.IsHTML(p)
 	return class:find("HTML") ~= nil or class == "Awesomium"
 end
 
-local BASE_PRESSED = vgui.GetControlTable("DPanel").OnMousePressed
-
 local function customInteraction(p)
 	if not p:IsMouseInputEnabled() then return false end
 	if isfunction(p.DoClick) or isfunction(p.Toggle) then return true end
 	if isfunction(p.SetValue) and isfunction(p.GetValue) then return true end
-	return isfunction(p.OnMousePressed) and p.OnMousePressed ~= BASE_PRESSED
+	-- Looked up here, not at load: Derma's controls aren't registered yet when autorun files run.
+	local base = vgui.GetControlTable("DPanel")
+	return isfunction(p.OnMousePressed) and p.OnMousePressed ~= (base and base.OnMousePressed)
 end
 
 -- "skip", "leaf", "container" (scan its children) or "custom" (a leaf if none of its children is one).

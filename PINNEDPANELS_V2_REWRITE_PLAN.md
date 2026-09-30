@@ -503,6 +503,7 @@ lua/pinnedpanels/
 ├─ record.lua ............................. 160  Record mode: timed vgui wrap, call-stack opener search (§33.9)
 ├─ manage.lua ............................. 280  managed windows: take/apply/release, watcher, focus rule (§33.5)
 ├─ embed.lua .............................. 280  embedded windows and parts: box, ghost shell, placeholder, watcher, release (§33.6)
+├─ quick.lua .............................. 190  quick controls: reading a control's convar, the Quick Controls tab, its menus (FF2)
 ├─ actions.lua ............................ 350  action list → window menu, taskbar menu, palette entries, key convars, conflict check, console commands
 ├─ nav.lua ................................ 450  keyboard nav state machine, zones, scan cache, Rank, hints, memory, DMenu driver
 ├─ nav_controls.lua ....................... 280  per-control keyboard behaviour
@@ -523,7 +524,7 @@ lua/pinnedpanels/
    └─ hub_settings.lua .................... 350  settings pages
 ```
 
-**Totals:** 24 Lua files, ≈ 6,700 lines for Phases 0–5; Phase 6 adds 5 (≈ 1,550 lines). Budgets flag problems; a file more than 25% over should be checked for doing two jobs.
+**Totals:** 24 Lua files, ≈ 6,700 lines for Phases 0–5; Phase 6 adds 5 (≈ 1,550 lines), Phase 7 adds `quick.lua`. Budgets flag problems; a file more than 25% over should be checked for doing two jobs.
 
 ---
 
@@ -584,7 +585,7 @@ tab = {
 
 One tab: no tab strip, looks exactly like a v1 pin. Several tabs: tab strip with the accent colour, like a v1 group. "New group" creates an empty titled window that shows only in the Pinned list until it gets a tab.
 
-Phase 6 adds `window.kind`, the `desktop:`, `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10).
+Phase 6 adds `window.kind`, the `desktop:`, `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10). Phase 7 adds `state = "rolled"` (FF6), `showWith = "contextmenu"` (FF5), the `active:tool` source (FF1) and `quick:<n>` tabs with `tab.controls` (FF2).
 
 ### 13.2 File
 
@@ -1025,13 +1026,21 @@ Built on the 2.0 pieces as §33.13 describes: `manage.lua`, `embed.lua`, `recipe
   - Strings are English only; Phase 11 translates them.
 
 ### Phase 7 — Everyday features (≈ 6 days)
-- [ ] FF1 Active tool window (`active:tool` source following `gmod_toolmode`)
-- [ ] FF2 Pin a single control (`convar:` source, *Quick controls* window)
-- [ ] FF5 Context-menu mode (`showWith = "contextmenu"`, a cursor reason while C is held)
-- [ ] FF6 Roll-up (double-click the header)
-- [ ] FF10 Layout undo/redo (`pinnedpanels_undo` / `_redo`)
-- [ ] FF13 Server tool restrictions shown in tool tabs
-- **Accept:** switching tools on the tool gun updates the active tool window; a pinned control keeps working after its tool rebuilds its panel; undo reverts moves, resizes, unpins, merges and crops.
+- [x] FF1 Active tool window (`active:tool` source following `gmod_toolmode`)
+- [x] FF2 Pin a single control (`convar:` source, *Quick controls* window)
+- [x] FF5 Context-menu mode (`showWith = "contextmenu"`, a cursor reason while C is held)
+- [x] FF6 Roll-up (double-click the header)
+- [x] FF10 Layout undo/redo (`pinnedpanels_undo` / `_redo`)
+- [x] FF13 Server tool restrictions shown in tool tabs
+- **Accept** (in game, still to check): switching tools on the tool gun updates the active tool window; a pinned control keeps working after its tool rebuilds its panel; undo reverts moves, resizes, unpins, merges and crops.
+- *Checked outside the game:* the headless run (not committed, D20) covers each item: rolling and double-click unrolling; undoing a merge, move, unpin and crop, all the way back and forward again; the active tool tab rebuilding and retitling on a `gmod_toolmode` change; the restriction banner following `toolmode_allow_<tool>`; pinning a slider, keeping it through a tool rebuild, saving it, removing it and undoing that; C-menu windows showing only while it's open.
+- *Deviations:*
+  - FF2: the source is `quick:<n>` with `tab.controls = { … }`, one tab holding many controls so they show together, rather than one `convar:` tab per control. "Pin This Control" joins the focused window's Quick Controls, else the first one, else a new window. Sliders, checkboxes and dropdowns only (as FF2 lists); `AddControl("ComboBox")` lists that set several convars (`CtrlListBox`) have no single convar and are greyed out. Offered on mouse right-click only, not from keyboard navigation's element menu.
+  - FF1: the active tool is the first entry of the Widgets page (category "Tool Gun") and in the palette; its title is "Active Tool: <tool>".
+  - FF5: no cursor reason: the C menu shows its own cursor, as the spawn menu does. While it is open every window takes the mouse, not only C-menu windows. C-menu windows are moved in front of it when it opens (⚑ verify that they end up above it).
+  - FF6: `state = "rolled"`. A rolled window moves but doesn't resize, and the layout editor still shows its full size. Minimizing it and restoring brings it back unrolled.
+  - FF10: one step per frame with changes, 50 kept. Loading, refitting to the screen or taskbar and undo itself push nothing. `nextId` only moves forward. "Recently closed" (Reopen) is separate. Undo and redo have no default keys until modifier shortcuts (FF19).
+  - FF13: `CanTool` refusals aren't shown; they depend on what the tool is pointed at. A banner also says when the player has no tool gun. Option pages get no banner.
 
 ### Phase 8 — The right windows at the right time (≈ 6 days)
 - [ ] FF3 Layout profiles (including managed windows from Phase 6)
@@ -1618,7 +1627,7 @@ Pass criteria in brackets.
 | `PinnedPanelsInputChanged` | — | `input` (cursor mode, ALT, spawn menu open/close) |
 | `PinnedPanelsAdoptChanged` | — | `manage`, `embed` (an adopted panel was taken, let go, or closed by its addon) |
 
-**GMod hooks used:** `Think` (one, `input`), `CreateMove`, `PlayerBindPress`, `StartChat`, `FinishChat`, `OnTextEntryGetFocus`, `OnTextEntryLoseFocus`, `OnSpawnMenuOpen`, `OnSpawnMenuClose`, `PostReloadToolsMenu`, `OnScreenSizeChanged`, `ShutDown`, `VGUIMousePressed` and `GUIMousePressed` (the §33.5 focus rule). Hook identifiers are `"PinnedPanels.<Area>"` or the owning control.
+**GMod hooks used:** `Think` (one, `input`), `CreateMove`, `PlayerBindPress`, `StartChat`, `FinishChat`, `OnTextEntryGetFocus`, `OnTextEntryLoseFocus`, `OnSpawnMenuOpen`, `OnSpawnMenuClose`, `PostReloadToolsMenu`, `OnScreenSizeChanged`, `ShutDown`, `VGUIMousePressed` and `GUIMousePressed` (the §33.5 focus rule, FF2's menus), `OnContextMenuOpen` and `OnContextMenuClose` (FF5), and a `gmod_toolmode` change callback (FF1). Hook identifiers are `"PinnedPanels.<Area>"` or the owning control.
 
 ## Appendix B — Glossary
 

@@ -8,6 +8,8 @@ local FILES = {
 	"layout.lua",
 	"input.lua",
 	"sources.lua",
+	"vgui/theme.lua",
+	"vgui/controls.lua",
 }
 
 if SERVER then

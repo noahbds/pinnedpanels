@@ -149,7 +149,10 @@ function CLIP:PerformLayout(w, h)
 		content:SetPos(-crop.l, -crop.t)
 		content:SetSize(w + crop.l + crop.r, h + crop.t + crop.b)
 	elseif self.docked ~= true then
+		-- Docking is applied by our layout, which is this pass, so size it here too; later passes dock it.
 		content:Dock(FILL)
+		content:SetPos(0, 0)
+		content:SetSize(w, h)
 		self.docked = true
 	end
 end

@@ -51,6 +51,12 @@ local function create(rec)
 	return win
 end
 
+-- Whether a window shows now: not minimized, and the C menu open if it only shows with it (FF5). Peek shows
+-- everything (F22).
+function Desktop.Shown(rec)
+	return (rec.state ~= "minimized" and (rec.showWith ~= "contextmenu" or Input.ContextOpen())) or Desktop.peeking
+end
+
 -- Visibility, mouse input and idle opacity, recomputed on changes, never per frame (§16.3, G27).
 -- Peek shows every window, minimized ones too, at full opacity (F22); so is the window keyboard
 -- navigation just used (L11).
@@ -60,7 +66,7 @@ function Desktop.UpdateStates()
 	for id, win in pairs(Desktop.panels) do
 		local rec = Layout.Get(id)
 		if IsValid(win) and rec then
-			win:SetVisible(rec.state ~= "minimized" or Desktop.peeking)
+			win:SetVisible(Desktop.Shown(rec))
 			win:SetMouseInputEnabled(interactive)
 			if not interactive then win:SetKeyboardInputEnabled(false) end
 			local alpha = (interactive or Desktop.peeking or PP.Nav.Opaque(id)) and 1 or math.max(rec.opacity or idle, 0.05)
@@ -122,6 +128,16 @@ hook.Add("PinnedPanelsChanged", "PinnedPanels.Desktop", function(kind, id)
 end)
 
 hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Desktop", Desktop.UpdateStates)
+
+-- The C menu is a popup made when it opens, so windows that come with it go in front of it (FF5, ⚑ verify).
+hook.Add("OnContextMenuOpen", "PinnedPanels.Desktop", function()
+	Util.NextFrame(nil, function()
+		for id, win in pairs(Desktop.panels) do
+			local rec = Layout.Get(id)
+			if IsValid(win) and rec and rec.showWith == "contextmenu" then win:MoveToFront() end
+		end
+	end)
+end)
 -- An adopted panel was taken, let go or closed by its addon (§33).
 hook.Add("PinnedPanelsAdoptChanged", "PinnedPanels.Desktop", function() Desktop.Reconcile() end)
 

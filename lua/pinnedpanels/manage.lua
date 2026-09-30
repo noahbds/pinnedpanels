@@ -41,7 +41,7 @@ end
 -- keyboard (§33.5); idle opacity outside cursor mode (G27).
 local function desired(id, rec, entry)
 	local interactive = Input.Interactive()
-	local shown = (rec.state ~= "minimized" and not Desktop.held[id]) or Desktop.peeking
+	local shown = (Desktop.Shown(rec) and not Desktop.held[id]) or Desktop.peeking
 	local mouse = interactive and (not rec.clickThrough or Input.AltHeld())
 	local focus = vgui.GetKeyboardFocus()
 	local typing = IsValid(focus) and (focus == entry.panel or focus:HasParent(entry.panel))

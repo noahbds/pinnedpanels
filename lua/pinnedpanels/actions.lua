@@ -374,6 +374,14 @@ Actions.Add({
 	run = function(ctx) Layout.ToggleRoll(ctx.id) end,
 })
 
+-- Only while the C menu is open (FF5), like GMod's own tool panel there.
+Actions.Add({
+	id = "context_menu", scope = "window", managed = true, name = "ctx.with_context",
+	icon = function(ctx) return ctx.window.showWith and "icon16/tick.png" or "icon16/application_view_icons.png" end,
+	label = "ctx.with_context", menu = { group = "view", window = 24 },
+	run = function(ctx) Layout.SetShowWith(ctx.id, not ctx.window.showWith and "contextmenu" or nil) end,
+})
+
 -- Hidden for this session; the Pinned page and palette show it again.
 Actions.Add({
 	id = "hide", scope = "window", managed = true, icon = "icon16/eye.png", label = "ctx.hide_panel", name = "kb.toggle_hide",

@@ -17,7 +17,7 @@ local binds = {}   -- id -> { key, press, release, repeating }
 local watched = {} -- key -> true
 local held = {}    -- key -> true when its press fired, false when it was already down during a gate
 local nextRepeat = {} -- key -> RealTime of its next repeat, while held with a repeating binding
-local chatOpen, spawnOpen, altHeld = false, false, false
+local chatOpen, spawnOpen, contextOpen, altHeld = false, false, false, false
 
 -- Held keys repeat after a delay, on real time so pause and host_timescale don't matter (G5, B28).
 local REPEAT_DELAY, REPEAT_INTERVAL = 0.35, 0.055
@@ -171,9 +171,14 @@ function Input.SetCursorMode(on)
 	inputChanged()
 end
 
--- Windows take the mouse in cursor mode and while the spawn menu is open (F10, E16).
+-- Windows take the mouse in cursor mode and while the spawn menu or the C menu is open (F10, E16, FF5).
 function Input.Interactive()
-	return Input.cursorMode or spawnOpen
+	return Input.cursorMode or spawnOpen or contextOpen
+end
+
+-- Windows set to show with the C menu appear only while it is open (FF5).
+function Input.ContextOpen()
+	return contextOpen
 end
 
 function Input.AltHeld()
@@ -187,6 +192,17 @@ end)
 
 hook.Add("OnSpawnMenuClose", "PinnedPanels.Input", function()
 	spawnOpen = false
+	inputChanged()
+end)
+
+-- The C menu shows its own cursor, like the spawn menu, so it needs no cursor reason of ours.
+hook.Add("OnContextMenuOpen", "PinnedPanels.Input", function()
+	contextOpen = true
+	inputChanged()
+end)
+
+hook.Add("OnContextMenuClose", "PinnedPanels.Input", function()
+	contextOpen = false
 	inputChanged()
 end)
 

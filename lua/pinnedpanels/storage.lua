@@ -159,6 +159,7 @@ local function sanitizeWindow(w, seen, summary)
 		clickThrough = w.clickThrough == true,
 		filterBar = w.filterBar == true,
 		quickKey = int(w.quickKey, 1, 511),
+		showWith = w.showWith == "contextmenu" and "contextmenu" or nil,
 		colors = {},
 	}
 	local opacity = tonumber(w.opacity)
@@ -242,7 +243,7 @@ function Storage.Encode(doc)
 				x = w.x, y = w.y, w = w.w, h = w.h, state = w.state, restore = w.restore,
 				title = w.title, accent = colorOrNil(w.accent),
 				locked = w.locked, clickThrough = w.clickThrough, filterBar = w.filterBar,
-				opacity = w.opacity, quickKey = w.quickKey,
+				opacity = w.opacity, quickKey = w.quickKey, showWith = w.showWith,
 				colors = { bg = colorOrNil(w.colors.bg), header = colorOrNil(w.colors.header), text = colorOrNil(w.colors.text) },
 			}
 		end

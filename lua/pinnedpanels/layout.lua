@@ -566,6 +566,15 @@ Layout.SetLocked = setFlag("locked", "state")
 Layout.SetClickThrough = setFlag("clickThrough", "state")
 Layout.SetFilterBar = setFlag("filterBar", "style")
 
+-- "contextmenu" shows the window only while the C menu is open (FF5); nil always.
+function Layout.SetShowWith(id, value)
+	local win = byId[id]
+	if not win then return false end
+	win.showWith = value == "contextmenu" and value or nil
+	changed("state", id)
+	return true
+end
+
 -- nil follows the idleOpacity setting.
 function Layout.SetOpacity(id, frac)
 	local win = byId[id]

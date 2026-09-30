@@ -258,6 +258,7 @@ function Desktop.Teardown()
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Remove() end
 	Desktop.taskbar = nil
 	PP.Manage.ReleaseAll()
+	PP.Recipes.StopRecording()
 	if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() end
 end
 

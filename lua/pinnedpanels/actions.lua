@@ -300,6 +300,12 @@ Actions.Add({
 })
 
 Actions.Add({
+	id = "record", scope = "global", icon = "icon16/bullet_red.png", label = "act.record",
+	sub = "sub.record", palette = true, bindable = true,
+	run = function() PP.Recipes.Record() end,
+})
+
+Actions.Add({
 	id = "unpin_all", scope = "global", icon = "icon16/cross.png", label = "act.unpin_all", sub = "sub.remove_every", palette = true,
 	run = function()
 		local ids = {}

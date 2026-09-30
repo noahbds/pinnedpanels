@@ -168,6 +168,19 @@ function Util.WithOverride(tbl, key, replacement, fn)
 	return ok
 end
 
+-- The timed form, only for Record mode (R14): tbl[key] is replacement until the returned function is
+-- called. That restores the original only if our replacement is still installed (another addon may have
+-- wrapped it since, §33.17) and returns whether it did; the replacement must then pass calls through.
+function Util.BeginOverride(tbl, key, replacement)
+	local original = tbl[key]
+	tbl[key] = replacement
+	return function()
+		if tbl[key] ~= replacement then return false end
+		tbl[key] = original
+		return true
+	end
+end
+
 -- ── Timing ──────────────────────────────────────────────────
 
 -- Runs fn next frame, unless panel was given and is gone by then.

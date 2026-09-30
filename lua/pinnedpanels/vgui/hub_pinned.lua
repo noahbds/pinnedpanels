@@ -57,6 +57,14 @@ function PAGE:Init()
 	pick:SetIcon("icon16/application_form_add.png")
 	pick:SetTooltip(PP.L("tip.pick"))
 	pick.DoClick = function() PP.Picker.Open() end
+	local record = self.bar:Add("PinnedPanelsButton")
+	record:Dock(LEFT)
+	record:DockMargin(6, 0, 0, 0)
+	record:SetWide(220)
+	record:SetLabel(PP.L("btn.record"))
+	record:SetIcon("icon16/bullet_red.png")
+	record:SetTooltip(PP.L("tip.record"))
+	record.DoClick = function() PP.Recipes.Record() end
 
 	self.list = self:Add("PinnedPanelsScroll")
 	self.list:Dock(FILL)

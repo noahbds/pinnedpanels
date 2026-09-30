@@ -80,6 +80,10 @@ local function think()
 			fire(key, "repeat")
 		end
 	end
+	-- Keys no longer bound are forgotten once released (until then they still count as held).
+	for key in pairs(held) do
+		if not watched[key] and not input.IsKeyDown(key) then held[key] = nil end
+	end
 end
 
 hook.Add("Think", "PinnedPanels.Input", think)
@@ -87,15 +91,14 @@ hook.Add("Think", "PinnedPanels.Input", think)
 -- ── Key bindings ────────────────────────────────────────────
 
 -- Calls press/release when key goes down/up, and press again while held if repeating. KEY_NONE or nil
--- removes the binding. A key already held when it gets a binding waits for its next press.
+-- removes the binding. A key already held when it gets a binding waits for its next press, and a held
+-- key stays held through rebinding (navigation rebinds its keys from inside their own handlers), so it
+-- doesn't press again.
 function Input.SetKey(id, key, press, release, repeating)
 	if key == KEY_NONE then key = nil end
 	binds[id] = key and { key = key, press = press, release = release, repeating = repeating } or nil
 	watched = {}
 	for _, b in pairs(binds) do watched[b.key] = true end
-	for k in pairs(held) do
-		if not watched[k] then held[k] = nil end
-	end
 	for k in pairs(nextRepeat) do
 		if not watched[k] then nextRepeat[k] = nil end
 	end

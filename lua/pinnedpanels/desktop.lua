@@ -200,21 +200,25 @@ function Desktop.RestoreAndFront(id)
 	Desktop.Front(id)
 end
 
+-- Hiding isn't a document change, so it has its own event for the hub.
 function Desktop.Hide(id)
 	Desktop.held[id] = true
 	Desktop.Reconcile()
+	hook.Run("PinnedPanelsHeldChanged")
 end
 
 function Desktop.Show(id)
 	if not Desktop.held[id] then return end
 	Desktop.held[id] = nil
 	Desktop.Reconcile()
+	hook.Run("PinnedPanelsHeldChanged")
 end
 
 -- Shows every window held back by autoRestore = off or hidden.
 function Desktop.ShowHeld()
 	Desktop.held = {}
 	Desktop.Reconcile()
+	hook.Run("PinnedPanelsHeldChanged")
 end
 
 function Desktop.Peek(on)

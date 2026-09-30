@@ -4,7 +4,7 @@ local PP = PinnedPanels
 local T = PP.Theme
 
 -- ── PinnedPanelsButton ──────────────────────────────────────
--- SetOn(true) gives the green "pinned" look.
+-- SetOn(true) gives the green "pinned" look; SetDanger(true) the red one. SetIcon takes an icon16 path.
 
 local BUTTON = {}
 
@@ -16,19 +16,33 @@ end
 
 function BUTTON:SetLabel(text) self.label = text end
 function BUTTON:SetOn(on) self.on = on end
+function BUTTON:SetDanger(on) self.danger = on end
+function BUTTON:SetIcon(path) self.icon = path and PP.Theme.Icon(path) end
 
 function BUTTON:Paint(w, h)
 	local hovered = self:IsHovered()
 	local bg, outline, text
 	if self.on then
 		bg, outline, text = hovered and T.buttonOnHover or T.buttonOn, T.buttonOnOutline, T.buttonOnText
+	elseif self.danger then
+		bg, outline, text = hovered and T.dangerHover or T.dangerBg, T.buttonOutline, T.dangerText
 	else
 		bg, outline, text = hovered and T.buttonHover or T.button, T.buttonOutline, T.buttonText
 	end
 	draw.RoundedBox(4, 0, 0, w, h, bg)
 	surface.SetDrawColor(outline)
 	surface.DrawOutlinedRect(0, 0, w, h, 1)
-	draw.SimpleText(self.label, "DermaDefault", w / 2, h / 2, text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	local x = w / 2
+	if self.icon then
+		surface.SetFont("DermaDefault")
+		local tw = self.label ~= "" and surface.GetTextSize(self.label) + 4 or 0
+		local ix = math.floor((w - 16 - tw) / 2)
+		surface.SetMaterial(self.icon)
+		surface.SetDrawColor(255, 255, 255, 255)
+		surface.DrawTexturedRect(ix, math.floor((h - 16) / 2), 16, 16)
+		x = ix + 20 + (tw - 4) / 2
+	end
+	draw.SimpleText(self.label, "DermaDefault", x, h / 2, text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end
 
 vgui.Register("PinnedPanelsButton", BUTTON, "DButton")

@@ -15,6 +15,7 @@ local FILES = {
 	"vgui/tabs.lua",
 	"vgui/window.lua",
 	"vgui/hud.lua",
+	"vgui/taskbar.lua",
 	"vgui/hub.lua",
 	"vgui/hub_catalog.lua",
 }

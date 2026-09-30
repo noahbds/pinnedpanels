@@ -1,5 +1,6 @@
 -- Records → window controls (§16): creates, refreshes and removes PinnedPanelsWindows as the document
--- changes, rations tab builds to one per frame, and applies interactivity and idle opacity.
+-- changes, rations tab builds to one per frame, applies interactivity, idle opacity and peek, and owns
+-- the taskbar control.
 
 local PP = PinnedPanels
 PP.Desktop = PP.Desktop or {}
@@ -7,9 +8,11 @@ local Desktop = PP.Desktop
 local Layout, Sources, Input, Settings, Storage, Util = PP.Layout, PP.Sources, PP.Input, PP.Settings, PP.Storage, PP.Util
 
 Desktop.panels = Desktop.panels or {}
--- Windows present at join while autoRestore is off: kept in the document, not shown until asked.
+-- Hidden for this session: kept in the document, no control until shown again. Windows present at join
+-- while autoRestore is off start hidden; "Hide" hides one.
 Desktop.held = Desktop.held or {}
 Desktop.ready = Desktop.ready or false
+Desktop.peeking = false
 
 local function hasAvailableTab(rec)
 	for _, t in ipairs(rec.tabs) do
@@ -24,6 +27,10 @@ local function wanted(rec)
 	return Desktop.ready and not Desktop.held[rec.id] and hasAvailableTab(rec)
 end
 
+function Desktop.IsDormant(rec)
+	return #rec.tabs > 0 and not hasAvailableTab(rec)
+end
+
 local function create(rec)
 	local win = vgui.Create("PinnedPanelsWindow")
 	win:ParentToHUD() -- as v1; the Phase 0 spike decides whether this matters for the escape menu (G30, E27)
@@ -35,19 +42,21 @@ local function create(rec)
 end
 
 -- Visibility, mouse input and idle opacity, recomputed on changes, never per frame (§16.3, G27).
+-- Peek shows every window, minimized ones too, at full opacity (F22).
 function Desktop.UpdateStates()
 	local interactive = Input.Interactive()
 	local idle = Settings.Get("idleOpacity") / 100
 	for id, win in pairs(Desktop.panels) do
 		local rec = Layout.Get(id)
 		if IsValid(win) and rec then
-			win:SetVisible(rec.state ~= "minimized")
+			win:SetVisible(rec.state ~= "minimized" or Desktop.peeking)
 			win:SetMouseInputEnabled(interactive)
 			if not interactive then win:SetKeyboardInputEnabled(false) end
-			local alpha = interactive and 1 or math.max(rec.opacity or idle, 0.05)
+			local alpha = (interactive or Desktop.peeking) and 1 or math.max(rec.opacity or idle, 0.05)
 			win:SetAlpha(math.Round(alpha * 255))
 		end
 	end
+	if IsValid(Desktop.taskbar) then Desktop.taskbar:Wake() end
 end
 
 function Desktop.Reconcile()
@@ -65,20 +74,61 @@ function Desktop.Reconcile()
 			Desktop.panels[id] = nil
 		end
 	end
+	if Desktop.focused and not Desktop.panels[Desktop.focused] then Desktop.focused = nil end
+	local front = Desktop.panels[Desktop.pendingFront or ""]
+	if IsValid(front) then
+		front:MoveToFront()
+		Desktop.pendingFront = nil
+	end
 	Desktop.UpdateStates()
+	if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+end
+
+-- Minimizing with the taskbar off says once where the window went (E23, B15).
+local toldAboutMinimize = false
+local function minimized(id)
+	if toldAboutMinimize or Settings.Get("taskbar") then return end
+	local rec = Layout.Get(id)
+	if rec and rec.state == "minimized" then
+		toldAboutMinimize = true
+		notification.AddLegacy(PP.L("notify.minimized_no_taskbar"), NOTIFY_HINT, 8)
+	end
 end
 
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Desktop", function(kind, id)
 	if kind == "windows" or kind == "tabs" or not id then return Desktop.Reconcile() end
 	local win = Desktop.panels[id]
 	if IsValid(win) then win:Refresh() end
-	if kind == "state" or kind == "style" then Desktop.UpdateStates() end
+	if kind == "state" or kind == "style" then
+		Desktop.UpdateStates()
+		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+		if kind == "state" then minimized(id) end
+	end
 end)
 
 hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Desktop", Desktop.UpdateStates)
 
+-- ── Taskbar ─────────────────────────────────────────────────
+
+function Desktop.UpdateTaskbar()
+	local want = Desktop.ready and Settings.Get("taskbar")
+	if want and not IsValid(Desktop.taskbar) then
+		Desktop.taskbar = vgui.Create("PinnedPanelsTaskbar")
+		Desktop.taskbar:MakePopup()
+		Desktop.taskbar:SetKeyboardInputEnabled(false)
+	elseif not want and IsValid(Desktop.taskbar) then
+		Desktop.taskbar:Remove()
+		Desktop.taskbar = nil
+	end
+	if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+end
+
 hook.Add("PinnedPanelsSettingChanged", "PinnedPanels.Desktop", function(key)
-	if key == "idleOpacity" then Desktop.UpdateStates() end
+	if key == "idleOpacity" then
+		Desktop.UpdateStates()
+	elseif key:sub(1, 7) == "taskbar" then
+		Desktop.UpdateTaskbar()
+	end
 end)
 
 -- The first catalogue decides what "restore on join" means; later ones re-check dormant tabs (E1, E12).
@@ -88,6 +138,7 @@ hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Desktop", function()
 		if not Settings.Get("autoRestore") then
 			for _, rec in ipairs(Layout.Windows()) do Desktop.held[rec.id] = true end
 		end
+		Desktop.UpdateTaskbar()
 	end
 	Desktop.Reconcile()
 end)
@@ -98,10 +149,11 @@ cvars.AddChangeCallback("gmod_language", function()
 		for _, win in pairs(Desktop.panels) do
 			if IsValid(win) then win:Refresh() end
 		end
+		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
 	end)
 end, "PinnedPanels.Desktop")
 
--- ── Services for controls ───────────────────────────────────
+-- ── Services ────────────────────────────────────────────────
 
 -- One tab host may build per frame across all windows (§16.2).
 local lastBuild = -1
@@ -122,21 +174,53 @@ function Desktop.SnapRects(exceptId)
 	return rects
 end
 
+-- The window keys and console commands act on when no id is given: the last one clicked or brought up.
+function Desktop.SetFocused(id)
+	Desktop.focused = id
+end
+
+-- A window that doesn't have its control yet comes to the front when the desktop creates it.
+function Desktop.Front(id)
+	local win = Desktop.panels[id]
+	if IsValid(win) then win:MoveToFront() else Desktop.pendingFront = id end
+	Desktop.focused = id
+end
+
 -- Pins src (or brings back its window) and puts the window in front (E22).
 function Desktop.PinSource(src)
 	local id = Layout.Pin(src, Sources.DefaultSize(src))
-	Desktop.held[id] = nil
-	Util.NextFrame(nil, function()
-		local win = Desktop.panels[id]
-		if IsValid(win) then win:MoveToFront() end
-	end)
+	Desktop.Show(id)
+	Desktop.Front(id)
 	return id
 end
 
--- Shows windows held back by autoRestore = off.
+function Desktop.RestoreAndFront(id)
+	Layout.Restore(id)
+	Desktop.Show(id)
+	Desktop.Front(id)
+end
+
+function Desktop.Hide(id)
+	Desktop.held[id] = true
+	Desktop.Reconcile()
+end
+
+function Desktop.Show(id)
+	if not Desktop.held[id] then return end
+	Desktop.held[id] = nil
+	Desktop.Reconcile()
+end
+
+-- Shows every window held back by autoRestore = off or hidden.
 function Desktop.ShowHeld()
 	Desktop.held = {}
 	Desktop.Reconcile()
+end
+
+function Desktop.Peek(on)
+	if Desktop.peeking == on then return end
+	Desktop.peeking = on
+	Desktop.UpdateStates()
 end
 
 -- ── Lifecycle ───────────────────────────────────────────────
@@ -146,6 +230,8 @@ function Desktop.Teardown()
 		if IsValid(win) then win:Remove() end
 	end
 	Desktop.panels = {}
+	if IsValid(Desktop.taskbar) then Desktop.taskbar:Remove() end
+	Desktop.taskbar = nil
 end
 
 -- Load the document; if the spawn menu already exists (a reload), read the catalogue now (E2).

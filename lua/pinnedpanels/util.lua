@@ -10,9 +10,23 @@ local Util, Geom = PP.Util, PP.Geom
 -- ── Geometry ────────────────────────────────────────────────
 -- Rects are tables with x, y, w, h (window records qualify); the area is passed as ux, uy, uw, uh.
 
--- The screen area windows may use (L12). The taskbar's share is subtracted once the taskbar exists (Phase 3).
+-- The screen area windows may use: the screen minus the taskbar, unless it auto-hides (L12).
 function Geom.Usable()
-	return 0, 0, ScrW(), ScrH()
+	local x, y, w, h = 0, 0, ScrW(), ScrH()
+	local Settings = PP.Settings
+	if Settings.Get("taskbar") and not Settings.Get("taskbarAutoHide") then
+		local size, side = Settings.Get("taskbarSize"), Settings.Get("taskbarSide")
+		if side == "top" then
+			y, h = size, h - size
+		elseif side == "left" then
+			x, w = size, w - size
+		elseif side == "right" then
+			w = w - size
+		else
+			h = h - size
+		end
+	end
+	return x, y, w, h
 end
 
 -- Shrinks a rect to fit the area, then moves it inside (E4).

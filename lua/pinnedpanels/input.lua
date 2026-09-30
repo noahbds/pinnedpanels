@@ -129,11 +129,12 @@ hook.Add("StartChat", "PinnedPanels.Input", function() chatOpen = true end)
 hook.Add("FinishChat", "PinnedPanels.Input", function() chatOpen = false end)
 
 -- ── Text focus ──────────────────────────────────────────────
--- A window takes the keyboard only while a text entry inside it has focus, never on hover (R8, B32, E14).
+-- Our windows and dialogs (marked ppTakesKeyboard) take the keyboard only while a text entry inside them
+-- has focus, never on hover (R8, B32, E14).
 
 local function windowOf(p)
 	while IsValid(p) do
-		if p.ClassName == "PinnedPanelsWindow" then return p end
+		if p.ppTakesKeyboard then return p end
 		p = p:GetParent()
 	end
 end

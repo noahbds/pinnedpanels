@@ -14,6 +14,12 @@ local CLOSED_MAX = 15
 local ARRANGE_MARGIN = 8
 local KIND_ORDER = { windows = 1, tabs = 2, state = 3, geometry = 4, style = 5 }
 
+-- New named groups take the next accent in turn (as v1's group colours).
+local GROUP_ACCENTS = {
+	Color(255, 200, 60), Color(60, 200, 255), Color(200, 100, 255), Color(100, 255, 150),
+	Color(255, 120, 100), Color(255, 160, 220), Color(160, 220, 80), Color(80, 220, 220),
+}
+
 -- "Recently closed" lives for the session only (§13.2) and survives pinnedpanels_reload.
 Layout.closed = Layout.closed or {}
 
@@ -322,8 +328,38 @@ end
 function Layout.NewGroup(title)
 	title = cleanTitle(title)
 	if not title then return nil end
+	local groups = 0
+	for _, w in ipairs(doc.windows) do
+		if w.title then groups = groups + 1 end
+	end
 	local x, y, w, h = place(DEFAULT_W, DEFAULT_H, SPAWN_X, SPAWN_Y)
-	return newWindow({}, x, y, w, h, title).id
+	local win = newWindow({}, x, y, w, h, title)
+	local c = GROUP_ACCENTS[groups % #GROUP_ACCENTS + 1]
+	win.accent = Color(c.r, c.g, c.b, c.a)
+	return win.id
+end
+
+-- Every tab but the first goes to its own window; the first keeps this one, no longer a group (F15).
+function Layout.Dissolve(id)
+	local win = byId[id]
+	if not win then return false end
+	for i = #win.tabs, 2, -1 do Layout.MoveTab(id, i, nil) end
+	if #win.tabs == 0 then return Layout.Unpin(id) end
+	win.title, win.accent = nil, nil
+	changed("style", id)
+	return true
+end
+
+-- Unpins every tab. A named group stays as an empty group; anything else goes away. Either way the
+-- tabs come back as one "recently closed" entry (B20).
+function Layout.ClearTabs(id)
+	local win = byId[id]
+	if not win or #win.tabs == 0 then return false end
+	if not win.title then return Layout.Unpin(id) end
+	pushClosed(win)
+	win.tabs, win.active = {}, 1
+	changed("tabs", id)
+	return true
 end
 
 -- ── Window state ────────────────────────────────────────────
@@ -554,4 +590,10 @@ end
 
 hook.Add("OnScreenSizeChanged", "PinnedPanels.Layout", function(oldW, oldH)
 	Layout.RescaleAll(oldW, oldH)
+end)
+
+-- The taskbar's settings change the usable area (E5).
+local USABLE_SETTINGS = { taskbar = true, taskbarSide = true, taskbarSize = true, taskbarAutoHide = true }
+hook.Add("PinnedPanelsSettingChanged", "PinnedPanels.Layout", function(key)
+	if USABLE_SETTINGS[key] then Layout.Refit() end
 end)

@@ -45,8 +45,25 @@ T.chromeInteractive = Color(60, 200, 120, 120)
 -- Cursor-mode banner
 T.hudBg, T.hudBorder, T.hudText = Color(0, 0, 0, 190), Color(60, 200, 120), Color(60, 230, 130)
 
+-- Tabs of multi-tab windows; accent when a window has none of its own
+T.groupAccent = Color(255, 200, 60)
+T.tabActive, T.tabIdle = Color(40, 44, 52), Color(20, 22, 28)
+
+-- Taskbar entries (the bar's own colours are settings)
+T.taskbarBorder, T.taskbarEntry, T.taskbarEntryHover = Color(50, 55, 75, 180), Color(40, 44, 55, 200), Color(55, 65, 85, 230)
+
+-- Dialogs, cards and list rows
+T.popupBg, T.popupHeader, T.popupBorder = Color(22, 24, 32), Color(28, 30, 40), Color(60, 140, 255, 100)
+T.card, T.cardHeader, T.rowHover = Color(40, 44, 52), Color(25, 28, 34), Color(50, 55, 65)
+T.dangerBg, T.dangerHover, T.dangerText = Color(140, 35, 35), Color(180, 50, 50), Color(240, 200, 200)
+
+-- Crop editor
+T.cropShade = Color(0, 0, 0, 160)
+
 T.FONT_BANNER = "PinnedPanels.Banner"
+T.FONT_TASKBAR = "PinnedPanels.Taskbar"
 
 hook.Add("PinnedPanelsLoaded", "PinnedPanels.Theme", function()
 	surface.CreateFont(T.FONT_BANNER, { font = "DefaultBold", size = 14, weight = 600 })
+	surface.CreateFont(T.FONT_TASKBAR, { font = "Tahoma", size = 13, weight = 500 })
 end)

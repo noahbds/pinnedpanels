@@ -32,6 +32,7 @@ function PANEL:Init()
 	self:DockPadding(EDGE, HEADER + 4, EDGE, EDGE)
 	self.hosts = {}
 	self.titleText = ""
+	self.ppTakesKeyboard = true
 end
 
 function PANEL:SetWindowId(id)

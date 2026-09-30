@@ -1,8 +1,8 @@
 -- Tabs (§15.2). PinnedPanelsTabStrip shows a window's tabs when it has two or more (F15).
 -- PinnedPanelsTabHost holds one tab's content: built when first shown, one per frame (D13, E24), with an
 -- optional filter bar (F19), remembered category collapse (F20, D14) and the size measurement behind
--- auto-size (F17). Its PinnedPanelsClip ignores the mouse while the content takes it (L22), and crops by
--- moving the content inside it, never by reparenting (F16). PinnedPanelsScroll throttles layout (L3, B6).
+-- auto-size (F17). Its PinnedPanelsClip crops by moving the content inside it, never by reparenting (F16).
+-- PinnedPanelsScroll throttles layout (L3, B6).
 
 local PP = PinnedPanels
 local Layout, Sources, Theme = PP.Layout, PP.Sources, PP.Theme
@@ -122,11 +122,9 @@ vgui.Register("PinnedPanelsTabStrip", STRIP, "Panel")
 -- Uncropped, the content fills the clip. Cropped, the content keeps the clip's size plus the insets and
 -- sits at (-l, -t), so the clip shows exactly the kept part.
 
+-- The clip keeps mouse input on: panels take their parent's mouse-input state when they are created, so a
+-- disabled clip would disable everything built inside it (L22). The content covers it, so it never gets clicks.
 local CLIP = {}
-
-function CLIP:Init()
-	self:SetMouseInputEnabled(false)
-end
 
 function CLIP:SetContent(content)
 	self.content, self.docked = content, nil
@@ -354,7 +352,17 @@ end
 function HOST:Build()
 	self.built = true
 	self.clip:Clear()
+	-- Tabs usually build while their window is idle and ignoring the mouse. Panels take their parent's
+	-- mouse-input state when created, so the chain the content is built under must accept the mouse now;
+	-- the window gets its own state back afterwards (the desktop sets it from cursor mode).
+	local win = self:GetParent()
+	local winMouse = win:IsMouseInputEnabled()
+	win:SetMouseInputEnabled(true)
+	self:SetMouseInputEnabled(true)
+	self.filter:SetMouseInputEnabled(true)
+	self.clip:SetMouseInputEnabled(true)
 	self.content = PP.Sources.Build(self.src, self.clip)
+	win:SetMouseInputEnabled(winMouse)
 	self.clip:SetContent(self.content)
 	if not self.content then
 		local err = self.clip:Add("PinnedPanelsError")

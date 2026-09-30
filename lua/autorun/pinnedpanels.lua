@@ -10,6 +10,8 @@ local FILES = {
 	"sources.lua",
 	"desktop.lua",
 	"actions.lua",
+	"nav.lua",
+	"nav_controls.lua",
 	"vgui/theme.lua",
 	"vgui/controls.lua",
 	"vgui/tabs.lua",

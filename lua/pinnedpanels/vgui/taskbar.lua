@@ -102,9 +102,14 @@ function BAR:OnScreenSizeChanged()
 	self:Place()
 end
 
+-- Shown while windows are interactive, or while keyboard navigation is on the bar (its zone, §19.1).
+local function wanted(self)
+	return #self.entries > 0 and (Input.Interactive() or PP.Nav.state == "taskbar")
+end
+
 -- Think only runs while visible (G4); this makes the bar visible when it has something to fade to.
 function BAR:Wake()
-	if #self.entries > 0 and Input.Interactive() then self:SetVisible(true) end
+	if wanted(self) then self:SetVisible(true) end
 end
 
 local function cursorNearEdge()
@@ -119,11 +124,11 @@ end
 function BAR:Think()
 	local dt = RealFrameTime()
 	local interactive = Input.Interactive()
-	local target = (#self.entries > 0 and interactive) and 1 or 0
+	local target = wanted(self) and 1 or 0
 	self.fade = math.Approach(self.fade, target, FADE_SPEED * dt)
 	self:SetAlpha(math.Round(self.fade * 255))
 
-	local collapse = Settings.Get("taskbarAutoHide") and not (interactive and cursorNearEdge())
+	local collapse = Settings.Get("taskbarAutoHide") and PP.Nav.state ~= "taskbar" and not (interactive and cursorNearEdge())
 	local slide = math.Approach(self.slide, collapse and 1 or 0, SLIDE_SPEED * dt)
 	if slide ~= self.slide then
 		self.slide = slide
@@ -200,6 +205,32 @@ function BAR:Paint(w, h)
 				hovered and Theme.textBright or text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 		end
 	end
+end
+
+-- The keyboard's entry: a ring and a tooltip ("title · Enter to restore") beside the bar.
+function BAR:PaintOver(w, h)
+	local Nav = PP.Nav
+	local e = Nav.state == "taskbar" and self.entries[Nav.taskIndex or 0]
+	if not e then return end
+	local side = Settings.Get("taskbarSide")
+	surface.SetDrawColor(Theme.focusRing)
+	surface.DrawOutlinedRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4, 2)
+
+	local bw, bh = Nav.hintW + 14, Nav.hintH + 14
+	local bx, by
+	if horizontal() then
+		bx = math.Clamp(e.x + e.w / 2 - bw / 2, 4, w - bw - 4)
+		by = side == "top" and e.y + e.h + 8 or e.y - bh - 8
+	else
+		by = math.Clamp(e.y + e.h / 2 - bh / 2, 4, h - bh - 4)
+		bx = side == "left" and e.x + e.w + 8 or e.x - bw - 8
+	end
+	local old = DisableClipping(true)
+	draw.RoundedBox(5, bx, by, bw, bh, Theme.popupBg)
+	surface.SetDrawColor(Settings.Get("taskbarColorAccent"))
+	surface.DrawOutlinedRect(bx, by, bw, bh, 1)
+	draw.SimpleText(Nav.hint, Theme.FONT_TASKBAR, bx + 7, by + bh / 2, Theme.textBright, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	DisableClipping(old) -- B29
 end
 
 vgui.Register("PinnedPanelsTaskbar", BAR, "EditablePanel")

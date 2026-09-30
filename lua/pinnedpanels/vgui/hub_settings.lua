@@ -176,9 +176,10 @@ function ROWS.color(page, parent, def)
 	end
 end
 
--- An action's key: name, current key, Bind (with conflicts), Clear and Reset.
+-- A key: its action's (or navigation's) name, the current key, Bind (with conflicts), Clear and Reset.
 function ROWS.key(page, parent, def)
-	local action = PP.Actions.byId[def.action]
+	local action = def.action and PP.Actions.byId[def.action]
+	local title = action and PP.Actions.Name(action) or PP.L(def.label)
 	local r = row(parent, 26)
 	r.Paint = function(_, w, h) draw.RoundedBox(4, 0, 0, w, h, T.cardHeader) end
 
@@ -187,7 +188,7 @@ function ROWS.key(page, parent, def)
 	name:DockMargin(8, 0, 0, 0)
 	name:SetWide(220)
 	name:SetTextColor(T.text)
-	name:SetText(PP.Actions.Name(action))
+	name:SetText(title)
 
 	local key = r:Add("DLabel")
 	key:Dock(LEFT)
@@ -215,10 +216,10 @@ function ROWS.key(page, parent, def)
 	small("btn.unbind", function() Settings.Set(def.key, KEY_NONE) end)
 	small("btn.bind", function()
 		PP.Dialogs.Key({
-			title = PP.L("bind.prefix", PP.Actions.Name(action)),
+			title = PP.L("bind.prefix", title),
 			get = function() return Settings.Get(def.key) end,
 			set = function(k) Settings.Set(def.key, k) end,
-			tag = "action:" .. action.id,
+			tag = action and "action:" .. action.id or "setting:" .. def.key,
 		})
 	end)
 end

@@ -390,4 +390,9 @@ function PANEL:Paint(w, h)
 	for _, name in ipairs(BUTTONS) do paintButton(self, name, w, text) end
 end
 
+-- Keyboard focus ring, focused control and hint (§19).
+function PANEL:PaintOver(w, h)
+	PP.Nav.PaintWindow(self, w, h)
+end
+
 vgui.Register("PinnedPanelsWindow", PANEL, "EditablePanel")

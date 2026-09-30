@@ -165,6 +165,12 @@ function Actions.Conflicts(key, exceptTag)
 			out[#out + 1] = PP.L("conflict.quick", Layout.Title(rec))
 		end
 	end
+	for _, name in ipairs(Settings.order) do
+		local def = Settings.defs[name]
+		if def.section == "nav" and Settings.Get(name) == key and exceptTag ~= "setting:" .. name then
+			out[#out + 1] = PP.L("conflict.nav", PP.L(def.label))
+		end
+	end
 	return out
 end
 
@@ -617,10 +623,16 @@ concommand.Add("pinnedpanels_list", function()
 end, nil, "List pinned windows and their tabs")
 
 -- pinnedpanels_debug panels: what the desktop holds, to check that merging and splitting leave nothing
--- behind (B9). "perf" and "nav" arrive with Phases 7 and 5.
+-- behind (B9). nav: keyboard navigation's state. "perf" arrives with Phase 7.
 concommand.Add("pinnedpanels_debug", function(_, _, args)
+	if args[1] == "nav" then
+		local Nav, el = PP.Nav, PP.Nav.element
+		print(string.format("[Pinned Panels] nav: %s, window %s, %d controls, focused %s", Nav.state, tostring(Desktop.focused),
+			#Nav.Elements(), IsValid(el) and (el.ClassName or el:GetClassName()) or "none"))
+		return
+	end
 	if args[1] ~= "panels" then
-		print("[Pinned Panels] usage: pinnedpanels_debug panels")
+		print("[Pinned Panels] usage: pinnedpanels_debug panels | nav")
 		return
 	end
 	local controls, hosts, built = 0, 0, 0

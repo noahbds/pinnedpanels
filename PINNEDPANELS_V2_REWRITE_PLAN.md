@@ -121,7 +121,7 @@ The ideas that do most of the work:
 - [ ] `grep -rn 'hook.Add( *"Think"' lua` → 1 match (`input.lua`).
 - [ ] `grep -rnE "\b(CurTime|FrameTime)\(" lua` → 0 matches (G5).
 - [ ] `file.*` only in `storage.lua`; `gui.EnableScreenClicker`, `input.IsKeyDown`, `CreateMove`, `PlayerBindPress` only in `input.lua`.
-- [ ] No assignment to a global library field outside `Sources.WithControlPanelFallback` (§14.3).
+- [ ] No assignment to a global library field outside `Util.WithOverride` (§14.3, §19.5).
 - [ ] A corrupt layout file, a decompression-bomb import and a layout naming 20 missing tools all leave the layout intact (E6, E7, E1).
 - [ ] Every budget in §9 is met on the reference scene.
 
@@ -401,7 +401,7 @@ A client addon's threats are **untrusted layout strings** (shared by other playe
 | R2 | One `Storage.Sanitize(doc)` for files and imports: known fields only, finite clamped numbers, titles ≤ 64 chars, source keys ≤ 128, colours 0–255, ≤ 64 windows, ≤ 16 tabs per window, unknown source kinds dropped | `storage.lua` |
 | R3 | Import writes nothing until confirmed; the current layout is backed up first | `storage.lua`, `vgui/hub_settings.lua` |
 | R4 | No `RunString`/`CompileString`, no string-built commands. "Equip" only runs `spawnmenu.ActivateTool` for a tool that resolved in the live catalogue (an imported layout can't make you run arbitrary commands) | review + rule check |
-| R5 | No global patching except `Sources.WithControlPanelFallback`, which restores in every path (`xpcall`, restore before returning) and is unit-tested with a throwing hook | `sources.lua` |
+| R5 | No global patching except through `Util.WithOverride`, which restores in every path (`xpcall`, restore before returning). Its two users: `Sources.WithControlPanelFallback` (`controlpanel.Get`) and the element-menu capture (`RegisterDermaMenuForClose`, §19.5) | `util.lua` |
 | R6 | Third-party code (build functions, creation-tab builders, foreign right-click handlers) runs so errors are printed *and* contained (G38) | `sources.lua`, `nav_controls.lua` |
 | R7 | Keys are suppressed only while we consume them (a bound action, content nav, keyboard menu), never with chat/console/escape menu/text focus or when the window is unfocused | `input.lua` |
 | R8 | Keyboard input is taken only while a text entry inside our window has focus (G20) | `input.lua` |
@@ -639,7 +639,7 @@ Titles come from `language.GetPhrase` at build time, so a rebuild after a langua
 
 ### 14.3 The `controlpanel.Get` fallback
 
-If the built `ControlPanel` gained no children (L2), run `Sources.WithControlPanelFallback(name, panel, function() hook.Run("PostReloadToolsMenu") end)`: temporarily makes `controlpanel.Get(name)` return our panel so a hook that fills it by name fills ours. This is the only global replacement in v2 (R5). It restores the original in every path and is unit-tested with a throwing hook. It fires every addon's `PostReloadToolsMenu`, so it runs only when the normal build produced nothing. ⚑ verify which popular tools need it (Phase 0 spike).
+If the built `ControlPanel` gained no children (L2), run `Sources.WithControlPanelFallback(name, panel, function() hook.Run("PostReloadToolsMenu") end)`: temporarily makes `controlpanel.Get(name)` return our panel so a hook that fills it by name fills ours. It goes through `Util.WithOverride` (R5), which restores the original in every path. It fires every addon's `PostReloadToolsMenu`, so it runs only when the normal build produced nothing. ⚑ verify which popular tools need it (Phase 0 spike).
 
 ### 14.4 Equip
 
@@ -789,7 +789,7 @@ Button, checkbox, combo box, text entry / number wang (hand focus to the entry),
 
 ### 19.5 Menus
 - **Window/tab menu**: build the real `DMenu` from actions, open it next to the window, then drive it: Up/Down move `HighlightItem`, Right/Enter `OpenSubMenu` or `option:DoClick()` + `CloseDermaMenus()`, Left/Backspace close (G17).
-- **Element menu** (Shift+Enter on a control): call the element's own right-click handler, find the DMenu it opened, move it next to the element, drive it the same way. Finding it without patching is ⚑ verify: first try diffing children of `vgui.GetWorldPanel()`; fallback is wrapping only `RegisterDermaMenuForClose` for the duration of the synchronous call inside the R5 helper. v1 patched `DermaMenu`, `vgui.Create`, `gui.MouseX`, `gui.MouseY` (B4, B5).
+- **Element menu** (Shift+Enter on a control): call the element's own right-click handler, find the DMenu it opened, move it next to the element, drive it the same way. Finding it is ⚑ verify. Implemented: `RegisterDermaMenuForClose` is wrapped through `Util.WithOverride` for the duration of the synchronous call (every DMenu registers itself there, G17); if nothing registered, new `DMenu` children of `vgui.GetWorldPanel()` are used. Openers tried, per element and then up to 10 parents: `OpenGenericSpawnmenuRightClickMenu`, `DoRightClick`, `OpenMenu`, a right press and release. v1 patched `DermaMenu`, `vgui.Create`, `gui.MouseX`, `gui.MouseY` (B4, B5).
 
 ---
 
@@ -971,11 +971,17 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - An import applies in place after the confirm; nothing reloads.
 
 ### Phase 5 — Keyboard navigation (3–4 days) → `2.0.0-beta.1`
-- [ ] `nav.lua` state machine, zones, scan, `Rank` [F25, L10, L11, L14, L15, G24, D8]
-- [ ] `nav_controls.lua` [L20, L21]
-- [ ] Keyboard-driven DMenus, window and element menus [L9, G17, B4, B5, E29, D9]
-- [ ] Taskbar and popup zones
-- **Accept:** everything the mouse can do inside a pinned window, the keyboard can do.
+- [x] `nav.lua` state machine, zones, scan, `Rank` [F25, L10, L11, L14, L15, G24, D8]
+- [x] `nav_controls.lua` [L20, L21]
+- [x] Keyboard-driven DMenus, window and element menus [L9, G17, B4, B5, E29, D9]
+- [x] Taskbar and popup zones
+- **Accept** (in game, still to check): everything the mouse can do inside a pinned window, the keyboard can do.
+- *Deviations:*
+  - `input.lua` gained the key repeat and `CreateMove` movement suppression left over from Phase 1. Handlers run from a snapshot because navigation rebinds its keys when its state changes.
+  - The navigation keys between windows are settings (`pinnedpanels_nav_next`, `_nav_prev`, `_nav_tab_next`, `_nav_tab_prev`, `_nav_enter`, `_nav_use`; v1 defaults Right, Left, ], [, Down, Enter) and are bound only while navigation is on. Keys inside a window and in menus are fixed: arrows, Enter, Shift+Enter, Backspace.
+  - The focused window for navigation is `Desktop.focused`, the same one mouse clicks and window-scope keys use.
+  - Only the colour dialog is a popup zone so far.
+  - `pinnedpanels_debug nav` prints the state.
 
 ### Phase 6 — Parity & translations (2 days)
 - [ ] Side-by-side v1/v2 screenshots of every screen and menu; close gaps or record a decision

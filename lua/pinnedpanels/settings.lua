@@ -93,6 +93,7 @@ end
 
 Settings.Add("autoRestore", { type = "bool", default = true, page = "general", section = "behavior", label = "opt.autorestore" })
 Settings.Add("idleOpacity", { type = "int", min = 10, max = 100, default = 100, page = "general", section = "behavior", label = "opt.idle_alpha" })
+Settings.Add("navEverywhere", { type = "bool", default = false, page = "general", section = "behavior", label = "opt.kbnav_outside" })
 Settings.Add("snap", { type = "bool", default = true, page = "general", section = "snapping", label = "opt.snap" })
 Settings.Add("snapDistance", { type = "int", min = 0, max = 40, default = 12, page = "general", section = "snapping", label = "opt.snap_dist" })
 Settings.Add("colorBg", { type = "color", default = Color(235, 238, 242, 250), page = "appearance", section = "colors", label = "color.panel_bg" })
@@ -107,4 +108,11 @@ Settings.Add("taskbarLabels", { type = "bool", default = true, page = "taskbar",
 Settings.Add("taskbarColorBg", { type = "color", default = Color(20, 22, 30, 220), page = "taskbar", section = "colors", label = "color.background" })
 Settings.Add("taskbarColorText", { type = "color", default = Color(220, 225, 235, 255), page = "taskbar", section = "colors", label = "color.text" })
 Settings.Add("taskbarColorAccent", { type = "color", default = Color(60, 140, 255, 255), page = "taskbar", section = "colors", label = "color.accent" })
--- Key settings (pinnedpanels_key_<action>) are declared by actions.lua, one per bindable action (§18.2).
+-- Keyboard navigation between windows (F25); they only take their keys while navigation is on (D8, R7).
+Settings.Add("navNext", { type = "key", default = KEY_RIGHT, page = "controls", section = "nav", label = "kb.focus_next" })
+Settings.Add("navPrev", { type = "key", default = KEY_LEFT, page = "controls", section = "nav", label = "kb.focus_prev" })
+Settings.Add("navTabNext", { type = "key", default = KEY_RBRACKET, page = "controls", section = "nav", label = "kb.tab_next" })
+Settings.Add("navTabPrev", { type = "key", default = KEY_LBRACKET, page = "controls", section = "nav", label = "kb.tab_prev" })
+Settings.Add("navEnter", { type = "key", default = KEY_DOWN, page = "controls", section = "nav", label = "kb.enter_nav" })
+Settings.Add("navUse", { type = "key", default = KEY_ENTER, page = "controls", section = "nav", label = "kb.use" })
+-- Key settings for actions (pinnedpanels_key_<action>) are declared by actions.lua, one per bindable action (§18.2).

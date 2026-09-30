@@ -42,7 +42,8 @@ local function create(rec)
 end
 
 -- Visibility, mouse input and idle opacity, recomputed on changes, never per frame (§16.3, G27).
--- Peek shows every window, minimized ones too, at full opacity (F22).
+-- Peek shows every window, minimized ones too, at full opacity (F22); so is the window keyboard
+-- navigation just used (L11).
 function Desktop.UpdateStates()
 	local interactive = Input.Interactive()
 	local idle = Settings.Get("idleOpacity") / 100
@@ -52,7 +53,7 @@ function Desktop.UpdateStates()
 			win:SetVisible(rec.state ~= "minimized" or Desktop.peeking)
 			win:SetMouseInputEnabled(interactive)
 			if not interactive then win:SetKeyboardInputEnabled(false) end
-			local alpha = (interactive or Desktop.peeking) and 1 or math.max(rec.opacity or idle, 0.05)
+			local alpha = (interactive or Desktop.peeking or PP.Nav.Opaque(id)) and 1 or math.max(rec.opacity or idle, 0.05)
 			win:SetAlpha(math.Round(alpha * 255))
 		end
 	end

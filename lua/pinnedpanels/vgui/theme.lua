@@ -60,6 +60,10 @@ T.dangerBg, T.dangerHover, T.dangerText = Color(140, 35, 35), Color(180, 50, 50)
 -- Crop editor
 T.cropShade = Color(0, 0, 0, 160)
 
+-- Keyboard navigation: window focus, focus inside a window, the focused control, a control being adjusted
+T.focusRing, T.navRing, T.navElement, T.navSelected = Color(90, 200, 255), Color(255, 50, 50), Color(0, 200, 255), Color(0, 255, 0)
+T.hintBg, T.hintText = Color(150, 30, 30, 235), Color(255, 225, 225)
+
 -- Icon materials are made once per path and never while painting (G29).
 local icons = {}
 function T.Icon(path)

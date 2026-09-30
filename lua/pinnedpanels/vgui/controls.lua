@@ -229,5 +229,6 @@ function Dialogs.Colors(id)
 		Layout.SetColors(id, {})
 		frame:Close()
 	end
+	PP.Nav.EnterPopup(frame)
 	return frame
 end

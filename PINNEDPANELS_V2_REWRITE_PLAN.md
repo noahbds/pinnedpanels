@@ -944,20 +944,31 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - `storage.lua` is 291 lines (budget 220): `Sanitize` is most of it, and it's still one job (the file format). `layout.lua` is 557 (budget 500).
 
 ### Phase 3 — Window features (3 days) → `2.0.0-alpha.1`
-- [ ] Multi-tab windows: tab strip, `MoveTab`, per-tab size, accents [F15]
-- [ ] Crop editor and clip crop [F16, L15, E19, E28]
-- [ ] Filter bar, collapse cookies, auto-size [F17, F19, F20, G23, D14]
-- [ ] Minimize/maximize, `vgui/taskbar.lua` [F12, F13, B15, B23, B29, E23]
-- [ ] `actions.lua` + window/tab/taskbar menus, colour dialog, rename, lock, geometry copy/paste, equip, rebuild content [F14, F26–F29, F34, F35, G32, D15, D17, E10]
-- [ ] Quick keys, peek, arrange, reopen [F18, F21, F22, F24]
-- **Accept:** every v1 context-menu entry exists; merging 3 tools into one window and splitting them back leaves no extra panels (`pinnedpanels_debug panels`); idle and restore budgets met.
+- [x] Multi-tab windows: tab strip, `MoveTab`, per-tab size, accents [F15]
+- [x] Crop editor and clip crop [F16, L15, E19, E28]
+- [x] Filter bar, collapse cookies, auto-size [F17, F19, F20, G23, D14]
+- [x] Minimize/maximize, `vgui/taskbar.lua` [F12, F13, B15, B23, B29, E23]
+- [x] `actions.lua` + window/tab/taskbar menus, colour dialog, rename, lock, geometry copy/paste, equip, rebuild content [F14, F26–F29, F34, F35, G32, D15, D17, E10]
+- [x] Quick keys, peek, arrange, reopen [F18, F21, F22, F24]
+- **Accept** (in game, still to check): every v1 context-menu entry exists; merging 3 tools into one window and splitting them back leaves no extra panels (`pinnedpanels_debug panels`); idle and restore budgets met.
+- *Deviations:*
+  - "Hide" is for this session only (the desktop's held set, like autoRestore off); the Pinned page, the palette or the window's quick key show it again. It isn't saved.
+  - The tab strip switches tabs on click and opens the tab menu on right-click. There's no drag to reorder or drag-hover switching; the tab menu has Move Left/Right/To Its Own Window.
+  - Each tab has its own filter text; the window's filter-bar setting shows or hides all of them.
+  - Crop insets are content pixels. Dragging a cropped window's edge trims or reveals content (v1); other size changes (arrange, rescale, the layout editor) keep the insets.
+  - Extra actions beyond v1's menu: `restore` (taskbar), `maximize` (key only), `palette`, `rename_tab`, `move_left`/`move_right`/`move_out`, `unpin_tab`, `unpin_group_tabs`, `dissolve`.
+  - `pinnedpanels_debug` has only `panels` for now.
+  - The taskbar's keyboard zone waits for Phase 5; `SetPopupStayAtBack` waits for the Phase 0 spike (G26).
 
 ### Phase 4 — Hub (3 days)
-- [ ] Pinned page with dormant entries [F4, L26]
-- [ ] Layout editor [F5, B22]
-- [ ] Settings pages, key binders with conflicts, Groups, Data with import preview [F6, F26, G19, R3, E15, E30, E34]
-- [ ] Palette [F23, L16, B14]
-- **Accept:** every §21.2 setting is visible and resets; importing a bomb string is rejected with a message and changes nothing.
+- [x] Pinned page with dormant entries [F4, L26]
+- [x] Layout editor [F5, B22]
+- [x] Settings pages, key binders with conflicts, Groups, Data with import preview [F6, F26, G19, R3, E15, E30, E34]
+- [x] Palette [F23, L16, B14]
+- **Accept** (in game, still to check): every §21.2 setting is visible and resets; importing a bomb string is rejected with a message and changes nothing.
+- *Deviations:*
+  - Resizing a cropped window's box in the layout editor keeps its crop insets (v1 adjusted them).
+  - An import applies in place after the confirm; nothing reloads.
 
 ### Phase 5 — Keyboard navigation (3–4 days) → `2.0.0-beta.1`
 - [ ] `nav.lua` state machine, zones, scan, `Rank` [F25, L10, L11, L14, L15, G24, D8]

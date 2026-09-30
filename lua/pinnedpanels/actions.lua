@@ -616,6 +616,27 @@ concommand.Add("pinnedpanels_list", function()
 	print(string.format("[Pinned Panels] %d window(s).", #Layout.Windows()))
 end, nil, "List pinned windows and their tabs")
 
+-- pinnedpanels_debug panels: what the desktop holds, to check that merging and splitting leave nothing
+-- behind (B9). "perf" and "nav" arrive with Phases 7 and 5.
+concommand.Add("pinnedpanels_debug", function(_, _, args)
+	if args[1] ~= "panels" then
+		print("[Pinned Panels] usage: pinnedpanels_debug panels")
+		return
+	end
+	local controls, hosts, built = 0, 0, 0
+	for _, win in pairs(Desktop.panels) do
+		if IsValid(win) then
+			controls = controls + 1
+			for _, host in pairs(win.hosts) do
+				hosts = hosts + 1
+				if host.built then built = built + 1 end
+			end
+		end
+	end
+	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), taskbar %s, %d Lua panels in total",
+		#Layout.Windows(), controls, hosts, built, IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
+end, nil, "Pinned Panels diagnostics: pinnedpanels_debug panels")
+
 -- Re-runs the loader (G2): windows rebuild from the saved document, with no duplicate hooks or panels (E25).
 concommand.Add("pinnedpanels_reload", function()
 	Storage.Flush()

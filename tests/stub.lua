@@ -47,6 +47,8 @@ function IsColor(v)
 	return getmetatable(v) == COLOR
 end
 
+color_white = Color(255, 255, 255)
+
 -- Clock, screen and frames: time only moves when a test says so (G5).
 function RealTime() return S.now end
 function SysTime() return S.now end
@@ -412,20 +414,25 @@ function util.Base64Decode(s)
 	end))
 end
 
--- Runs of 4+ identical bytes become "\1<byte><count>;", so a huge run compresses to a few bytes.
+-- Repeats of a 1-8 byte unit (4+ times) become "\1<len><unit><count>;", so bombs and key floods stay small.
 function util.Compress(s)
 	local out, i = {}, 1
 	while i <= #s do
-		local c = s:sub(i, i)
-		local j = i
-		while s:byte(j + 1) == c:byte() do j = j + 1 end
-		local n = j - i + 1
-		if n > 3 or c == "\1" then
-			out[#out + 1] = "\1" .. c .. n .. ";"
-		else
-			out[#out + 1] = s:sub(i, j)
+		local bestP, bestK = 0, 0
+		for p = 1, 8 do
+			local unit, k = s:sub(i, i + p - 1), 1
+			while #unit == p and s:sub(i + k * p, i + k * p + p - 1) == unit do k = k + 1 end
+			if k >= 4 and k * p > bestK * bestP then bestP, bestK = p, k end
 		end
-		i = j + 1
+		local c = s:sub(i, i)
+		if bestK > 0 or c == "\1" then
+			local p, k = math.max(bestP, 1), math.max(bestK, 1)
+			out[#out + 1] = "\1" .. string.char(p) .. s:sub(i, i + p - 1) .. k .. ";"
+			i = i + p * k
+		else
+			out[#out + 1] = c
+			i = i + 1
+		end
 	end
 	return "RLE" .. table.concat(out)
 end
@@ -436,12 +443,14 @@ function util.Decompress(s, maxSize)
 	while i <= #s do
 		local piece
 		if s:sub(i, i) == "\1" then
-			local c, n, stop = s:match("^\1(.)(%d+);()", i)
-			if not c then return nil end
-			n = tonumber(n)
-			size = size + n
+			local p = s:byte(i + 1)
+			if not p then return nil end
+			local unit = s:sub(i + 2, i + 1 + p)
+			local k, stop = s:match("^(%d+);()", i + 2 + p)
+			if #unit ~= p or not k then return nil end
+			size = size + p * tonumber(k)
 			if maxSize and size > maxSize then return nil end
-			piece = c:rep(n)
+			piece = unit:rep(tonumber(k))
 			i = stop
 		else
 			piece = s:sub(i, i)

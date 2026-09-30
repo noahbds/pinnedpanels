@@ -1,0 +1,14 @@
+{
+	"title": "Pinned Panels",
+	"type": "tool",
+	"tags": ["build"],
+	"ignore": [
+		"*.md",
+		"tests/*",
+		"tools/*",
+		".github/*",
+		".vscode/*",
+		".gluarc.json",
+		"**/.DS_Store"
+	]
+}

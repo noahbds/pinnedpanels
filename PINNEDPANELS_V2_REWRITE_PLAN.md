@@ -911,7 +911,8 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - §14.3: which tools in a common pack (Wiremod, Easy Precision, Advanced Duplicator 2) produce an empty `ControlPanel` without the fallback
   - G8: chat open is visible to Lua only via `StartChat`/`FinishChat` (not `vgui.GetKeyboardFocus`)
   - §33.15: the "pin any panel" spike (where windows live, Manage, Embed, reproduce the v1 failure, Record, real addons)
-- [ ] Remove the v1 tree; add loader, `addon.json`, `tools/check_rules.sh`, `tests/run.lua` + stub, CI (green)
+- [x] Remove the v1 tree; add loader, `addon.json`, `tools/check_rules.sh`, `tests/run.lua` + stub, CI (green)
+  - *Deviation:* the stub starts with `Color`, the manual clock, `ScrW/ScrH` and `Compress/Decompress`; the convar table and vendored `dkjson` arrive with `settings.lua` and `storage.lua` in Phase 1, the first code that needs them. `check_rules.sh` also enforces the §2 rule that cursor, key polling and bind hooks live only in `input.lua`. `README.md` still describes v1 until Phase 7.
 - **Accept:** the game boots and prints `Pinned Panels 2.0.0 loaded`; CI green.
 
 ### Phase 1 — Data and input (2 days)

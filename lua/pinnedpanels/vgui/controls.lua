@@ -42,7 +42,7 @@ function SEARCH:Paint(w, h)
 	surface.SetDrawColor(T.inputBorder)
 	surface.DrawOutlinedRect(0, 0, w, h, 1)
 	if self:GetText() == "" then
-		draw.SimpleText(self:GetPlaceholderText() or "", self:GetFont(), 5, h / 2, T.textMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+		draw.SimpleText(self:GetPlaceholderText() or "", "DermaDefault", 5, h / 2, T.textMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 	end
 	self:DrawTextEntryText(T.inputText, T.inputCursor, T.inputText)
 end

@@ -350,10 +350,19 @@ Actions.Add({
 	run = function(ctx) Layout.ToggleMaximize(ctx.id) end,
 })
 
+-- Rolled up to its header (FF6); double-clicking the header does the same.
+Actions.Add({
+	id = "roll", scope = "window", icon = "icon16/arrow_in.png", name = "kb.roll", bindable = true,
+	label = function(ctx) return PP.L(ctx.window.state == "rolled" and "ctx.unroll" or "ctx.roll") end,
+	menu = { group = "view", window = 22 },
+	enabled = function(ctx) return ctx.window.state == "normal" or ctx.window.state == "rolled" end,
+	run = function(ctx) Layout.ToggleRoll(ctx.id) end,
+})
+
 -- Hidden for this session; the Pinned page and palette show it again.
 Actions.Add({
 	id = "hide", scope = "window", managed = true, icon = "icon16/eye.png", label = "ctx.hide_panel", name = "kb.toggle_hide",
-	menu = { group = "view", window = 22 }, bindable = true,
+	menu = { group = "view", window = 23 }, bindable = true,
 	run = function(ctx)
 		if Desktop.held[ctx.id] then Desktop.Show(ctx.id) else Desktop.Hide(ctx.id) end
 	end,

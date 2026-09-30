@@ -14,6 +14,7 @@ local MIN_CROPPED = 60
 local AUTOSIZE_ANIM = 0.12
 local AUTOSIZE_MAX_W, AUTOSIZE_MAX_H = 0.6, 0.92
 local AUTOSIZE_DEADBAND = 12
+local DOUBLE_CLICK = 0.35
 
 -- Slot 1 is the rightmost button.
 local BUTTONS = { "close", "max", "min" }
@@ -74,9 +75,11 @@ function PANEL:Refresh()
 	local rec = Layout.Get(self.id)
 	if not rec then return end
 	self.rec = rec
+	-- Rolled up (FF6), the window is its header; the record keeps the height it unrolls to.
+	local rolled = rec.state == "rolled"
 	if not (self.drag or self.resize or self.animating or self.editing) then
 		self:SetPos(rec.x, rec.y)
-		self:SetSize(rec.w, rec.h)
+		self:SetSize(rec.w, rolled and HEADER or rec.h)
 	end
 
 	local tab, shown = self:ShownTab()
@@ -90,7 +93,7 @@ function PANEL:Refresh()
 	for i, t in ipairs(rec.tabs) do
 		if Sources.Get(t.src) then items[#items + 1] = { index = i, title = Layout.TabTitle(t) } end
 	end
-	self.strip:SetVisible(#items > 1)
+	self.strip:SetVisible(#items > 1 and not rolled)
 	self.strip:Setup(rec, items, shown)
 
 	local keep = {}
@@ -109,7 +112,7 @@ function PANEL:Refresh()
 		self.hosts[tab.src] = host
 	end
 	for src, host in pairs(self.hosts) do
-		host:SetVisible(tab ~= nil and src == tab.src)
+		host:SetVisible(not rolled and tab ~= nil and src == tab.src)
 		host:SetFilterBar(rec.filterBar)
 	end
 	if tab then self.hosts[tab.src]:SetCrop(crop) end
@@ -134,7 +137,8 @@ end
 
 -- ── Hit-testing ─────────────────────────────────────────────
 
--- Returns "close"/"max"/"min", a resize zone ("n", "se", …), "header" or nil (the body).
+-- Returns "close"/"max"/"min", a resize zone ("n", "se", …), "header" or nil (the body). A rolled-up
+-- window is all header: it moves but doesn't resize.
 function PANEL:Zone(x, y)
 	local w, h = self:GetSize()
 	if x < 0 or y < 0 or x >= w or y >= h then return nil end
@@ -142,6 +146,7 @@ function PANEL:Zone(x, y)
 		local slot = math.floor((w - 2 - x) / BTN_W) + 1
 		if x < w - 2 and BUTTONS[slot] then return BUTTONS[slot] end
 	end
+	if self.rec and self.rec.state == "rolled" then return "header" end
 	local n, s, west, e = y < EDGE, y >= h - EDGE, x < EDGE, x >= w - EDGE
 	if n or s or west or e then
 		if n or s then
@@ -197,6 +202,16 @@ function PANEL:OnMousePressed(code)
 		self.pressed = zone
 		self:MouseCapture(true)
 		return
+	end
+	-- Double-clicking the header rolls the window up to it, or back down (FF6).
+	if zone == "header" then
+		local now = RealTime()
+		if self.lastHeaderClick and now - self.lastHeaderClick < DOUBLE_CLICK then
+			self.lastHeaderClick = nil
+			Layout.ToggleRoll(self.id)
+			return
+		end
+		self.lastHeaderClick = now
 	end
 	if not zone or rec.locked then return end
 
@@ -305,6 +320,7 @@ function PANEL:OnMouseReleased(code)
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
 		if resize and resize.newCrop then Layout.SetCrop(self.id, resize.index, resize.newCrop) end
+		if self.rec.state == "rolled" then h = self.rec.h end
 		Layout.SetGeometry(self.id, x, y, w, h)
 	end
 end
@@ -316,7 +332,7 @@ end
 function PANEL:AutoSize(settle)
 	local tab = self:ShownTab()
 	local host = tab and self.hosts[tab.src]
-	if not host or tab.crop then return end
+	if not host or tab.crop or self.rec.state == "rolled" then return end
 	if self.rec.state == "maximized" then
 		Layout.ToggleMaximize(self.id)
 		self:Refresh()
@@ -387,7 +403,8 @@ function PANEL:Paint(w, h)
 	end
 
 	draw.RoundedBox(6, 0, 0, w, h, bg)
-	draw.RoundedBoxEx(6, 0, 0, w, HEADER, header, true, true, false, false)
+	local rolled = rec.state == "rolled"
+	draw.RoundedBoxEx(6, 0, 0, w, HEADER, header, true, true, rolled, rolled)
 	draw.SimpleText(self.titleText, "DermaDefaultBold", 10, HEADER / 2, text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 	if rec.locked then

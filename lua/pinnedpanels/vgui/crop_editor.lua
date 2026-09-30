@@ -195,6 +195,7 @@ function PP.CropEditor.Open(id, index)
 	if IsValid(win.cropEditor) then win.cropEditor:Remove() end
 	if rec.state == "minimized" then Layout.Restore(id) end
 	if rec.state == "maximized" then Layout.ToggleMaximize(id) end
+	if rec.state == "rolled" then Layout.ToggleRoll(id) end
 	if IsValid(g_SpawnMenu) and g_SpawnMenu:IsVisible() then g_SpawnMenu:Close() end
 	Input.SetCursorMode(true)
 	if index ~= rec.active then Layout.Activate(id, index) end

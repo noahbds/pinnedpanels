@@ -20,7 +20,7 @@ local MAX_WINDOWS, MAX_TABS = 64, 16
 local MAX_TITLE, MAX_SRC = 64, 128
 local MAX_COORD = 32768
 local KINDS = { tool = true, creation = true, desktop = true, postprocess = true, adopt = true }
-local STATES = { normal = true, minimized = true, maximized = true }
+local STATES = { normal = true, minimized = true, maximized = true, rolled = true }
 local ADOPT_MODES = { manage = true, embed = true, part = true }
 local MAX_PATH = 16
 

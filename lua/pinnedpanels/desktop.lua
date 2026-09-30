@@ -187,7 +187,9 @@ function Desktop.SnapRects(exceptId)
 	local rects = {}
 	for id, win in pairs(Desktop.panels) do
 		local rec = Layout.Get(id)
-		if id ~= exceptId and rec and IsValid(win) and win:IsVisible() then rects[#rects + 1] = rec end
+		if id ~= exceptId and rec and IsValid(win) and win:IsVisible() then
+			rects[#rects + 1] = rec.state == "rolled" and { x = rec.x, y = rec.y, w = rec.w, h = win:GetTall() } or rec
+		end
 	end
 	return rects
 end

@@ -440,6 +440,21 @@ function Layout.Restore(id)
 	return true
 end
 
+-- Roll-up (FF6): a normal window shrinks to its header and keeps its size for when it unrolls.
+function Layout.ToggleRoll(id)
+	local win = byId[id]
+	if not win or win.kind == "managed" then return false end
+	if win.state == "rolled" then
+		win.state = "normal"
+	elseif win.state == "normal" then
+		win.state = "rolled"
+	else
+		return false
+	end
+	changed("state", id)
+	return true
+end
+
 -- Maximize fills the usable area; the crop is kept on the tab and suspended by the window (B27, E28).
 function Layout.ToggleMaximize(id)
 	local win = byId[id]

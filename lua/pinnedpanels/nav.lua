@@ -602,6 +602,10 @@ end)
 hook.Add("PinnedPanelsSettingChanged", "PinnedPanels.Nav", function(key)
 	if key == "navEverywhere" then Nav.Refresh() elseif key:sub(1, 3) == "nav" then bindKeys() end
 end)
+-- The hint is worked out on changes, so a language change works it out again (E11).
+cvars.AddChangeCallback("gmod_language", function()
+	Util.NextFrame(nil, function() if Nav.state ~= "off" then updateHint() end end)
+end, "PinnedPanels.Nav")
 
 -- ── Drawing (called from the window's and the popup's PaintOver) ──
 

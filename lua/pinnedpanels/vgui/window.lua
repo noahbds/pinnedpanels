@@ -115,6 +115,12 @@ function PANEL:Refresh()
 	self:InvalidateLayout()
 end
 
+-- A language change: the tab hosts' text and content, then the title (E11).
+function PANEL:Relocalize()
+	for _, host in pairs(self.hosts) do host:Relocalize() end
+	self:Refresh()
+end
+
 function PANEL:MinSize()
 	if self:ActiveCrop(self:ShownTab()) then return MIN_CROPPED, MIN_CROPPED end
 	return MIN_W, MIN_H

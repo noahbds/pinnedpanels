@@ -387,6 +387,13 @@ function HOST:Rebuild()
 	self.built = false
 end
 
+-- A language change (E11): tool content is built again so it follows the game language like the spawn
+-- menu's own copy; content tabs keep what they show (they hold browsing state) unless they failed.
+function HOST:Relocalize()
+	self.filter:SetPlaceholderText(PP.L("filter.controls"))
+	if self.built and (self.src:match("^tool:") or not self.content) then self:Rebuild() end
+end
+
 function HOST:SetCrop(crop)
 	self.clip:SetCrop(crop)
 end

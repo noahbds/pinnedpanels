@@ -144,11 +144,12 @@ hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Desktop", function()
 	Desktop.Reconcile()
 end)
 
--- Default titles follow the game language (L19, E11); the spawn menu rebuilds the hub itself (G11).
+-- Windows follow the game language (L19, E11); the spawn menu rebuilds the hub itself (G11), and the
+-- catalogue's default titles come back with it.
 cvars.AddChangeCallback("gmod_language", function()
 	Util.NextFrame(nil, function()
 		for _, win in pairs(Desktop.panels) do
-			if IsValid(win) then win:Refresh() end
+			if IsValid(win) then win:Relocalize() end
 		end
 		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
 	end)

@@ -105,4 +105,4 @@ Settings.Add("taskbarLabels", { type = "bool", default = true, page = "taskbar",
 Settings.Add("taskbarColorBg", { type = "color", default = Color(20, 22, 30, 220), page = "taskbar", section = "colors" })
 Settings.Add("taskbarColorText", { type = "color", default = Color(220, 225, 235, 255), page = "taskbar", section = "colors" })
 Settings.Add("taskbarColorAccent", { type = "color", default = Color(60, 140, 255, 255), page = "taskbar", section = "colors" })
-Settings.Add("keyCursor", { type = "key", default = KEY_F4, page = "controls" })
+-- Key settings (pinnedpanels_key_<action>) are declared by actions.lua, one per bindable action (§18.2).

@@ -91,19 +91,16 @@ end
 
 -- ── Content ─────────────────────────────────────────────────
 
--- The only global replacement in the addon (R5): while fn runs, controlpanel.Get(name) returns panel,
--- so hooks that fill a tool's panel by name fill ours (L2). The original is restored on every path.
+-- While fn runs, controlpanel.Get(name) returns panel, so hooks that fill a tool's panel by name fill ours
+-- (L2). Util.WithOverride restores the original on every path (R5).
 function Sources.WithControlPanelFallback(name, panel, fn)
 	local original = controlpanel.Get
-	controlpanel.Get = function(n)
+	Sources.inFallback = true
+	local ok = PP.Util.WithOverride(controlpanel, "Get", function(n)
 		if n == name then return panel end
 		return original(n)
-	end
-	Sources.inFallback = true
-	local ok, err = xpcall(fn, debug.traceback)
+	end, fn)
 	Sources.inFallback = false
-	controlpanel.Get = original
-	if not ok then ErrorNoHalt("[Pinned Panels] " .. tostring(err) .. "\n") end
 	return ok
 end
 

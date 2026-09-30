@@ -155,6 +155,19 @@ function Util.Fuzzy(hay, needle)
 	return 500 + #hay
 end
 
+-- ── Replacing a global ──────────────────────────────────────
+
+-- The addon's only way to replace a field of a global table (R5): tbl[key] is replacement while fn runs
+-- and the original comes back on every path. fn's errors are printed and contained (G38). Returns ok.
+function Util.WithOverride(tbl, key, replacement, fn)
+	local original = tbl[key]
+	tbl[key] = replacement
+	local ok, err = xpcall(fn, debug.traceback)
+	tbl[key] = original
+	if not ok then ErrorNoHalt("[Pinned Panels] " .. tostring(err) .. "\n") end
+	return ok
+end
+
 -- ── Timing ──────────────────────────────────────────────────
 
 -- Runs fn next frame, unless panel was given and is gone by then.

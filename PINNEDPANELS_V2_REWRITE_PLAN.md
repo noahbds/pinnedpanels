@@ -513,7 +513,6 @@ lua/pinnedpanels/
    ├─ hub_pinned.lua ...................... 220  Pinned page
    ├─ hub_layout.lua ...................... 380  layout editor canvas
    └─ hub_settings.lua .................... 350  settings pages
-tools/ ............................................ check_rules.sh, check_lang.lua, lua_to_properties.lua
 ```
 
 **Totals:** 24 Lua files, ≈ 6,700 lines. Budgets flag problems; a file more than 25% over should be checked for doing two jobs.
@@ -862,7 +861,7 @@ Rows are generated per `page`/`section` with our convar-bound controls (`Derma_I
 - Codes: v1 `pt` → `pt-BR`, `zh` → `zh-CN`, `es` → `es-ES`; `en`, `fr`, `de`, `ru`, `pl`, `tr` unchanged.
 - Keys `pinnedpanels.<area>.<thing>`; Derma labels use `"#pinnedpanels.key"`; code uses `L(key, …)` = `language.GetPhrase` + guarded `string.format`.
 - Refresh: the spawn menu already rebuilds itself on `gmod_language` (G11), so the hub refreshes for free; windows, taskbar, palette and settings listen to one `cvars.AddChangeCallback("gmod_language")`.
-- `tools/lua_to_properties.lua` converts v1's 9 tables once (content conversion only); `tools/check_lang.lua` fails on keys used but missing from `en`, warns on unused and untranslated keys (B25).
+- v1's 9 tables are converted once, by hand or a throwaway script (no tools are kept, D21): v1 key `ctx_lock` becomes `pinnedpanels.ctx.lock` (first `_` → `.`), newlines are written as `\n`. Missing keys fall back to English (B25 is checked by review).
 - Limitation: a player who receives the Lua from a server without having the addon installed won't have the `.properties` files and sees raw keys. Pinned Panels is meant to be installed by the player, so this is documented, not designed around.
 
 ---
@@ -888,12 +887,11 @@ Rows are generated per `page`/`section` with our convar-bound controls (`Derma_I
 
 Kept small: most of this addon is VGUI and is tested in game.
 
-- **`tools/check_rules.sh`**: `luajit -bl` parse check on every file (L27); greps for `timer.Simple` outside `util.lua`, `Think` hooks outside `input.lua`, `CurTime(`/`FrameTime(`, `file.` outside `storage.lua`, library-field assignments, `Decompress(` with one argument, `SetSkin(`, `Color(`/`Material(` in functions assigned to `Paint`/`Think` (heuristic, `-- cached-ok` to justify), `RunString`, `CompileString`; `.properties` first line empty.
+- **No tool scripts and no CI** (D21): the §24 rules and the §2 grep metrics are checked by review. A Lua parse check before committing: `luajit -bl <file> > /dev/null` (L27).
 - **No unit tests** (D20): the owner tests in game and reports problems. A suite covering `util`, `settings`, `storage` (sanitize, quarantine, import fixtures), `layout`, `input`, the R5 helper and headless window wiring was written for Phases 1–2, then removed (it is in the git history before the removal commit).
-- **CI** (`.github/workflows/ci.yml`): the two above plus `tools/check_lang.lua` on push/PR.
 - **Editor**: keep `.gluarc.json`; drop the server attach config from `.vscode/launch.json` (no server code to debug).
 - **Dev loop on macOS** (G2): `pinnedpanels_reload` re-includes the loader; controls re-register; windows rebuild from the document (E25).
-- **Packaging** (G39): `addon.json` `{ "title": "Pinned Panels", "type": "tool", "tags": ["build"], "ignore": ["*.md", "tools/*", ".github/*", ".vscode/*", ".gluarc.json", "**/.DS_Store"] }`; `gmad create` must contain only `lua/` and `resource/localization/`; 512×512 baseline JPEG icon.
+- **Packaging** (G39): `addon.json` `{ "title": "Pinned Panels", "type": "tool", "tags": ["build"], "ignore": ["*.md", ".vscode/*", ".gluarc.json", "**/.DS_Store"] }`; `gmad create` must contain only `lua/` and `resource/localization/`; 512×512 baseline JPEG icon.
 
 ## 26. Roadmap
 
@@ -902,7 +900,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 ### Phase 0 — Groundwork (½ day)
 - [x] Branches and tag (§3.2); confirm D1 and D4
   - *Done 2026-09-30:* `legacy/v1` and `1.0.0` at `5b6def9`, pushed; `feature/localization` deleted; D1 (no compat) and D4 (`pinnedpanels_`) confirmed. Branch protection on `legacy/v1` is left to the repo owner.
-- [ ] **⚑ verify spike** (≈ 1 hour), results written into §5.2. Script: `tools/spike/phase0.lua` (standalone, doesn't need v1 loaded; `ppspike_help` lists one command per item below). *Results pending.*
+- [ ] **⚑ verify spike** (≈ 1 hour), results written into §5.2. Done by hand in game (the spike script was removed with `tools/`, D21). *Results pending.*
   - G30/E27: pinned windows during the escape menu (`ParentToHUD` + `MakePopup`)
   - G26/E36: `SetPopupStayAtBack(true)` keeps a popup behind the spawn menu and `Derma_Query`
   - G25: `TestHover` on a popup makes the body click-through with the header still draggable
@@ -910,9 +908,9 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - §14.3: which tools in a common pack (Wiremod, Easy Precision, Advanced Duplicator 2) produce an empty `ControlPanel` without the fallback
   - G8: chat open is visible to Lua only via `StartChat`/`FinishChat` (not `vgui.GetKeyboardFocus`)
   - §33.15: the "pin any panel" spike (where windows live, Manage, Embed, reproduce the v1 failure, Record, real addons)
-- [x] Remove the v1 tree; add loader, `addon.json`, `tools/check_rules.sh`, CI (green). Unit tests were added, then removed after Phase 2 (D20)
-  - *Deviation:* the stub starts with `Color`, the manual clock, `ScrW/ScrH` and `Compress/Decompress`; the convar table and vendored `dkjson` arrive with `settings.lua` and `storage.lua` in Phase 1, the first code that needs them. `check_rules.sh` also enforces the §2 rule that cursor, key polling and bind hooks live only in `input.lua`. `README.md` still describes v1 until Phase 7.
-- **Accept:** the game boots and prints `Pinned Panels 2.0.0 loaded`; CI green.
+- [x] Remove the v1 tree; add loader, `addon.json`. Rule checks, unit tests and CI were added, then removed after Phase 2 (D20, D21)
+  - *Deviation:* `README.md` still describes v1 until Phase 7.
+- **Accept:** the game boots and prints `Pinned Panels 2.0 loaded`.
 
 ### Phase 1 — Data and input (2 days)
 - [x] `util.lua` (+ tests) [F36, L5, L12, L23, G5, G35]
@@ -920,7 +918,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `storage.lua` (+ tests) [F30, F31, R1–R3, R9, G34–G37, B2, B3, E6, E7]
 - [x] `layout.lua` operations headless (+ tests) [F12, F15, F18, F24, F27, F28, F32, L6, L7, B8, B17, B20, B27, E3–E5, E20–E22, E28, E33]
 - [x] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
-- [x] English `.properties`, `L()`, `tools/check_lang.lua`, `tools/lua_to_properties.lua` [F33, L18, G39]
+- [x] English `.properties`, `L()` [F33, L18, G39] (the converter and lang check were written, then removed, D21)
 - **Accept** (in game, still to check): a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
 - *Deviations:*
   - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5. `PlayerBindPress` suppression is in.
@@ -988,7 +986,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 
 ## 27. Definition of done
 - [ ] One thing per commit, IDs referenced.
-- [ ] `tools/check_rules.sh` and the lang check pass.
+- [ ] The §24 rules hold (by review); every file parses (`luajit -bl`).
 - [ ] Behaviour has a matrix row.
 - [ ] Strings in `en/pinnedpanels.properties`.
 - [ ] Plan updated if the design changed; file within budget or overrun explained.
@@ -1085,6 +1083,7 @@ None (D20). Bugs are reported from in-game testing and fixed against the matrix 
 | D18 | Global name | **`PinnedPanels`** · `PP` | **Keep `PinnedPanels`** |
 | D19 | When to ship "pin any panel" (§33) | in 2.0 · **as the core of 2.1** | **Core of 2.1** (§33.16, ≈ 15 days), with the §33.15 spike in Phase 0 so the approach is proven before 2.0's window, input and source code is finalized. 2.1-a (picker + Manage) alone delivers the original vision for most windows |
 | D20 | Unit tests | offline suite · **none** | **None**: the owner tests in game and reports problems (decided after Phase 2; the suite was removed) |
+| D21 | Tool scripts and CI | `tools/` + CI · **none** | **None**: rules are checked by review, translations and the Phase 0 spike by hand (decided after Phase 2; `tools/` and CI were removed) |
 
 ---
 
@@ -1145,7 +1144,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 | FF21 | **Theme presets** (dark, light, translucent, high contrast) + export/import of a theme | Fast restyling; high contrast helps readability over bright maps | Themes are sets of the colour settings (§21); a preset applies several convars at once | S · ★ |
 | FF22 | **UI scale** for our own chrome (header, taskbar, palette, hub) on 1440p/4K | Fixed pixel sizes are tiny on large screens | A scale setting feeding `theme.lua` sizes and a small fixed set of font sizes (G29: no per-size font creation). Hosted tool panels can't be scaled (Derma has no transform), so this only covers our parts | M · ★★ |
 | FF23 | **Hide for screenshots** — hide all windows while holding the camera, and a "hide all" toggle | Pinned windows are popups, not HUD, so they show up in camera shots | Visibility rule (FF4) on `gmod_camera`; the screenshot key itself can't be detected (F5 is an F-key, G6), so the toggle covers other cases | S · ★★ |
-| FF24 | **More languages** (ja, ko, uk, zh-TW, it, cs, …) | Wider audience; `.properties` makes it a data-only change | New files under `resource/localization/`; `check_lang.lua` reports coverage | S each · ★ |
+| FF24 | **More languages** (ja, ko, uk, zh-TW, it, cs, …) | Wider audience; `.properties` makes it a data-only change | New files under `resource/localization/` | S each · ★ |
 
 ### 32.6 For other addons
 

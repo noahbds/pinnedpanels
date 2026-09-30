@@ -4,8 +4,6 @@
 	"tags": ["build"],
 	"ignore": [
 		"*.md",
-		"tools/*",
-		".github/*",
 		".vscode/*",
 		".gluarc.json",
 		"**/.DS_Store"

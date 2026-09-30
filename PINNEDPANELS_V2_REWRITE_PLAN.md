@@ -923,6 +923,12 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [ ] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
 - [ ] English `.properties`, `L()`, `tools/check_lang.lua`, `tools/lua_to_properties.lua` [F33, L18, G39]
 - **Accept:** unit tests cover every layout operation; a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
+- *Deviations:*
+  - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5 with their tests. `PlayerBindPress` suppression is in.
+  - Input announces cursor-mode, ALT and spawn-menu changes with an internal `PinnedPanelsInputChanged` event (Appendix A).
+  - Fuzzy matching moves to Phase 4 with the palette, its only user. The taskbar's share of `Geom.Usable()` arrives with the taskbar in Phase 3.
+  - Renaming a single-tab window renames its tab, so the name travels if the tab is moved; a window `title` is a group name (§13.1).
+  - The unit-test stub has its own small JSON codec instead of vendored `dkjson`.
 
 ### Phase 2 — Windows on screen (3 days)
 - [ ] `sources.lua` + fallback helper (+ test) [F7, F8, F35, L2, L28, G11–G16, G18, R4–R6, B26, E2, E8–E10, E12]
@@ -1505,6 +1511,7 @@ Pass criteria in brackets.
 | `PinnedPanelsCatalogChanged` | — | `sources`, after each `PostReloadToolsMenu` |
 | `PinnedPanelsCursorMode` | `active` | `input` |
 | `PinnedPanelsSettingChanged` | `key, value` | `settings` |
+| `PinnedPanelsInputChanged` | — | `input` (cursor mode, ALT, spawn menu open/close) |
 
 **GMod hooks used:** `Think` (one, `input`), `CreateMove`, `PlayerBindPress`, `StartChat`, `FinishChat`, `OnTextEntryGetFocus`, `OnTextEntryLoseFocus`, `OnSpawnMenuOpen`, `OnSpawnMenuClose`, `PostReloadToolsMenu`, `OnScreenSizeChanged`, `ShutDown`. Hook identifiers are `"PinnedPanels.<Area>"` or the owning control.
 

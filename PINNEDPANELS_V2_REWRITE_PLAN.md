@@ -903,7 +903,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 ### Phase 0 — Groundwork (½ day)
 - [x] Branches and tag (§3.2); confirm D1 and D4
   - *Done 2026-09-30:* `legacy/v1` and `1.0.0` at `5b6def9`, pushed; `feature/localization` deleted; D1 (no compat) and D4 (`pinnedpanels_`) confirmed. Branch protection on `legacy/v1` is left to the repo owner.
-- [ ] **⚑ verify spike on v1** (≈ 1 hour), results written into §5.2:
+- [ ] **⚑ verify spike** (≈ 1 hour), results written into §5.2. Script: `tools/spike/phase0.lua` (standalone, doesn't need v1 loaded; `ppspike_help` lists one command per item below). *Results pending.*
   - G30/E27: pinned windows during the escape menu (`ParentToHUD` + `MakePopup`)
   - G26/E36: `SetPopupStayAtBack(true)` keeps a popup behind the spawn menu and `Derma_Query`
   - G25: `TestHover` on a popup makes the body click-through with the header still draggable

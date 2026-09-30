@@ -12,7 +12,7 @@ if SERVER then
 end
 
 PinnedPanels = PinnedPanels or {}
-PinnedPanels.VERSION = "2.0.0"
+PinnedPanels.VERSION = "2.0"
 
 for _, path in ipairs(FILES) do
 	include("pinnedpanels/" .. path)

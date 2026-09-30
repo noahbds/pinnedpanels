@@ -381,6 +381,7 @@ function Recipes.Attach(w, panel, opened)
 		PP.Manage.Attach(w.rec.id, panel, opened)
 		return true
 	end
+	if opened and panel:IsVisible() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode then PP.Input.SetCursorMode(true) end
 	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
 	if not IsValid(panel) then return false end
 	PP.Embed.Attach(w.tab.src, panel, mode)
@@ -414,7 +415,9 @@ function Recipes.Catch()
 		if w.tab.adopt.signature.hud then hud = true end
 	end
 	local list = hud and ticks % HUD_EVERY == 0 and Recipes.TopLevels() or vgui.GetWorldPanel():GetChildren()
-	for _, p in ipairs(list) do
+	-- Newest first: of two windows that match, the one just opened is the one the player wants.
+	for n = #list, 1, -1 do
+		local p = list[n]
 		if not checked[p] and IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 then
 			checked[p] = true
 			-- The spawn and context menus can't be taken whole, but a part of them can.

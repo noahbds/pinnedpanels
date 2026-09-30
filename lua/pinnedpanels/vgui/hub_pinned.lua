@@ -18,6 +18,7 @@ local KIND = {
 	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
 	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
 	managed = { label = "kind.managed", icon = "icon16/application_link.png", color = T.warning },
+	adopt = { label = "kind.embedded", icon = "icon16/application_add.png", color = T.warning },
 	desktop = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 }

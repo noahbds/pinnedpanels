@@ -180,9 +180,9 @@ local function ours(p)
 	return false
 end
 
--- The window or tab that already has this panel, if any.
+-- Whether a panel is already pinned: a managed window, an embedded window's shell or an embedded panel.
 function Recipes.Owner(p)
-	return PP.Manage.byPanel[p]
+	return PP.Manage.byPanel[p] or PP.Embed.shells[p] or PP.Embed.byPanel[p]
 end
 
 -- Why panel (root's window, or root itself) can't be pinned: a localization key, or nil.
@@ -195,10 +195,34 @@ function Recipes.Refusal(panel, root)
 		if p:IsModal() then return "refuse.modal" end
 		p = p:GetParent()
 	end
-	if panel == root then
-		if Recipes.Owner(panel) then return "refuse.pinned" end
-		if panel == g_SpawnMenu or panel == g_ContextMenu or panel == GetHUDPanel() then return "refuse.root" end
+	if Recipes.Owner(panel) then return "refuse.pinned" end
+	if panel == root and (panel == g_SpawnMenu or panel == g_ContextMenu or panel == GetHUDPanel()) then return "refuse.root" end
+end
+
+-- A part's place in its window: child indices and classes from the root down (§33.8).
+function Recipes.Path(root, part)
+	local path, p = {}, part
+	while p ~= root do
+		local parent = p:GetParent()
+		for i, c in ipairs(parent:GetChildren()) do
+			if c == p then
+				table.insert(path, 1, { i = i, class = c.ClassName or c:GetClassName() })
+				break
+			end
+		end
+		p = parent
 	end
+	return path
+end
+
+-- The same part in a window made again, or nil when the window is laid out differently now.
+function Recipes.FollowPath(root, path)
+	local p = root
+	for _, step in ipairs(path) do
+		p = p:GetChildren()[step.i]
+		if not IsValid(p) or (step.class and (p.ClassName or p:GetClassName()) ~= step.class) then return nil end
+	end
+	return p
 end
 
 -- ── Suggestions ─────────────────────────────────────────────
@@ -235,7 +259,8 @@ end
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
 	local info = {
-		mode = "manage", part = panel ~= root, signature = sig, native = Recipes.Native(panel), commands = Recipes.CommandsIn(sig.src),
+		mode = panel ~= root and "part" or "manage", part = panel ~= root, signature = sig, native = Recipes.Native(panel),
+		commands = Recipes.CommandsIn(sig.src),
 	}
 	if #info.commands == 1 then
 		info.recipe = { kind = "command", command = info.commands[1], confirmed = true }
@@ -248,11 +273,16 @@ function Recipes.Suggest(panel, root)
 	return info
 end
 
--- The modes the picker offers for a suggestion.
+-- The modes the picker offers for a suggestion: a window can be managed or embedded, a part embedded.
 function Recipes.Modes(info)
 	local modes = {}
 	if info.native then modes[1] = "native" end
-	if not info.part then modes[#modes + 1] = "manage" end
+	if info.part then
+		modes[#modes + 1] = "part"
+	else
+		modes[#modes + 1] = "manage"
+		modes[#modes + 1] = "embed"
+	end
 	return modes
 end
 
@@ -271,10 +301,42 @@ function Recipes.Choices(info)
 	return list
 end
 
--- Pins panel in the given mode with the given recipe. Returns the window id.
+-- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 function Recipes.Take(panel, root, mode, recipe)
 	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root) }
-	return PP.Manage.Take(panel, adopt)
+	if mode == "manage" then return PP.Manage.Take(root, adopt) end
+	adopt.needsKeyboard = root:IsKeyboardInputEnabled()
+	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
+	return PP.Embed.Take(mode == "part" and panel or root, adopt)
+end
+
+-- Moves an adopted panel between Manage and Embed (§33.6): "Embed for full features" on a managed window,
+-- "Return to managed mode" on an embedded one, which then gets a window of its own.
+function Recipes.SwitchMode(id, index, mode)
+	local rec = Layout.Get(id)
+	local tab = rec and rec.tabs[index]
+	if not (tab and tab.adopt) then return end
+	if mode == "embed" then
+		local panel = PP.Manage.Panel(id)
+		if not IsValid(panel) then return end
+		PP.Manage.Release(id)
+		Layout.SetAdopt(id, index, { mode = "embed" })
+		local _, top = panel:GetDockPadding()
+		if IsValid(panel.lblTitle) and top > 0 then Layout.SetCrop(id, index, { l = 0, t = top, r = 0, b = 0 }) end
+		PP.Embed.Attach(tab.src, panel, "embed")
+		Desktop.Front(id)
+		return
+	end
+	local e = PP.Embed.live[tab.src]
+	if not e or e.mode ~= "embed" then return end
+	local shell = e.shell
+	PP.Embed.Release(tab.src)
+	if #rec.tabs > 1 then id = Layout.MoveTab(id, index, nil) end
+	Layout.SetCrop(id, 1, nil)
+	local x, y = shell:GetPos()
+	Layout.SetGeometry(id, x, y, shell:GetWide(), shell:GetTall(), true)
+	Layout.SetAdopt(id, 1, { mode = "manage" })
+	PP.Manage.Attach(id, shell)
 end
 
 -- A line saying how a pinned panel comes back.
@@ -292,7 +354,8 @@ end
 
 -- Whether tab (of window rec) has its panel now.
 function Recipes.IsLive(rec, tab)
-	return PP.Manage.live[rec.id] ~= nil
+	if tab.adopt.mode == "manage" then return PP.Manage.live[rec.id] ~= nil end
+	return PP.Embed.live[tab.src] ~= nil
 end
 
 -- Adopted tabs waiting for their panel, once the desktop knows which windows are held. Hidden windows
@@ -310,9 +373,17 @@ function Recipes.Waiting()
 	return out
 end
 
--- Gives a caught panel to its waiting tab; opened means the player just opened it.
+-- Gives a caught window to its waiting tab, which takes it whole or the part at its path; opened means
+-- the player just opened it.
 function Recipes.Attach(w, panel, opened)
-	PP.Manage.Attach(w.rec.id, panel, opened)
+	local mode = w.tab.adopt.mode
+	if mode == "manage" then
+		PP.Manage.Attach(w.rec.id, panel, opened)
+		return true
+	end
+	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
+	if not IsValid(panel) then return false end
+	PP.Embed.Attach(w.tab.src, panel, mode)
 	return true
 end
 
@@ -346,12 +417,19 @@ function Recipes.Catch()
 	for _, p in ipairs(list) do
 		if not checked[p] and IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 then
 			checked[p] = true
-			if not Recipes.Refusal(p, p) then
+			-- The spawn and context menus can't be taken whole, but a part of them can.
+			local refusal = Recipes.Refusal(p, p)
+			local partsOnly = refusal == "refuse.root"
+			if not refusal or partsOnly then
 				local cand = Recipes.Signature(p)
 				local best, bestScore, bestStrong
 				for _, w in ipairs(waiting) do
-					local score, strong = Recipes.Match(w.tab.adopt.signature, cand)
-					if score and (not best or score > bestScore) then best, bestScore, bestStrong = w, score, strong end
+					local a = w.tab.adopt
+					local fits = a.mode ~= "part" or Recipes.FollowPath(p, a.signature.path) ~= nil
+					local score, strong = Recipes.Match(a.signature, cand)
+					if score and fits and (a.mode == "part" or not partsOnly) and (not best or score > bestScore) then
+						best, bestScore, bestStrong = w, score, strong
+					end
 				end
 				if best then
 					local ours = (expecting[best.rec.id] or 0) > RealTime()
@@ -532,11 +610,13 @@ local function recorded(result)
 			end
 		end
 	end
+	local function take(mode)
+		return function()
+			if IsValid(panel) and not Recipes.Owner(panel) then Recipes.Take(panel, panel, mode, recipe) end
+		end
+	end
 	Derma_Query(PP.L("record.found", Recipes.SigTitle(cand), how(result)), PP.L("record.title"),
-		PP.L("picker.mode_manage"), function()
-			if IsValid(panel) and not Recipes.Owner(panel) then Recipes.Take(panel, panel, "manage", recipe) end
-		end,
-		PP.L("btn.cancel"), function() end)
+		PP.L("picker.mode_manage"), take("manage"), PP.L("picker.mode_embed"), take("embed"), PP.L("btn.cancel"), function() end)
 end
 
 -- Starts recording, or stops it when it is running.

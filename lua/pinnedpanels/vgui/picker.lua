@@ -114,7 +114,7 @@ function PICKER:Select(panel)
 	self.lines, self.refusal, self.info = {}, nil, nil
 	if not IsValid(panel) then return end
 	local root = self.root
-	self.refusal = Recipes.Refusal(panel, root) or (panel ~= root and not Recipes.Native(panel) and "refuse.part")
+	self.refusal = Recipes.Refusal(panel, root)
 	local sig = Recipes.Signature(panel)
 	local lines = self.lines
 	lines[1] = Recipes.SigTitle(sig)

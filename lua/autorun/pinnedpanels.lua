@@ -11,6 +11,7 @@ local FILES = {
 	"desktop.lua",
 	"recipes.lua",
 	"manage.lua",
+	"embed.lua",
 	"actions.lua",
 	"nav.lua",
 	"nav_controls.lua",

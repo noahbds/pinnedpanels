@@ -82,7 +82,10 @@ function Desktop.Reconcile()
 	end
 	for id, win in pairs(Desktop.panels) do
 		if not seen[id] then
-			if IsValid(win) then win:Remove() end
+			if IsValid(win) then
+				win:Unbuild()
+				win:Remove()
+			end
 			Desktop.panels[id] = nil
 		end
 	end
@@ -252,12 +255,16 @@ end
 
 function Desktop.Teardown()
 	for _, win in pairs(Desktop.panels) do
-		if IsValid(win) then win:Remove() end
+		if IsValid(win) then
+			win:Unbuild()
+			win:Remove()
+		end
 	end
 	Desktop.panels = {}
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Remove() end
 	Desktop.taskbar = nil
 	PP.Manage.ReleaseAll()
+	PP.Embed.ReleaseAll()
 	PP.Recipes.StopRecording()
 	if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() end
 end

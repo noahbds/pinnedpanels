@@ -1,6 +1,7 @@
 -- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>"), spawn-menu
 -- content tabs ("creation:<name>"), C-menu desktop widgets ("desktop:<id>", G47) and post-process panels
--- ("postprocess:<name>", G64), rebuilt on every PostReloadToolsMenu (G11). Builds their content.
+-- ("postprocess:<name>", G64), rebuilt on every PostReloadToolsMenu (G11). Builds their content. Embedded
+-- panels ("adopt:<n>", §33.6) aren't in the catalogue: Embed answers for them while it holds them.
 
 local PP = PinnedPanels
 PP.Sources = PP.Sources or {}
@@ -98,7 +99,12 @@ hook.Add("PostReloadToolsMenu", "PinnedPanels.Sources", function()
 	if not Sources.inFallback then Sources.Rebuild() end
 end)
 
+local function adopted(src)
+	return src:sub(1, 6) == "adopt:"
+end
+
 function Sources.Get(src)
+	if adopted(src) then return PP.Embed.live[src] end
 	return Sources.catalogue[src]
 end
 
@@ -236,9 +242,16 @@ end
 
 -- Fills parent with src's content. Returns the content panel, or nil if src is unavailable or failed.
 function Sources.Build(src, parent)
+	if adopted(src) then return PP.Embed.Build(src, parent) end
 	local e = Sources.catalogue[src]
 	if not e then return nil end
 	return (BUILDERS[e.kind] or buildCreation)(e, parent)
+end
+
+-- Before a tab host clears or removes its content: an embedded panel's box goes back to Embed, since
+-- other addons' panels are never removed with our controls (R15).
+function Sources.Unbuild(src, content)
+	if adopted(src) then PP.Embed.Unbuild(src, content) end
 end
 
 -- "Equip" only ever runs a tool that resolved in the live catalogue (R4, G16, F35).

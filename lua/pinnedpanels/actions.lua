@@ -611,6 +611,21 @@ Actions.Add({
 	end,
 })
 
+-- Moving another addon's panel between Manage and Embed (§33.6).
+Actions.Add({
+	id = "embed", scope = "window", managed = true, icon = "icon16/application_add.png", label = "ctx.embed",
+	menu = { group = "adopt", window = 80 },
+	visible = function(ctx) return ctx.window.kind == "managed" and PP.Manage.IsLive(ctx.id) end,
+	run = function(ctx) PP.Recipes.SwitchMode(ctx.id, 1, "embed") end,
+})
+
+Actions.Add({
+	id = "unembed", scope = "tab", icon = "icon16/application_link.png", label = "ctx.return_managed",
+	menu = { group = "adopt", window = 81, tab = 81 },
+	visible = function(ctx) return ctx.tab.adopt ~= nil and ctx.tab.adopt.mode == "embed" and PP.Embed.IsLive(ctx.tab.src) end,
+	run = function(ctx) PP.Recipes.SwitchMode(ctx.id, ctx.index, "manage") end,
+})
+
 Actions.Add({
 	id = "unpin", scope = "window", managed = true, icon = "icon16/cross.png", label = "ctx.unpin", name = "kb.unpin",
 	taskbarLabel = "tb.unpin", menu = { group = "unpin", window = 90, taskbar = 3 }, bindable = true,
@@ -626,7 +641,7 @@ concommand.Add("-pinnedpanels_peek", function() Desktop.Peek(false) end)
 -- The raw argument string keeps "tool:weld" whole; the console splits arguments at ":".
 concommand.Add("pinnedpanels_pin", function(_, _, _, argStr)
 	local src = string.Trim(argStr or ""):gsub('^"(.*)"$', "%1")
-	if not Sources.Get(src) then
+	if not Sources.catalogue[src] then
 		print("[Pinned Panels] Unknown source: " .. src .. " (try tool:weld or creation:#spawnmenu.content_tab)")
 		return
 	end
@@ -676,8 +691,8 @@ concommand.Add("pinnedpanels_debug", function(_, _, args)
 			end
 		end
 	end
-	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), %d managed, taskbar %s, %d Lua panels in total",
-		#Layout.Windows(), controls, hosts, built, table.Count(PP.Manage.live), IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
+	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), %d managed, %d embedded, taskbar %s, %d Lua panels in total",
+		#Layout.Windows(), controls, hosts, built, table.Count(PP.Manage.live), table.Count(PP.Embed.live), IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
 end, nil, "Pinned Panels diagnostics: pinnedpanels_debug panels")
 
 -- Re-runs the loader (G2): windows rebuild from the saved document, with no duplicate hooks or panels (E25).

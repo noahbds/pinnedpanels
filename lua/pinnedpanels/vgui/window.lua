@@ -97,6 +97,7 @@ function PANEL:Refresh()
 	for _, it in ipairs(items) do keep[rec.tabs[it.index].src] = true end
 	for src, host in pairs(self.hosts) do
 		if not keep[src] then
+			host:Unbuild()
 			host:Remove()
 			self.hosts[src] = nil
 		end
@@ -113,6 +114,11 @@ function PANEL:Refresh()
 	end
 	if tab then self.hosts[tab.src]:SetCrop(crop) end
 	self:InvalidateLayout()
+end
+
+-- Before the window is removed: every tab hands its content back (embedded panels aren't ours, R15).
+function PANEL:Unbuild()
+	for _, host in pairs(self.hosts) do host:Unbuild() end
 end
 
 -- A language change: the tab hosts' text and content, then the title (E11).

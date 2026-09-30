@@ -354,6 +354,7 @@ end
 
 function HOST:Build()
 	self.built = true
+	self:Unbuild()
 	self.clip:Clear()
 	-- Tabs usually build while their window is idle and ignoring the mouse. Panels take their parent's
 	-- mouse-input state when created, so the chain the content is built under must accept the mouse now;
@@ -374,12 +375,22 @@ function HOST:Build()
 		err:SetRetry(function() self:Rebuild() end)
 		return
 	end
-	-- Collapse memory: GMod's own cookie per category, saved on every toggle (G23).
+	-- Collapse memory: GMod's own cookie per category, saved on every toggle (G23). Not for another addon's
+	-- embedded panel: we only change what we can put back (R12).
+	if self.src:match("^adopt:") then return end
 	for _, cat in ipairs(categories(self.content, {}, 0)) do
 		local label = categoryLabel(cat)
 		if label then cat:SetCookieName("pinnedpanels." .. self.src .. "." .. label) end
 	end
 	if self.filter:GetValue() ~= "" then self:ApplyFilter() end
+end
+
+-- Hands the content back before the host clears or loses it: the filter puts hidden rows back, and an
+-- embedded panel returns to Embed instead of being removed with us (R15).
+function HOST:Unbuild()
+	if not IsValid(self.content) then return end
+	if self.filter:GetValue() ~= "" then unfilter(self.content, 0) end
+	PP.Sources.Unbuild(self.src, self.content)
 end
 
 -- "Rebuild content": a tool that rebuilt its spawn-menu panel doesn't update pinned copies (E10, G15).

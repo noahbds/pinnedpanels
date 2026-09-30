@@ -1,5 +1,6 @@
 -- The layout document (§13): windows holding 1..N tabs. Layout is its only writer (§10.2): every operation
 -- validates, mutates, marks storage dirty and queues PinnedPanelsChanged(kind, id), flushed once per frame.
+-- Each frame with changes is one undo step (FF10).
 
 local PP = PinnedPanels
 PP.Layout = PP.Layout or {}
@@ -13,6 +14,7 @@ local MAX_TITLE = 64
 local CLOSED_MAX = 15
 local ARRANGE_MARGIN = 8
 local KIND_ORDER = { windows = 1, tabs = 2, state = 3, geometry = 4, style = 5 }
+local UNDO_MAX = 50
 
 -- New named groups take the next accent in turn (as v1's group colours).
 local GROUP_ACCENTS = {
@@ -31,8 +33,17 @@ local bySrc -- src -> window, rebuilt lazily after tab changes
 
 local pending, queued = {}, false
 
+-- Undo (FF10): the first change in a frame pushes the document as it was when the last frame's changes
+-- were flushed (stable), so a drag, a merge or "unpin all" is one step. Loading, refitting to the screen
+-- and undo itself happen quietly and push nothing.
+local undo, redo = {}, {}
+local stable, stepOpen, quiet = nil, false, 0
+local snapshot -- defined with the helpers below
+
 function Layout.FlushChanges()
 	queued = false
+	stepOpen = false
+	stable = snapshot()
 	local list = {}
 	for _, e in pairs(pending) do list[#list + 1] = e end
 	pending = {}
@@ -46,6 +57,12 @@ end
 -- id nil means "every window".
 local function changed(kind, id, noSave)
 	if not noSave then PP.Storage.MarkDirty() end
+	if not noSave and quiet == 0 and not stepOpen and stable then
+		stepOpen = true
+		undo[#undo + 1] = stable
+		if #undo > UNDO_MAX then table.remove(undo, 1) end
+		redo = {}
+	end
 	if kind == "windows" or kind == "tabs" then bySrc = nil end
 	local key = kind .. ":" .. (id or "*")
 	if pending[key] then return end
@@ -95,6 +112,17 @@ local function copy(t)
 	local c = setmetatable({}, getmetatable(t))
 	for k, v in pairs(t) do c[k] = copy(v) end
 	return c
+end
+
+function snapshot()
+	return { windows = copy(doc.windows), nextId = doc.nextId }
+end
+
+local function quietly(fn, ...)
+	quiet = quiet + 1
+	local ok, err = pcall(fn, ...)
+	quiet = quiet - 1
+	if not ok then error(err, 0) end
 end
 
 local function others(except)
@@ -187,11 +215,44 @@ function Layout.Load(loaded)
 	local screen = doc.screen
 	doc.screen = { w = ScrW(), h = ScrH() }
 	if screen and (screen.w ~= ScrW() or screen.h ~= ScrH()) then
-		Layout.RescaleAll(screen.w, screen.h)
+		quietly(Layout.RescaleAll, screen.w, screen.h)
 	else
-		Layout.Refit()
+		quietly(Layout.Refit)
 	end
+	undo, redo, stepOpen = {}, {}, false
+	stable = snapshot()
 	changed("windows", nil, true)
+end
+
+-- Puts a saved state back. Ids only go forward, so a window control never meets another window's id.
+local function restore(state)
+	quietly(function()
+		doc.windows, doc.nextId = state.windows, math.max(doc.nextId, state.nextId)
+		byId, bySrc = {}, nil
+		for _, w in ipairs(doc.windows) do byId[w.id] = w end
+		Layout.Refit()
+		changed("windows")
+	end)
+	stable = snapshot()
+end
+
+function Layout.CanUndo() return #undo > 0 end
+function Layout.CanRedo() return #redo > 0 end
+
+function Layout.Undo()
+	local state = table.remove(undo)
+	if not state then return false end
+	redo[#redo + 1] = snapshot()
+	restore(state)
+	return true
+end
+
+function Layout.Redo()
+	local state = table.remove(redo)
+	if not state then return false end
+	undo[#undo + 1] = snapshot()
+	restore(state)
+	return true
 end
 
 -- Replaces the whole document (an import or its undo) and saves it. The write keeps the previous file as
@@ -660,11 +721,11 @@ function Layout.RescaleAll(oldW, oldH)
 end
 
 hook.Add("OnScreenSizeChanged", "PinnedPanels.Layout", function(oldW, oldH)
-	Layout.RescaleAll(oldW, oldH)
+	quietly(Layout.RescaleAll, oldW, oldH)
 end)
 
 -- The taskbar's settings change the usable area (E5).
 local USABLE_SETTINGS = { taskbar = true, taskbarSide = true, taskbarSize = true, taskbarAutoHide = true }
 hook.Add("PinnedPanelsSettingChanged", "PinnedPanels.Layout", function(key)
-	if USABLE_SETTINGS[key] then Layout.Refit() end
+	if USABLE_SETTINGS[key] then quietly(Layout.Refit) end
 end)

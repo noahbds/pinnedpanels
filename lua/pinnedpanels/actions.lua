@@ -285,6 +285,21 @@ Actions.Add({
 	end,
 })
 
+-- Layout undo and redo (FF10): moves, resizes, unpins, merges, crops and the rest, 50 steps back.
+Actions.Add({
+	id = "undo", scope = "global", icon = "icon16/arrow_rotate_anticlockwise.png", label = "act.undo",
+	sub = "sub.undo", palette = true, bindable = true,
+	visible = function() return Layout.CanUndo() end,
+	run = function() Layout.Undo() end,
+})
+
+Actions.Add({
+	id = "redo", scope = "global", icon = "icon16/arrow_rotate_clockwise.png", label = "act.redo",
+	sub = "sub.redo", palette = true, bindable = true,
+	visible = function() return Layout.CanRedo() end,
+	run = function() Layout.Redo() end,
+})
+
 Actions.Add({
 	id = "restore_all", scope = "global", icon = "icon16/application_get.png", label = "act.restore_all",
 	taskbarLabel = "tb.restore_all", menu = { group = "taskbar", taskbar = 2 }, sub = "sub.bring_back", palette = true, bindable = true,

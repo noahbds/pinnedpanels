@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 fail=0
 
 # Every Lua file must parse as plain LuaJIT, so GMod-only syntax (continue, !=, &&, //) fails here (L27).
-for f in $(find lua tests tools -name '*.lua' 2>/dev/null); do
+for f in $(find lua tools -name '*.lua' 2>/dev/null); do
 	if ! err=$(luajit -bl "$f" 2>&1 >/dev/null); then
 		echo "parse error: $err"
 		fail=1

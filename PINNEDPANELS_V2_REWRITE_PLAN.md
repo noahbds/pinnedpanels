@@ -470,7 +470,7 @@ Pinned Panels is a UI program living inside GMod's VGUI. It has three kinds of c
 3. **`Layout` is the only writer** of the document and fires one coalesced `PinnedPanelsChanged(kind, id)` per frame.
 4. **Derma does the timing.** Layout happens in `PerformLayout` after `InvalidateLayout`; the only deferral is `Util.NextFrame(panel, fn)`, a guarded `timer.Simple(0)`.
 5. **Everything reload-safe** (G2): `X = X or {}`, fixed hook IDs or control IDs, controls re-registered by name.
-6. **Pure where possible**: geometry, snapping, rescaling, free-spot search, nav ranking, fuzzy scoring, sanitizing and key-repeat timing are pure functions with offline tests.
+6. **Pure where possible**: geometry, snapping, rescaling, free-spot search, nav ranking, fuzzy scoring, sanitizing and key-repeat timing are pure functions.
 7. **Fail soft per item**: a bad tab, source or import entry is skipped and reported; it never aborts a restore.
 
 ### 10.3 Lifecycle
@@ -513,7 +513,6 @@ lua/pinnedpanels/
    ├─ hub_pinned.lua ...................... 220  Pinned page
    ├─ hub_layout.lua ...................... 380  layout editor canvas
    └─ hub_settings.lua .................... 350  settings pages
-tests/ ............................................ luajit unit tests for the pure modules + fixtures
 tools/ ............................................ check_rules.sh, check_lang.lua, lua_to_properties.lua
 ```
 
@@ -890,11 +889,11 @@ Rows are generated per `page`/`section` with our convar-bound controls (`Derma_I
 Kept small: most of this addon is VGUI and is tested in game.
 
 - **`tools/check_rules.sh`**: `luajit -bl` parse check on every file (L27); greps for `timer.Simple` outside `util.lua`, `Think` hooks outside `input.lua`, `CurTime(`/`FrameTime(`, `file.` outside `storage.lua`, library-field assignments, `Decompress(` with one argument, `SetSkin(`, `Color(`/`Material(` in functions assigned to `Paint`/`Think` (heuristic, `-- cached-ok` to justify), `RunString`, `CompileString`; `.properties` first line empty.
-- **Unit tests** (`luajit tests/run.lua`, < 2 s) with a small stub (`Color`, JSON via vendored `dkjson`, a size-prefixed identity `Compress`/`Decompress` that honours `maxSize`, manual `RealTime`, `ScrW/ScrH`, a headless convar table): `util` (geometry, snap, rescale, free spot, fuzzy, colour codec), `storage.Sanitize` + import fixtures (bomb, 50,000 keys, wrong types, unknown sources, 500 windows, NaN), `layout` operations headless (merge, split, reorder, unpin last tab, reopen whole window, rescale with crop and maximize, dormant tabs survive save), `Nav.Rank` fixtures, nav transitions, `input` edge/repeat timing, the R5 helper with a throwing hook.
+- **No unit tests** (D20): the owner tests in game and reports problems. A suite covering `util`, `settings`, `storage` (sanitize, quarantine, import fixtures), `layout`, `input`, the R5 helper and headless window wiring was written for Phases 1–2, then removed (it is in the git history before the removal commit).
 - **CI** (`.github/workflows/ci.yml`): the two above plus `tools/check_lang.lua` on push/PR.
 - **Editor**: keep `.gluarc.json`; drop the server attach config from `.vscode/launch.json` (no server code to debug).
 - **Dev loop on macOS** (G2): `pinnedpanels_reload` re-includes the loader; controls re-register; windows rebuild from the document (E25).
-- **Packaging** (G39): `addon.json` `{ "title": "Pinned Panels", "type": "tool", "tags": ["build"], "ignore": ["*.md", "tests/*", "tools/*", ".github/*", ".vscode/*", ".gluarc.json", "**/.DS_Store"] }`; `gmad create` must contain only `lua/` and `resource/localization/`; 512×512 baseline JPEG icon.
+- **Packaging** (G39): `addon.json` `{ "title": "Pinned Panels", "type": "tool", "tags": ["build"], "ignore": ["*.md", "tools/*", ".github/*", ".vscode/*", ".gluarc.json", "**/.DS_Store"] }`; `gmad create` must contain only `lua/` and `resource/localization/`; 512×512 baseline JPEG icon.
 
 ## 26. Roadmap
 
@@ -911,7 +910,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - §14.3: which tools in a common pack (Wiremod, Easy Precision, Advanced Duplicator 2) produce an empty `ControlPanel` without the fallback
   - G8: chat open is visible to Lua only via `StartChat`/`FinishChat` (not `vgui.GetKeyboardFocus`)
   - §33.15: the "pin any panel" spike (where windows live, Manage, Embed, reproduce the v1 failure, Record, real addons)
-- [x] Remove the v1 tree; add loader, `addon.json`, `tools/check_rules.sh`, `tests/run.lua` + stub, CI (green)
+- [x] Remove the v1 tree; add loader, `addon.json`, `tools/check_rules.sh`, CI (green). Unit tests were added, then removed after Phase 2 (D20)
   - *Deviation:* the stub starts with `Color`, the manual clock, `ScrW/ScrH` and `Compress/Decompress`; the convar table and vendored `dkjson` arrive with `settings.lua` and `storage.lua` in Phase 1, the first code that needs them. `check_rules.sh` also enforces the §2 rule that cursor, key polling and bind hooks live only in `input.lua`. `README.md` still describes v1 until Phase 7.
 - **Accept:** the game boots and prints `Pinned Panels 2.0.0 loaded`; CI green.
 
@@ -922,13 +921,12 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `layout.lua` operations headless (+ tests) [F12, F15, F18, F24, F27, F28, F32, L6, L7, B8, B17, B20, B27, E3–E5, E20–E22, E28, E33]
 - [x] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
 - [x] English `.properties`, `L()`, `tools/check_lang.lua`, `tools/lua_to_properties.lua` [F33, L18, G39]
-- **Accept:** unit tests cover every layout operation (88 tests, done); in game, still to check: a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
+- **Accept** (in game, still to check): a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
 - *Deviations:*
-  - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5 with their tests. `PlayerBindPress` suppression is in.
+  - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5. `PlayerBindPress` suppression is in.
   - Input announces cursor-mode, ALT and spawn-menu changes with an internal `PinnedPanelsInputChanged` event (Appendix A).
   - Fuzzy matching moves to Phase 4 with the palette, its only user. The taskbar's share of `Geom.Usable()` arrives with the taskbar in Phase 3.
   - Renaming a single-tab window renames its tab, so the name travels if the tab is moved; a window `title` is a group name (§13.1).
-  - The unit-test stub has its own small JSON codec instead of vendored `dkjson`.
 
 ### Phase 2 — Windows on screen (3 days)
 - [x] `sources.lua` + fallback helper (+ test) [F7, F8, F35, L2, L28, G11–G16, G18, R4–R6, B26, E2, E8–E10, E12]
@@ -938,7 +936,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `desktop.lua` (reconcile, restore queue, opacity, interactivity) [L11, G27, B1, B9, E1, E24]
 - [x] `vgui/hud.lua` [L8, B19]
 - [x] Minimal hub: Tools and Content pages [F1–F3, L1, L4]
-- **Accept** (in game, still to check): pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back. The same flows pass headlessly in `tests/desktop_test.lua`.
+- **Accept** (in game, still to check): pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back.
 - *Deviations:*
   - `actions.lua` starts here with the cursor key and `pinnedpanels_cursor`, `_pin`, `_list`, `_reload`, so Phase 2 can be tried in game. Phase 3 turns it into the action list.
   - With `autoRestore` off, the windows saved at join are *held*: kept in the document, not shown until `Desktop.ShowHeld()` (Pinned page in Phase 4). Pinning something else doesn't show them.
@@ -946,7 +944,6 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - No right-click menu yet (actions, Phase 3), and minimizing has no taskbar to restore from until Phase 3.
   - The theme keeps v1's specific button and row colours, so it has about 40 tokens, not 20.
   - `storage.lua` is 291 lines (budget 220): `Sanitize` is most of it, and it's still one job (the file format). `layout.lua` is 557 (budget 500).
-  - Tooling: `tests/derma_stub.lua` is a headless stand-in for Derma, so window, desktop and hub wiring get unit tests too.
 
 ### Phase 3 — Window features (3 days) → `2.0.0-alpha.1`
 - [ ] Multi-tab windows: tab strip, `MoveTab`, per-tab size, accents [F15]
@@ -965,7 +962,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - **Accept:** every §21.2 setting is visible and resets; importing a bomb string is rejected with a message and changes nothing.
 
 ### Phase 5 — Keyboard navigation (3–4 days) → `2.0.0-beta.1`
-- [ ] `nav.lua` state machine, zones, scan, `Rank` (+ tests) [F25, L10, L11, L14, L15, G24, D8]
+- [ ] `nav.lua` state machine, zones, scan, `Rank` [F25, L10, L11, L14, L15, G24, D8]
 - [ ] `nav_controls.lua` [L20, L21]
 - [ ] Keyboard-driven DMenus, window and element menus [L9, G17, B4, B5, E29, D9]
 - [ ] Taskbar and popup zones
@@ -991,17 +988,17 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 
 ## 27. Definition of done
 - [ ] One thing per commit, IDs referenced.
-- [ ] `tools/check_rules.sh`, unit tests and lang check pass.
-- [ ] Pure logic has tests; behaviour has a matrix row.
+- [ ] `tools/check_rules.sh` and the lang check pass.
+- [ ] Behaviour has a matrix row.
 - [ ] Strings in `en/pinnedpanels.properties`.
 - [ ] Plan updated if the design changed; file within budget or overrun explained.
 
 ## 28. Testing strategy
 
 ### 28.1 Unit tests
-§25. Every bug in pure logic found after alpha gets a test first.
+None (D20). Bugs are reported from in-game testing and fixed against the matrix below.
 
-### 28.2 Manual matrix (`tests/MATRIX.md`, one tick column per rc)
+### 28.2 Manual matrix (`MATRIX.md`, one tick column per rc)
 
 | Environment | Covers |
 |---|---|
@@ -1087,6 +1084,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 | D17 | "Rebuild content" action for tool tabs (G15) | add · skip | **Add**: small, fixes a real staleness limit |
 | D18 | Global name | **`PinnedPanels`** · `PP` | **Keep `PinnedPanels`** |
 | D19 | When to ship "pin any panel" (§33) | in 2.0 · **as the core of 2.1** | **Core of 2.1** (§33.16, ≈ 15 days), with the §33.15 spike in Phase 0 so the approach is proven before 2.0's window, input and source code is finalized. 2.1-a (picker + Manage) alone delivers the original vision for most windows |
+| D20 | Unit tests | offline suite · **none** | **None**: the owner tests in game and reports problems (decided after Phase 2; the suite was removed) |
 
 ---
 

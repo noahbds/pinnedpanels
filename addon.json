@@ -4,7 +4,6 @@
 	"tags": ["build"],
 	"ignore": [
 		"*.md",
-		"tests/*",
 		"tools/*",
 		".github/*",
 		".vscode/*",

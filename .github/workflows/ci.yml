@@ -13,7 +13,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y luajit
       - name: Rule checks
         run: tools/check_rules.sh
-      - name: Unit tests
-        run: luajit tests/run.lua
       - name: Translations
         run: luajit tools/check_lang.lua

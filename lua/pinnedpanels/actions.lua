@@ -539,7 +539,7 @@ Actions.Add({
 		local items = {
 			{ text = PP.L("ctx.use_global", Settings.Get("idleOpacity")), icon = tick(current == nil), run = function() Layout.SetOpacity(ctx.id, nil) end },
 		}
-		for _, pct in ipairs({ 100, 75, 50, 25 }) do
+		for _, pct in ipairs({ 100, 75, 50, 25, 1 }) do
 			items[#items + 1] = { text = pct .. "%", icon = tick(current == pct / 100), run = function() Layout.SetOpacity(ctx.id, pct / 100) end }
 		end
 		items[#items + 1] = { spacer = true }

@@ -916,13 +916,13 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - **Accept:** the game boots and prints `Pinned Panels 2.0.0 loaded`; CI green.
 
 ### Phase 1 — Data and input (2 days)
-- [ ] `util.lua` (+ tests) [F36, L5, L12, L23, G5, G35]
-- [ ] `settings.lua` [G33]
-- [ ] `storage.lua` (+ tests) [F30, F31, R1–R3, R9, G34–G37, B2, B3, E6, E7]
-- [ ] `layout.lua` operations headless (+ tests) [F12, F15, F18, F24, F27, F28, F32, L6, L7, B8, B17, B20, B27, E3–E5, E20–E22, E28, E33]
-- [ ] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
-- [ ] English `.properties`, `L()`, `tools/check_lang.lua`, `tools/lua_to_properties.lua` [F33, L18, G39]
-- **Accept:** unit tests cover every layout operation; a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
+- [x] `util.lua` (+ tests) [F36, L5, L12, L23, G5, G35]
+- [x] `settings.lua` [G33]
+- [x] `storage.lua` (+ tests) [F30, F31, R1–R3, R9, G34–G37, B2, B3, E6, E7]
+- [x] `layout.lua` operations headless (+ tests) [F12, F15, F18, F24, F27, F28, F32, L6, L7, B8, B17, B20, B27, E3–E5, E20–E22, E28, E33]
+- [x] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
+- [x] English `.properties`, `L()`, `tools/check_lang.lua`, `tools/lua_to_properties.lua` [F33, L18, G39]
+- **Accept:** unit tests cover every layout operation (88 tests, done); in game, still to check: a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
 - *Deviations:*
   - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5 with their tests. `PlayerBindPress` suppression is in.
   - Input announces cursor-mode, ALT and spawn-menu changes with an internal `PinnedPanelsInputChanged` event (Appendix A).

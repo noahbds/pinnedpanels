@@ -2,24 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "gluals_gmod",
-            "request": "attach",
-            "name": "[SERVER] Attach to SRCDS",
-            "host": "127.0.0.1",
-            "port": 21111,
-            "sourceRoot": "${workspaceFolder}/../..",
-            "sourceFileMap": {
-                "${workspaceFolder}/../../addons": "addons",
-                "${workspaceFolder}/../../lua": "lua",
-                "${workspaceFolder}/../../gamemodes/base": "gamemodes/base",
-                "${workspaceFolder}/../../gamemodes/sandbox": "gamemodes/sandbox",
-                "${workspaceFolder}": "addons/pinnedpanels"
-            },
-            "stopOnEntry": false,
-            "stopOnError": false,
-            "realm": "server"
-        },
-        {
             "type": "gluals_gmod_client",
             "request": "attach",
             "name": "[CLIENT] Attach to Gmod",

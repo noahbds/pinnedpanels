@@ -19,10 +19,13 @@ local MAX_DECOMPRESSED = 256 * 1024
 local MAX_WINDOWS, MAX_TABS = 64, 16
 local MAX_TITLE, MAX_SRC = 64, 128
 local MAX_COORD = 32768
-local KINDS = { tool = true, creation = true, desktop = true, postprocess = true, adopt = true }
+local KINDS = { tool = true, creation = true, desktop = true, postprocess = true, adopt = true, active = true, quick = true }
 local STATES = { normal = true, minimized = true, maximized = true, rolled = true }
 local ADOPT_MODES = { manage = true, embed = true, part = true }
 local MAX_PATH = 16
+local CONTROL_KINDS = { slider = true, check = true, combo = true }
+local MAX_CONTROLS, MAX_CHOICES = 32, 32
+local MAX_VALUE = 1e9
 
 Storage.VERSION = VERSION
 Storage.readOnly = false
@@ -96,17 +99,53 @@ local function sanitizeAdopt(a)
 	return { mode = a.mode, signature = sig, recipe = sanitizeRecipe(a.recipe), needsKeyboard = a.needsKeyboard == true, noGeometry = a.noGeometry == true }
 end
 
+local function number(v)
+	v = tonumber(v)
+	if not Util.Finite(v) then return nil end
+	return math.Clamp(v, -MAX_VALUE, MAX_VALUE)
+end
+
+-- A quick control (FF2). Its convar must look like a convar name; whether it exists is checked when built.
+local function sanitizeControl(c)
+	if not istable(c) or not CONTROL_KINDS[c.kind] then return nil end
+	local convar = text(c.convar, MAX_TITLE)
+	if not convar or not convar:match("^[%w_%.%-]+$") then return nil end
+	local out = { kind = c.kind, convar = convar, label = text(c.label, MAX_TITLE) or convar }
+	if c.kind == "slider" then
+		out.min, out.max, out.decimals = number(c.min), number(c.max), int(c.decimals, 0, 6) or 0
+		if not (out.min and out.max) then return nil end
+	elseif c.kind == "combo" then
+		out.choices = {}
+		for i, choice in ipairs(istable(c.choices) and c.choices or {}) do
+			if i > MAX_CHOICES then break end
+			local label = istable(choice) and text(choice.text, MAX_TITLE)
+			if label then out.choices[#out.choices + 1] = { text = label, data = text(choice.data, MAX_SRC) } end
+		end
+	end
+	return out
+end
+
+local function sanitizeControls(list)
+	local out = {}
+	for _, c in ipairs(istable(list) and list or {}) do
+		if #out >= MAX_CONTROLS then break end
+		out[#out + 1] = sanitizeControl(c)
+	end
+	return #out > 0 and out or nil
+end
+
 local function sanitizeTab(t, seen, summary)
 	if not istable(t) then return nil end
 	local src = text(t.src, MAX_SRC)
 	local kind = src and src:match("^(%a+):.")
 	local adopt = kind == "adopt" and sanitizeAdopt(t.adopt)
-	if not kind or not KINDS[kind] or seen[src] or (kind == "adopt" and not adopt) then
+	local controls = kind == "quick" and sanitizeControls(t.controls)
+	if not kind or not KINDS[kind] or seen[src] or (kind == "adopt" and not adopt) or (kind == "quick" and not controls) then
 		summary.dropped = summary.dropped + 1
 		return nil
 	end
 	seen[src] = true
-	local tab = { src = src, title = text(t.title, MAX_TITLE), adopt = adopt or nil }
+	local tab = { src = src, title = text(t.title, MAX_TITLE), adopt = adopt or nil, controls = controls or nil }
 	if istable(t.size) then
 		local w, h = int(t.size.w, 20, MAX_COORD), int(t.size.h, 20, MAX_COORD)
 		if w and h then tab.size = { w = w, h = h } end
@@ -234,7 +273,7 @@ function Storage.Encode(doc)
 		local tabs = {}
 		for _, t in ipairs(w.tabs) do
 			if not (t.adopt and t.adopt.recipe.kind == "session") then
-				tabs[#tabs + 1] = { src = t.src, title = t.title, size = t.size, crop = t.crop, adopt = t.adopt }
+				tabs[#tabs + 1] = { src = t.src, title = t.title, size = t.size, crop = t.crop, adopt = t.adopt, controls = t.controls }
 			end
 		end
 		if #tabs > 0 or w.title then

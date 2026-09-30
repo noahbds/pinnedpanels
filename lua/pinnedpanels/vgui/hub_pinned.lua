@@ -22,6 +22,7 @@ local KIND = {
 	desktop = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 	active = { label = "kind.tool", icon = "icon16/wrench_orange.png", color = T.accent },
+	quick = { label = "kind.quick", icon = "icon16/lightning.png", color = T.accent },
 }
 
 local function paintRow(row, w, h)

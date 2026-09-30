@@ -15,6 +15,8 @@ local CLOSED_MAX = 15
 local ARRANGE_MARGIN = 8
 local KIND_ORDER = { windows = 1, tabs = 2, state = 3, geometry = 4, style = 5 }
 local UNDO_MAX = 50
+local QUICK_H = 220
+local MAX_CONTROLS = 32
 
 -- New named groups take the next accent in turn (as v1's group colours).
 local GROUP_ACCENTS = {
@@ -474,6 +476,42 @@ function Layout.SetAdopt(id, i, fields)
 		win.x, win.y, win.w, win.h = r.x, r.y, r.w, r.h
 	end
 	changed("windows", id)
+	return true
+end
+
+-- ── Quick controls (FF2) ────────────────────────────────────
+-- A "quick:<n>" tab holds single controls taken from control panels: tab.controls = { control, … }.
+
+-- Adds a control to tab i of window id, or to a new Quick Controls window when id is nil. A convar is
+-- never there twice. Returns the window id.
+function Layout.AddControl(id, i, control)
+	if not id then
+		local n = doc.nextId
+		while Layout.Find("quick:" .. n) do n = n + 1 end
+		doc.nextId = n
+		local x, y, w, h = place(DEFAULT_W, QUICK_H, SPAWN_X, SPAWN_Y)
+		return newWindow({ { src = "quick:" .. n, controls = { control } } }, x, y, w, h).id
+	end
+	local win = byId[id]
+	local tab = win and win.tabs[i]
+	if not (tab and tab.controls) then return nil end
+	for _, c in ipairs(tab.controls) do
+		if c.convar == control.convar then return id end
+	end
+	if #tab.controls >= MAX_CONTROLS then return nil end
+	tab.controls[#tab.controls + 1] = control
+	changed("tabs", id)
+	return id
+end
+
+-- Removes control ci; the last one takes its tab with it.
+function Layout.RemoveControl(id, i, ci)
+	local win = byId[id]
+	local tab = win and win.tabs[i]
+	if not (tab and tab.controls and tab.controls[ci]) then return false end
+	if #tab.controls == 1 then return Layout.UnpinTab(id, i) end
+	table.remove(tab.controls, ci)
+	changed("tabs", id)
 	return true
 end
 

@@ -13,6 +13,7 @@ local FILES = {
 	"record.lua",
 	"manage.lua",
 	"embed.lua",
+	"quick.lua",
 	"actions.lua",
 	"nav.lua",
 	"nav_controls.lua",

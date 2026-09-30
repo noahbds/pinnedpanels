@@ -1,7 +1,7 @@
 -- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>"), spawn-menu
 -- content tabs ("creation:<name>"), C-menu desktop widgets ("desktop:<id>", G47) and post-process panels
 -- ("postprocess:<name>", G64) and the active tool ("active:tool", FF1), rebuilt on every PostReloadToolsMenu
--- (G11). Builds their content. Embedded
+-- (G11). Builds their content. Quick controls ("quick:<n>", FF2) are built by Quick from their tab. Embedded
 -- panels ("adopt:<n>", §33.6) aren't in the catalogue: Embed answers for them while it holds them.
 
 local PP = PinnedPanels
@@ -109,13 +109,20 @@ local function adopted(src)
 	return src:sub(1, 6) == "adopt:"
 end
 
+local QUICK = { kind = "quick" }
+local function quick(src)
+	return src:sub(1, 6) == "quick:"
+end
+
 function Sources.Get(src)
 	if adopted(src) then return PP.Embed.live[src] end
+	if quick(src) then return QUICK end
 	return Sources.catalogue[src]
 end
 
 -- Resolved at call time so a language change shows up without a rebuild (L19).
 function Sources.Title(src)
+	if quick(src) then return PP.L("quick.title") end
 	local e = Sources.catalogue[src]
 	if e and e.kind == "active" then
 		local tool = Sources.ActiveTool()
@@ -164,7 +171,7 @@ local function run(src, fn, ...)
 end
 
 -- A ControlPanel like the spawn menu's, headerless, inside a throttled scroll panel (L3).
-local function controlPanel(parent)
+function Sources.ControlPanel(parent)
 	local scroll = vgui.Create("PinnedPanelsScroll", parent)
 	scroll:Dock(FILL)
 	local cp = scroll:Add("ControlPanel")
@@ -176,6 +183,8 @@ local function controlPanel(parent)
 	end
 	return scroll, cp
 end
+
+local controlPanel = Sources.ControlPanel
 
 -- The same ControlPanel + FillViaTable the spawn menu uses (G14).
 -- A tab that only says why it is empty.
@@ -269,6 +278,7 @@ end
 -- Fills parent with src's content. Returns the content panel, or nil if src is unavailable or failed.
 function Sources.Build(src, parent)
 	if adopted(src) then return PP.Embed.Build(src, parent) end
+	if quick(src) then return PP.Quick.Build(src, parent) end
 	local e = Sources.catalogue[src]
 	if not e then return nil end
 	return (BUILDERS[e.kind] or buildCreation)(e, parent)

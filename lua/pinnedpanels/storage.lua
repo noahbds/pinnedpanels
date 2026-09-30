@@ -165,7 +165,7 @@ function Storage.Sanitize(raw)
 			win.id = "w" .. maxId
 		end
 	end
-	doc.nextId = maxId + 1
+	doc.nextId = math.max(maxId + 1, int(raw.nextId, 1, 1e9) or 1)
 	return doc, summary
 end
 

@@ -1,8 +1,15 @@
--- The hub's Tools and Content pages (F2, F3): PinnedPanelsCatalog lists one kind of source, with search
--- and category headers for tools. Rows read their pinned state when they paint, never from a snapshot (L1).
+-- The hub's Tools, Content and Widgets pages (F2, F3, §33.9): PinnedPanelsCatalog lists one kind of
+-- source, with search and category headers for tools and widgets. Rows read their pinned state when they
+-- paint, never from a snapshot (L1).
 
 local PP = PinnedPanels
 local Layout, Sources, Desktop, T = PP.Layout, PP.Sources, PP.Desktop, PP.Theme
+
+-- Searchable lists with category headers; "creation" is the plain one.
+local LISTS = {
+	tool = { entries = "tools", search = "search.tools", count = "count.tools", empty = "no.tools" },
+	native = { entries = "natives", search = "search.native", count = "count.native", empty = "no.native" },
+}
 
 -- ── PinnedPanelsCatalogRow ──────────────────────────────────
 
@@ -118,14 +125,15 @@ function CATALOG:Init()
 	hook.Add("PinnedPanelsCatalogChanged", self, self.Populate)
 end
 
--- "tool" gets a search box and category headers; "creation" gets an explanation line.
+-- "tool" and "native" get a search box and category headers; "creation" gets an explanation line.
 function CATALOG:SetKind(kind)
 	self.kind = kind
-	if kind == "tool" then
+	self.searchable = LISTS[kind]
+	if self.searchable then
 		self.top:SetTall(32)
 		self.search = self.top:Add("PinnedPanelsSearch")
 		self.search:Dock(FILL)
-		self.search:SetPlaceholderText(PP.L("search.tools"))
+		self.search:SetPlaceholderText(PP.L(self.searchable.search))
 		self.search.OnChange = function() self:Filter() end
 		self.countLabel = self.top:Add("DLabel")
 		self.countLabel:Dock(RIGHT)
@@ -154,12 +162,13 @@ function CATALOG:Populate()
 	self.empty:SetWrap(true)
 	self.empty:SetAutoStretchVertical(true)
 	self.empty:SetTextColor(T.textSubtle)
-	self.empty:SetText(PP.L(self.kind == "tool" and "no.tools" or "creation.none"))
+	local list = self.searchable
+	self.empty:SetText(PP.L(list and list.empty or "creation.none"))
 
-	local entries = self.kind == "tool" and Sources.tools or Sources.creations
+	local entries = list and Sources[list.entries] or Sources.creations
 	local header, category
 	for _, e in ipairs(entries) do
-		if self.kind == "tool" and e.category ~= category then
+		if list and e.category ~= category then
 			category = e.category
 			header = self.list:Add("PinnedPanelsCatalogHeader")
 			header:SetText(category)
@@ -170,7 +179,7 @@ function CATALOG:Populate()
 		local row = self.list:Add("PinnedPanelsCatalogRow")
 		row:Setup(e)
 		row:Dock(TOP)
-		row:DockMargin(2, 1, 2, self.kind == "tool" and 0 or 1)
+		row:DockMargin(2, 1, 2, list and 0 or 1)
 		row.header = header
 		self.rows[#self.rows + 1] = row
 	end
@@ -193,7 +202,7 @@ function CATALOG:Filter()
 	self.empty:SetVisible(shown == 0)
 
 	if self.countLabel then
-		self.countLabel:SetText(query == "" and PP.L("count.tools", #self.rows) or (shown .. " / " .. #self.rows))
+		self.countLabel:SetText(query == "" and PP.L(self.searchable.count, #self.rows) or (shown .. " / " .. #self.rows))
 	end
 	self.list:GetCanvas():InvalidateLayout()
 	self.list:InvalidateLayout()

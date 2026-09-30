@@ -10,6 +10,8 @@ local Layout, Desktop = PP.Layout, PP.Desktop
 local CATCH_TIMER, CATCH_INTERVAL, HUD_EVERY = "PinnedPanels.Catch", 0.5, 2
 local SCAN_LIMIT = 200
 local MAX_TITLE = 64
+local MAX_COMMANDS = 10
+local OPEN_GRACE = 3 -- seconds in which a window we opened ourselves is expected
 
 -- Files whose functions say nothing about who made a panel: Derma, the base libraries and us.
 local STOCK_DIRS = { "lua/vgui/", "lua/derma/", "lua/includes/", "lua/pinnedpanels/" }
@@ -200,17 +202,69 @@ end
 
 -- ── Suggestions ─────────────────────────────────────────────
 
--- What pinning panel (root, or a part of root) would do: { mode, recipe, signature }.
-function Recipes.Suggest(panel, root)
-	return { mode = "manage", recipe = { kind = "watch" }, signature = Recipes.Signature(root) }
+-- Lua console commands defined in the file that built a window (G48): likely its opener. Ours are left out.
+function Recipes.CommandsIn(src)
+	local out = {}
+	if not src then return out end
+	for name, fn in pairs(concommand.GetTable()) do
+		if isfunction(fn) and name:sub(1, 13) ~= "pinnedpanels_" and fileOf(fn) == src then out[#out + 1] = name end
+	end
+	table.sort(out)
+	while #out > MAX_COMMANDS do table.remove(out) end
+	return out
 end
 
--- The recipes the player can choose instead, the suggested one first.
+-- A desktop widget's window (G47): a panel at or above this one titled like a widget we can build.
+function Recipes.Native(panel)
+	local byTitle = {}
+	for _, e in ipairs(PP.Sources.natives) do
+		if e.kind == "desktop" then byTitle[e.text] = e.key end
+	end
+	local p = panel
+	while IsValid(p) do
+		local title = titleOf(p)
+		if title and byTitle[title] then return byTitle[title] end
+		p = p:GetParent()
+	end
+end
+
+-- What pinning panel (root, or a part of root) would do (§33.9): build it natively if it is a desktop
+-- widget, else manage it; it comes back through the one command defined where it was built, else by
+-- recreating its registered class, else when its addon opens it.
+function Recipes.Suggest(panel, root)
+	local sig = Recipes.Signature(root)
+	local info = {
+		mode = "manage", part = panel ~= root, signature = sig, native = Recipes.Native(panel), commands = Recipes.CommandsIn(sig.src),
+	}
+	if #info.commands == 1 then
+		info.recipe = { kind = "command", command = info.commands[1], confirmed = true }
+	elseif sig.class and vgui.GetControlTable(sig.class) then
+		info.recipe = { kind = "class", class = sig.class }
+	else
+		info.recipe = { kind = "watch" }
+	end
+	if info.native then info.mode = "native" end
+	return info
+end
+
+-- The modes the picker offers for a suggestion.
+function Recipes.Modes(info)
+	local modes = {}
+	if info.native then modes[1] = "native" end
+	if not info.part then modes[#modes + 1] = "manage" end
+	return modes
+end
+
+-- The recipes the player can choose instead, the suggested one first. Commands chosen here are the
+-- player's own choice, so they are allowed (R16 only holds back imported ones).
 function Recipes.Choices(info)
 	local list = { info.recipe }
 	local function add(r)
 		if r.kind ~= info.recipe.kind or r.command ~= info.recipe.command then list[#list + 1] = r end
 	end
+	local class = info.signature.class
+	if class and vgui.GetControlTable(class) then add({ kind = "class", class = class }) end
+	for _, command in ipairs(info.commands) do add({ kind = "command", command = command, confirmed = true }) end
 	add({ kind = "watch" })
 	add({ kind = "session" })
 	return list
@@ -225,6 +279,11 @@ end
 -- A line saying how a pinned panel comes back.
 function Recipes.Describe(adopt)
 	local r = adopt.recipe
+	if r.kind == "class" then return PP.L("recipe.class", r.class) end
+	if r.kind == "command" then
+		local command = r.args and r.command .. " " .. r.args or r.command
+		return PP.L(r.confirmed and "recipe.command" or "recipe.command_ask", command)
+	end
 	return PP.L("recipe." .. r.kind)
 end
 
@@ -259,6 +318,8 @@ end
 -- Top-level panels already looked at, so each is signed once while the waiting set stays the same.
 local checked = setmetatable({}, { __mode = "k" })
 local ticks = 0
+-- Window id -> RealTime until which a window appearing for it is the one we opened (not the player).
+local expecting = {}
 
 local function ask(w, panel, sig)
 	Derma_Query(PP.L("adopt.confirm", sig.title and phrase(sig.title) or Recipes.Title(w.tab.adopt)), PP.L("adopt.confirm_title"),
@@ -292,7 +353,8 @@ function Recipes.Catch()
 					if score and (not best or score > bestScore) then best, bestScore, bestStrong = w, score, strong end
 				end
 				if best then
-					if bestStrong then Recipes.Attach(best, p, true) else ask(best, p, cand) end
+					local ours = (expecting[best.rec.id] or 0) > RealTime()
+					if bestStrong then Recipes.Attach(best, p, not ours) else ask(best, p, cand) end
 					waiting = Recipes.Waiting()
 					if #waiting == 0 then return end
 				end
@@ -307,8 +369,49 @@ function Recipes.Wake()
 	if not timer.Exists(CATCH_TIMER) then timer.Create(CATCH_TIMER, CATCH_INTERVAL, 0, Recipes.Catch) end
 end
 
+-- ── Opening ─────────────────────────────────────────────────
+
+-- Whether a waiting panel can be opened by us: a registered class, or a command the player allowed and
+-- that exists now. Commands from an imported layout wait for the player (R16).
+function Recipes.CanOpen(adopt)
+	local r = adopt.recipe
+	if r.kind == "class" then return vgui.GetControlTable(r.class) ~= nil end
+	return r.kind == "command" and r.confirmed == true and concommand.GetTable()[r.command] ~= nil
+end
+
+-- Runs a waiting tab's opener, the only foreign code we call besides builders (R13). A class panel is
+-- taken at once; a command's window is caught when it appears.
+function Recipes.Open(rec, tab)
+	if Recipes.IsLive(rec, tab) or not Recipes.CanOpen(tab.adopt) then return end
+	local r = tab.adopt.recipe
+	Recipes.Wake()
+	expecting[rec.id] = RealTime() + OPEN_GRACE
+	if r.kind == "class" then
+		local panel
+		ProtectedCall(function() panel = vgui.Create(r.class) end)
+		if not IsValid(panel) then return end
+		if tab.adopt.signature.popup then panel:MakePopup() end
+		Recipes.Attach({ rec = rec, tab = tab }, panel)
+	else
+		ProtectedCall(function() concommand.Run(LocalPlayer(), r.command, r.args and string.Explode(" ", r.args) or {}, r.args or "") end)
+		Recipes.Catch()
+	end
+end
+
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Recipes", function(kind)
 	if kind == "windows" or kind == "tabs" then Recipes.Wake() end
 end)
 hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Recipes", Recipes.Wake)
-hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", Recipes.Wake)
+
+-- On join, with autoRestore, windows already open are taken and the others are opened once. A reload
+-- doesn't open them again: they are still open and get caught. Next frame, so the desktop is ready.
+hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", function()
+	Recipes.Wake()
+	if Recipes.restored then return end
+	Recipes.restored = true
+	PP.Util.NextFrame(nil, function()
+		if not PP.Settings.Get("autoRestore") then return end
+		Recipes.Catch()
+		for _, w in ipairs(Recipes.Waiting()) do Recipes.Open(w.rec, w.tab) end
+	end)
+end)

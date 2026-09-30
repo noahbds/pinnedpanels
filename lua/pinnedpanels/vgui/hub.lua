@@ -73,6 +73,10 @@ function HUB:Init()
 	content:SetKind("creation")
 	sheet:AddSheet(PP.L("tab.content"), content, "icon16/application_view_list.png")
 
+	local widgets = vgui.Create("PinnedPanelsCatalog")
+	widgets:SetKind("native")
+	sheet:AddSheet(PP.L("tab.widgets"), widgets, "icon16/application_view_tile.png")
+
 	sheet:AddSheet(PP.L("tab.pinned"), vgui.Create("PinnedPanelsPinned"), "icon16/lock.png")
 	sheet:AddSheet(PP.L("tab.layout"), vgui.Create("PinnedPanelsLayout"), "icon16/application_view_columns.png")
 	sheet:AddSheet(PP.L("tab.settings"), vgui.Create("PinnedPanelsSettings"), "icon16/cog.png")

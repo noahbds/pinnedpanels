@@ -9,7 +9,9 @@ PP.Palette = PP.Palette or {}
 
 local W, H, HEADER_H, FOOTER_H, ROW_H = 580, 470, 48, 24, 44
 local MAX_ROWS = 80
-local CATEGORIES = { action = { 1, "cat.action" }, pinned = { 2, "cat.pinned" }, tool = { 3, "cat.tool" }, content = { 4, "cat.content" } }
+local CATEGORIES = {
+	action = { 1, "cat.action" }, pinned = { 2, "cat.pinned" }, tool = { 3, "cat.tool" }, content = { 4, "cat.content" }, native = { 5, "cat.native" },
+}
 
 -- Everything the palette can run, collected when it opens.
 local function collect()
@@ -43,6 +45,9 @@ local function collect()
 	for _, e in ipairs(Sources.creations) do
 		add("content", Sources.Title(e.key), PP.L("sub.content_browser"), e.icon or "icon16/application_view_list.png",
 			function() Desktop.PinSource(e.key) end)
+	end
+	for _, e in ipairs(Sources.natives) do
+		add("native", Sources.Title(e.key), e.category, "icon16/application_view_tile.png", function() Desktop.PinSource(e.key) end)
 	end
 	return list
 end

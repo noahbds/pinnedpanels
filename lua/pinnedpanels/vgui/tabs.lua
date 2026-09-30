@@ -387,11 +387,13 @@ function HOST:Rebuild()
 	self.built = false
 end
 
--- A language change (E11): tool content is built again so it follows the game language like the spawn
--- menu's own copy; content tabs keep what they show (they hold browsing state) unless they failed.
+-- A language change (E11): control panels (tools, post-process) are built again so they follow the game
+-- language like the spawn menu's own copies; other tabs keep what they show (they hold browsing or
+-- editing state) unless they failed.
+local CONTROL_PANELS = { tool = true, postprocess = true }
 function HOST:Relocalize()
 	self.filter:SetPlaceholderText(PP.L("filter.controls"))
-	if self.built and (self.src:match("^tool:") or not self.content) then self:Rebuild() end
+	if self.built and (CONTROL_PANELS[self.src:match("^(%a+):")] or not self.content) then self:Rebuild() end
 end
 
 function HOST:SetCrop(crop)
@@ -412,8 +414,8 @@ function HOST:ApplyFilter()
 	if IsValid(self.content) then filterContent(self.content, self.filter:GetValue()) end
 end
 
--- The content's natural width (tools only) and height, and the panel they were measured against, so the
--- window can add its own chrome. nil when there is nothing to measure.
+-- The content's natural width (control panels only) and height, and the panel they were measured
+-- against, so the window can add its own chrome. nil when there is nothing to measure.
 function HOST:NaturalSize()
 	local content = self.content
 	if not IsValid(content) then return nil end
@@ -426,7 +428,7 @@ function HOST:NaturalSize()
 		content:InvalidateLayout(true)
 	end
 	local w
-	if self.src:match("^tool:") then
+	if CONTROL_PANELS[self.src:match("^(%a+):")] then
 		local natural = naturalWidth(canvas or content, 0)
 		if natural > 60 then w = natural end
 	end

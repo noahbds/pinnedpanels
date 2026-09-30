@@ -18,6 +18,8 @@ local KIND = {
 	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
 	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
 	managed = { label = "kind.managed", icon = "icon16/application_link.png", color = T.warning },
+	desktop = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
+	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 }
 
 local function paintRow(row, w, h)
@@ -111,6 +113,19 @@ function PAGE:AddWindowRow(rec)
 
 	if dormant then
 		button(row, PP.L("btn.remove"), "icon16/cross.png", 80, adopt and "tip.remove_waiting" or "tip.remove_dormant", function() Layout.Unpin(id) end, true)
+		-- A command from an imported layout runs only once the player allows it (R16).
+		local r = adopt and adopt.recipe
+		if r and r.kind == "command" and not r.confirmed then
+			button(row, PP.L("btn.allow"), "icon16/accept.png", 70, "tip.allow", function()
+				Derma_Query(PP.L("allow.query", r.args and r.command .. " " .. r.args or r.command), PP.L("allow.title"),
+					PP.L("btn.allow"), function()
+						Layout.SetAdopt(id, 1, { recipe = { kind = "command", command = r.command, args = r.args, confirmed = true } })
+					end,
+					PP.L("btn.cancel"), function() end)
+			end)
+		elseif adopt and PP.Recipes.CanOpen(adopt) then
+			button(row, PP.L("btn.open"), "icon16/application_go.png", 70, "tip.open_adopted", function() PP.Recipes.Open(rec, rec.tabs[1]) end)
+		end
 	elseif #rec.tabs == 0 then
 		button(row, PP.L("btn.delete"), "icon16/cross.png", 70, nil, function() Layout.Unpin(id) end, true)
 	else

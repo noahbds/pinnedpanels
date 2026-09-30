@@ -225,7 +225,9 @@ end)
 
 local function isMulti(ctx) return #ctx.window.tabs > 1 end
 local function notLocked(ctx) return not ctx.window.locked end
-local function isTool(ctx) return ctx.tab.src:match("^tool:") ~= nil end
+-- Tabs built from a function, which a rebuild runs again (E10); content tabs and adopted panels aren't.
+local REBUILDABLE = { tool = true, postprocess = true, desktop = true }
+local function rebuildable(ctx) return REBUILDABLE[ctx.tab.src:match("^(%a+):")] == true end
 local function tabTitle(ctx) return Layout.TabTitle(ctx.tab) end
 
 local function host(ctx)
@@ -382,7 +384,7 @@ Actions.Add({
 Actions.Add({
 	id = "rebuild", scope = "tab", icon = "icon16/arrow_refresh.png", label = "ctx.rebuild",
 	menu = { group = "size", window = 33, tab = 33 },
-	visible = function(ctx) return isTool(ctx) and host(ctx) ~= nil end,
+	visible = function(ctx) return rebuildable(ctx) and host(ctx) ~= nil end,
 	run = function(ctx) host(ctx):Rebuild() end,
 })
 

@@ -114,7 +114,7 @@ function PICKER:Select(panel)
 	self.lines, self.refusal, self.info = {}, nil, nil
 	if not IsValid(panel) then return end
 	local root = self.root
-	self.refusal = Recipes.Refusal(panel, root) or (panel ~= root and "refuse.part")
+	self.refusal = Recipes.Refusal(panel, root) or (panel ~= root and not Recipes.Native(panel) and "refuse.part")
 	local sig = Recipes.Signature(panel)
 	local lines = self.lines
 	lines[1] = Recipes.SigTitle(sig)
@@ -124,8 +124,13 @@ function PICKER:Select(panel)
 	if self.refusal then
 		lines[5] = PP.L(self.refusal)
 	else
-		self.info = Recipes.Suggest(panel, root)
-		lines[5] = PP.L("picker.click_" .. self.info.mode) .. "  ·  " .. Recipes.Describe(self.info)
+		local info = Recipes.Suggest(panel, root)
+		self.info = info
+		if info.mode == "native" then
+			lines[5] = PP.L("picker.click_native", PP.Sources.Title(info.native))
+		else
+			lines[5] = PP.L("picker.click_" .. info.mode) .. "  ·  " .. Recipes.Describe(info)
+		end
 	end
 end
 
@@ -141,24 +146,34 @@ function PICKER:Cycle(dir)
 end
 
 -- Pins the selection; the picker closes first so its cursor reason is gone before the window is taken.
+-- A desktop widget is built as our own tab instead, and its window is left alone.
 function PICKER:Pin(mode, recipe)
 	local panel, root, info = self.selected, self.root, self.info
 	self:Remove()
 	if not info or not IsValid(panel) then return end
-	local id = Recipes.Take(panel, root, mode or info.mode, recipe or info.recipe)
+	mode = mode or info.mode
+	if mode == "native" then return PP.Desktop.PinSource(info.native) end
+	local id = Recipes.Take(panel, root, mode, recipe or info.recipe)
 	if id then notification.AddLegacy(PP.L("adopt.pinned", PP.Layout.Title(PP.Layout.Get(id))), NOTIFY_GENERIC, 6) end
 end
 
--- Right-click: how it comes back, and pin with that.
+-- Right-click: each way of pinning it, with how it comes back.
 function PICKER:OpenMenu()
-	if not self.info then return surface.PlaySound("buttons/button10.wav") end
+	local info = self.info
+	if not info then return surface.PlaySound("buttons/button10.wav") end
 	local menu = DermaMenu()
 	self.menu = menu
-	for _, r in ipairs(Recipes.Choices(self.info)) do
-		local option = menu:AddOption(Recipes.Describe({ recipe = r }), function()
-			if IsValid(self) then self:Pin(self.info.mode, r) end
-		end)
-		option:SetIcon(r == self.info.recipe and "icon16/tick.png" or "icon16/bullet_white.png")
+	for _, mode in ipairs(Recipes.Modes(info)) do
+		if mode == "native" then
+			menu:AddOption(PP.L("picker.mode_native"), function() self:Pin("native") end):SetIcon("icon16/application_view_tile.png")
+		else
+			local sub, option = menu:AddSubMenu(PP.L("picker.mode_" .. mode))
+			option:SetIcon(mode == info.mode and "icon16/tick.png" or "icon16/bullet_white.png")
+			for _, r in ipairs(Recipes.Choices(info)) do
+				sub:AddOption(Recipes.Describe({ recipe = r }), function() self:Pin(mode, r) end)
+					:SetIcon(r == info.recipe and "icon16/tick.png" or "icon16/bullet_white.png")
+			end
+		end
 	end
 	menu:Open()
 end

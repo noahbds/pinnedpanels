@@ -1,5 +1,6 @@
--- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>") and spawn-menu
--- content tabs ("creation:<name>"), rebuilt on every PostReloadToolsMenu (G11). Builds their content.
+-- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>"), spawn-menu
+-- content tabs ("creation:<name>"), C-menu desktop widgets ("desktop:<id>", G47) and post-process panels
+-- ("postprocess:<name>", G64), rebuilt on every PostReloadToolsMenu (G11). Builds their content.
 
 local PP = PinnedPanels
 PP.Sources = PP.Sources or {}
@@ -9,9 +10,11 @@ Sources.HUB_TAB = "#pinnedpanels.spawn.tab"
 Sources.catalogue = Sources.catalogue or {}
 Sources.tools = Sources.tools or {}
 Sources.creations = Sources.creations or {}
+Sources.natives = Sources.natives or {}
 Sources.inFallback = false
 
-local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 } }
+local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 }, postprocess = { 280, 400 }, desktop = { 400, 400 } }
+local MAX_DESKTOP_W, MAX_DESKTOP_H = 0.6, 0.8
 
 -- "#tool.weld.name" → the current language's text; unknown phrases fall back to the key without "#".
 local function phrase(text)
@@ -54,17 +57,39 @@ function Sources.Rebuild()
 		end
 	end
 
-	table.sort(tools, function(a, b)
+	-- Built natively like tools: our tab gives the widget its window, or the effect its control panel.
+	local natives = {}
+	for id, w in pairs(list.Get("DesktopWindows")) do
+		if isstring(id) and istable(w) and isfunction(w.init) then
+			local e = {
+				kind = "desktop", key = "desktop:" .. id, name = id, text = isstring(w.title) and w.title or id,
+				category = PP.L("native.desktop"), init = w.init, width = tonumber(w.width), height = tonumber(w.height),
+			}
+			catalogue[e.key] = e
+			natives[#natives + 1] = e
+		end
+	end
+	for name, pp in pairs(list.Get("PostProcess")) do
+		if isstring(name) and istable(pp) and isfunction(pp.cpanel) then
+			local e = { kind = "postprocess", key = "postprocess:" .. name, name = name, text = name, category = PP.L("native.postprocess"), cpanel = pp.cpanel }
+			catalogue[e.key] = e
+			natives[#natives + 1] = e
+		end
+	end
+
+	local function byCategory(a, b)
 		local ca, cb = a.category:lower(), b.category:lower()
 		if ca ~= cb then return ca < cb end
 		return phrase(a.text):lower() < phrase(b.text):lower()
-	end)
+	end
+	table.sort(tools, byCategory)
+	table.sort(natives, byCategory)
 	table.sort(creations, function(a, b)
 		if a.order ~= b.order then return a.order < b.order end
 		return a.name < b.name
 	end)
 
-	Sources.catalogue, Sources.tools, Sources.creations = catalogue, tools, creations
+	Sources.catalogue, Sources.tools, Sources.creations, Sources.natives = catalogue, tools, creations, natives
 	hook.Run("PinnedPanelsCatalogChanged")
 end
 
@@ -85,6 +110,10 @@ function Sources.Title(src)
 end
 
 function Sources.DefaultSize(src)
+	local e = Sources.catalogue[src]
+	if e and e.kind == "desktop" and e.width and e.height then
+		return math.min(e.width + 10, math.floor(ScrW() * MAX_DESKTOP_W)), math.min(e.height, math.floor(ScrH() * MAX_DESKTOP_H))
+	end
 	local size = DEFAULT_SIZE[src:match("^(%a+):")] or DEFAULT_SIZE.tool
 	return size[1], size[2]
 end
@@ -112,11 +141,25 @@ local function run(src, fn, ...)
 	return false, result
 end
 
--- The same ControlPanel + FillViaTable the spawn menu uses (G14), inside a throttled scroll panel.
-local function buildTool(e, parent)
+-- A ControlPanel like the spawn menu's, headerless, inside a throttled scroll panel (L3).
+local function controlPanel(parent)
 	local scroll = vgui.Create("PinnedPanelsScroll", parent)
 	scroll:Dock(FILL)
+	local cp = scroll:Add("ControlPanel")
+	cp:Dock(TOP)
+	cp:SetAutoSize(true)
+	if IsValid(cp.Header) then
+		cp.Header:SetVisible(false)
+		cp:SetHeaderHeight(0)
+	end
+	return scroll, cp
+end
+
+-- The same ControlPanel + FillViaTable the spawn menu uses (G14).
+local function buildTool(e, parent)
 	if not isfunction(e.item.CPanelFunction) then
+		local scroll = vgui.Create("PinnedPanelsScroll", parent)
+		scroll:Dock(FILL)
 		local label = scroll:Add("DLabel")
 		label:SetText(PP.L("pin.no_cp"))
 		label:SetWrap(true)
@@ -127,13 +170,7 @@ local function buildTool(e, parent)
 		return scroll
 	end
 
-	local cp = scroll:Add("ControlPanel")
-	cp:Dock(TOP)
-	cp:SetAutoSize(true)
-	if IsValid(cp.Header) then
-		cp.Header:SetVisible(false)
-		cp:SetHeaderHeight(0)
-	end
+	local scroll, cp = controlPanel(parent)
 	local before = #cp:GetChildren()
 	local ok = run(e.key, cp.FillViaTable, cp, { Text = e.item.Text, ControlPanelBuildFunction = e.item.CPanelFunction })
 	if not ok then
@@ -145,6 +182,43 @@ local function buildTool(e, parent)
 	end
 	return scroll
 end
+
+-- A post-process entry's cpanel fills a control panel, as its spawn-menu icon does (G64).
+local function buildPostProcess(e, parent)
+	local scroll, cp = controlPanel(parent)
+	if not run(e.key, e.cpanel, cp) then
+		scroll:Remove()
+		return nil
+	end
+	return scroll
+end
+
+local function noPaint() end
+
+-- A desktop widget builds into the DFrame it is given (the context menu makes one per click, G47). Ours
+-- is docked inside the tab with its own chrome hidden: the pinned window is the chrome.
+local function buildDesktop(e, parent)
+	local frame = vgui.Create("DFrame", parent)
+	frame:SetTitle(phrase(e.text))
+	frame:SetSize(e.width or 400, e.height or 400)
+	frame:SetDeleteOnClose(true)
+	if not run(e.key, e.init, { Window = frame }, frame) then
+		frame:Remove()
+		return nil
+	end
+	frame:SetDraggable(false)
+	frame:SetSizable(false)
+	frame:SetScreenLock(false)
+	frame:ShowCloseButton(false)
+	for _, part in ipairs({ frame.btnMaxim, frame.btnMinim, frame.lblTitle, frame.imgIcon }) do
+		if IsValid(part) then part:SetVisible(false) end
+	end
+	frame:DockPadding(0, 0, 0, 0)
+	frame.Paint = noPaint
+	return frame
+end
+
+local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, desktop = buildDesktop }
 
 -- Each call returns a new, independent container (G13).
 local function buildCreation(e, parent)
@@ -164,8 +238,7 @@ end
 function Sources.Build(src, parent)
 	local e = Sources.catalogue[src]
 	if not e then return nil end
-	if e.kind == "tool" then return buildTool(e, parent) end
-	return buildCreation(e, parent)
+	return (BUILDERS[e.kind] or buildCreation)(e, parent)
 end
 
 -- "Equip" only ever runs a tool that resolved in the live catalogue (R4, G16, F35).

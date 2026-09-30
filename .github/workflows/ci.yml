@@ -15,3 +15,5 @@ jobs:
         run: tools/check_rules.sh
       - name: Unit tests
         run: luajit tests/run.lua
+      - name: Translations
+        run: luajit tools/check_lang.lua

@@ -664,7 +664,7 @@ If the built `ControlPanel` gained no children (L2), run `Sources.WithControlPan
 
 - **Tab strip**: shown only with ≥ 2 tabs; accent colour; click to activate, right-click for the tab menu, drag-hover switches (like `DTab`).
 - **Tab host** (one per tab, created lazily when the tab is first shown, D13):
-  - a permanent **clip panel** with mouse input disabled (L22); content docked `FILL` inside it, or, when cropped, undocked at the uncropped size and positioned at `(-l, -t)`. Crop never reparents content.
+  - a permanent **clip panel**; content docked `FILL` inside it, or, when cropped, undocked at the uncropped size and positioned at `(-l, -t)`. Crop never reparents content.
   - **filter bar** slot (F19) and the filter itself (hide non-matching rows, expand matching categories, restore on clear).
   - **collapse memory** (F20, D14): each `DCollapsibleCategory` inside a tool panel gets `SetCookieName("pinnedpanels." .. src .. "." .. label)` (G23).
   - **scroll throttle**: trailing-edge throttle of the scroll panel's layout (L3, B6), implemented by the host scheduling one `InvalidateLayout` per interval instead of replacing the method.
@@ -976,6 +976,9 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] Keyboard-driven DMenus, window and element menus [L9, G17, B4, B5, E29, D9]
 - [x] Taskbar and popup zones
 - **Accept** (in game, still to check): everything the mouse can do inside a pinned window, the keyboard can do.
+- *Found in game:*
+  - Derma's control tables are nil while autorun files load; look them up at call time.
+  - Panels take their parent's mouse-input state when created (v1's crop code relied on this), so the clip keeps mouse input on and a tab's chain accepts the mouse while its content builds (L22 revised).
 - *Deviations:*
   - `input.lua` gained the key repeat and `CreateMove` movement suppression left over from Phase 1. Handlers run from a snapshot because navigation rebinds its keys when its state changes.
   - The navigation keys between windows are settings (`pinnedpanels_nav_next`, `_nav_prev`, `_nav_tab_next`, `_nav_tab_prev`, `_nav_enter`, `_nav_use`; v1 defaults Right, Left, ], [, Down, Enter) and are bound only while navigation is on. Keys inside a window and in menus are fixed: arrows, Enter, Shift+Enter, Backspace.

@@ -15,7 +15,7 @@ Actions.byId = {}
 --   id, scope = "global" | "window" | "tab", icon,
 --   label = "loc.key" | function(ctx) → text,   name = "loc.key" (context-free, for Controls and conflicts)
 --   menu = { group, window = order?, tab = order?, taskbar = order? },
---   palette = true?, bindable = true?, key = default,
+--   palette = true?, sub = "loc.key"? (palette subtitle), bindable = true?, key = default,
 --   visible(ctx)?, enabled(ctx)?, children(ctx) → { { text, icon?, run, enabled? } | { spacer = true } }?,
 --   run(ctx), release(ctx)? (bindable keys only),
 -- }
@@ -74,6 +74,18 @@ end
 -- ── Menus ───────────────────────────────────────────────────
 -- Real DMenus built from the list (G17), so the keyboard can drive the same menus later (§19.5).
 
+local function addChildren(menu, items)
+	for _, item in ipairs(items) do
+		if item.spacer then
+			menu:AddSpacer()
+		else
+			local o = menu:AddOption(item.text, item.run)
+			if item.icon then o:SetIcon(item.icon) end
+			if item.enabled == false then o:SetEnabled(false) end
+		end
+	end
+end
+
 local function fill(menu, where, ctx)
 	local defs = {}
 	for _, def in ipairs(Actions.list) do
@@ -90,15 +102,7 @@ local function fill(menu, where, ctx)
 		if def.children then
 			local sub
 			sub, option = menu:AddSubMenu(label)
-			for _, item in ipairs(def.children(ctx)) do
-				if item.spacer then
-					sub:AddSpacer()
-				else
-					local o = sub:AddOption(item.text, item.run)
-					if item.icon then o:SetIcon(item.icon) end
-					if item.enabled == false then o:SetEnabled(false) end
-				end
-			end
+			addChildren(sub, def.children(ctx))
 		else
 			option = menu:AddOption(label, function() def.run(ctx) end)
 			if def.enabled and not def.enabled(ctx) then option:SetEnabled(false) end
@@ -122,6 +126,16 @@ end
 function Actions.OpenTabMenu(id, index)
 	local ctx = context(id, index, "tab")
 	if ctx then return open("tab", ctx) end
+end
+
+-- One action's submenu on its own, e.g. the Pinned page's "Group" button.
+function Actions.OpenChildren(actionId, id)
+	local def, ctx = Actions.byId[actionId], context(id, nil, "window")
+	if not ctx or not available(def, ctx) then return end
+	local menu = DermaMenu()
+	addChildren(menu, def.children(ctx))
+	menu:Open()
+	return menu
 end
 
 function Actions.OpenTaskbarMenu(id)
@@ -217,8 +231,13 @@ end
 
 Actions.Add({
 	id = "cursor", scope = "global", icon = "icon16/cursor.png", label = "act.toggle_cursor",
-	palette = true, bindable = true, key = KEY_F4,
+	sub = "sub.show_cursor", palette = true, bindable = true, key = KEY_F4,
 	run = function() Input.SetCursorMode(not Input.cursorMode) end,
+})
+
+Actions.Add({
+	id = "palette", scope = "global", icon = "icon16/application_view_list.png", label = "card.palette", bindable = true,
+	run = function() PP.Palette.Toggle() end,
 })
 
 Actions.Add({
@@ -229,13 +248,13 @@ Actions.Add({
 
 Actions.Add({
 	id = "arrange", scope = "global", icon = "icon16/application_tile_horizontal.png", label = "act.auto_arrange",
-	name = "kb.auto_arrange", palette = true, bindable = true,
+	name = "kb.auto_arrange", sub = "sub.tile_visible", palette = true, bindable = true,
 	run = function() Layout.Arrange() end,
 })
 
 Actions.Add({
 	id = "autosize_all", scope = "global", icon = "icon16/arrow_inout.png", label = "act.auto_size_all",
-	palette = true, bindable = true,
+	sub = "sub.fit_content", palette = true, bindable = true,
 	run = function()
 		for id, win in pairs(Desktop.panels) do
 			if win:IsVisible() then autosize(id) end
@@ -245,7 +264,7 @@ Actions.Add({
 
 Actions.Add({
 	id = "reopen", scope = "global", icon = "icon16/arrow_undo.png", label = "act.reopen", name = "kb.reopen",
-	palette = true, bindable = true,
+	sub = "sub.undo_unpin", palette = true, bindable = true,
 	visible = function() return #Layout.closed > 0 end,
 	run = function()
 		local id = Layout.Reopen()
@@ -255,14 +274,14 @@ Actions.Add({
 
 Actions.Add({
 	id = "restore_all", scope = "global", icon = "icon16/application_get.png", label = "act.restore_all",
-	taskbarLabel = "tb.restore_all", menu = { group = "taskbar", taskbar = 2 }, palette = true, bindable = true,
+	taskbarLabel = "tb.restore_all", menu = { group = "taskbar", taskbar = 2 }, sub = "sub.bring_back", palette = true, bindable = true,
 	run = function()
 		for _, rec in ipairs(Layout.Windows()) do Layout.Restore(rec.id) end
 	end,
 })
 
 Actions.Add({
-	id = "unpin_all", scope = "global", icon = "icon16/cross.png", label = "act.unpin_all", palette = true,
+	id = "unpin_all", scope = "global", icon = "icon16/cross.png", label = "act.unpin_all", sub = "sub.remove_every", palette = true,
 	run = function()
 		local ids = {}
 		for _, rec in ipairs(Layout.Windows()) do ids[#ids + 1] = rec.id end

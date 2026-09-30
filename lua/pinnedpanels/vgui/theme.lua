@@ -60,10 +60,26 @@ T.dangerBg, T.dangerHover, T.dangerText = Color(140, 35, 35), Color(180, 50, 50)
 -- Crop editor
 T.cropShade = Color(0, 0, 0, 160)
 
+-- Icon materials are made once per path and never while painting (G29).
+local icons = {}
+function T.Icon(path)
+	icons[path] = icons[path] or Material(path)
+	return icons[path]
+end
+
+-- Command palette
+T.paletteSelected, T.paletteFooter = Color(42, 72, 116), Color(16, 18, 24)
+
 T.FONT_BANNER = "PinnedPanels.Banner"
 T.FONT_TASKBAR = "PinnedPanels.Taskbar"
+T.FONT_PALETTE_ITEM = "PinnedPanels.PaletteItem"
+T.FONT_PALETTE_SUB = "PinnedPanels.PaletteSub"
+T.FONT_PALETTE_QUERY = "PinnedPanels.PaletteQuery"
 
 hook.Add("PinnedPanelsLoaded", "PinnedPanels.Theme", function()
 	surface.CreateFont(T.FONT_BANNER, { font = "DefaultBold", size = 14, weight = 600 })
 	surface.CreateFont(T.FONT_TASKBAR, { font = "Tahoma", size = 13, weight = 500 })
+	surface.CreateFont(T.FONT_PALETTE_ITEM, { font = "Roboto", size = 17, weight = 500 })
+	surface.CreateFont(T.FONT_PALETTE_SUB, { font = "Roboto", size = 12, weight = 400 })
+	surface.CreateFont(T.FONT_PALETTE_QUERY, { font = "Roboto", size = 20, weight = 400 })
 end)

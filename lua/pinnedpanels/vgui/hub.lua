@@ -1,6 +1,5 @@
 -- PinnedPanelsHub (§20.1): the "Pinned Panels" spawn-menu tab. The spawn menu destroys and rebuilds it on
 -- every rebuild (G11), so it holds no state and reads Layout and Sources when shown.
--- Phase 2 has the Tools and Content pages; Pinned, Layout and Settings arrive in Phase 4.
 
 local PP = PinnedPanels
 local Layout, Sources, T = PP.Layout, PP.Sources, PP.Theme
@@ -73,6 +72,10 @@ function HUB:Init()
 	local content = vgui.Create("PinnedPanelsCatalog")
 	content:SetKind("creation")
 	sheet:AddSheet(PP.L("tab.content"), content, "icon16/application_view_list.png")
+
+	sheet:AddSheet(PP.L("tab.pinned"), vgui.Create("PinnedPanelsPinned"), "icon16/lock.png")
+	sheet:AddSheet(PP.L("tab.layout"), vgui.Create("PinnedPanelsLayout"), "icon16/application_view_columns.png")
+	sheet:AddSheet(PP.L("tab.settings"), vgui.Create("PinnedPanelsSettings"), "icon16/cog.png")
 
 	for _, item in ipairs(sheet:GetItems()) do item.Tab.Paint = paintTab end
 

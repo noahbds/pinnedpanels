@@ -140,6 +140,21 @@ function PP.L(key, ...)
 	return ok and out or text
 end
 
+-- Palette matching (v1): a substring scores its position; letters in order score behind any substring.
+-- Lower is better; nil means no match. needle must be lower case.
+function Util.Fuzzy(hay, needle)
+	hay = hay:lower()
+	local at = hay:find(needle, 1, true)
+	if at then return at end
+	local from = 1
+	for i = 1, #needle do
+		local found = hay:find(needle:sub(i, i), from, true)
+		if not found then return nil end
+		from = found + 1
+	end
+	return 500 + #hay
+end
+
 -- ── Timing ──────────────────────────────────────────────────
 
 -- Runs fn next frame, unless panel was given and is gone by then.

@@ -16,6 +16,7 @@ local EDITOR = {}
 -- rect = the content's area in window coordinates; sel starts at rect minus the current crop.
 function EDITOR:Setup(win, index, rect, crop)
 	self.win, self.index, self.rect = win, index, rect
+	self.hint = PP.L("crop.hint")
 	self.sel = { x = rect.x, y = rect.y, w = rect.w, h = rect.h }
 	if crop then
 		self.sel = { x = rect.x + crop.l, y = rect.y + crop.t, w = rect.w - crop.l - crop.r, h = rect.h - crop.t - crop.b }
@@ -180,7 +181,7 @@ function EDITOR:Paint(w, h)
 			if px ~= s.x + s.w / 2 or py ~= s.y + s.h / 2 then surface.DrawRect(px - half, py - half, HANDLE_DRAW, HANDLE_DRAW) end
 		end
 	end
-	draw.SimpleText(PP.L("crop.hint"), "DermaDefault", w / 2, 4, Theme.textBright, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+	draw.SimpleText(self.hint, "DermaDefault", w / 2, 4, Theme.textBright, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 end
 
 vgui.Register("PinnedPanelsCropEditor", EDITOR, "Panel")

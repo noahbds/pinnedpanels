@@ -194,6 +194,14 @@ function Layout.Load(loaded)
 	changed("windows", nil, true)
 end
 
+-- Replaces the whole document (an import or its undo) and saves it. The write keeps the previous file as
+-- the backup (R3, E34).
+function Layout.Replace(newDoc)
+	PP.Storage.Flush() -- pending changes reach the file first, so the backup is the layout as it was
+	Layout.Load(newDoc)
+	PP.Storage.MarkDirty()
+end
+
 -- ── Pinning ─────────────────────────────────────────────────
 
 -- Pins src in a new window, or brings back the window that already has it (E22, D10).

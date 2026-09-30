@@ -19,6 +19,10 @@ local FILES = {
 	"vgui/taskbar.lua",
 	"vgui/hub.lua",
 	"vgui/hub_catalog.lua",
+	"vgui/hub_pinned.lua",
+	"vgui/hub_layout.lua",
+	"vgui/hub_settings.lua",
+	"vgui/palette.lua",
 }
 
 if SERVER then

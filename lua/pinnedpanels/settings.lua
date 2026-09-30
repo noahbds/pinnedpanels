@@ -57,7 +57,8 @@ local function update(key, s)
 	hook.Run("PinnedPanelsSettingChanged", key, value)
 end
 
--- def: { type = "bool"|"int"|"enum"|"color"|"key", default, min?, max?, values? (enum), page, section? }
+-- def: { type = "bool"|"int"|"enum"|"color"|"key", default, min?, max?, values? (enum), page, section?,
+--        label (loc key; key settings use their action's name), choices? (enum value → loc key) }
 function Settings.Add(key, def)
 	def.key = key
 	def.convar = convarName(key)
@@ -90,19 +91,20 @@ end
 -- ── Declarations ────────────────────────────────────────────
 -- Declared in the commit that first reads them (§21.1); the full list is §21.2.
 
-Settings.Add("autoRestore", { type = "bool", default = true, page = "general", section = "behavior" })
-Settings.Add("idleOpacity", { type = "int", min = 10, max = 100, default = 100, page = "general", section = "behavior" })
-Settings.Add("snap", { type = "bool", default = true, page = "general", section = "snapping" })
-Settings.Add("snapDistance", { type = "int", min = 0, max = 40, default = 12, page = "general", section = "snapping" })
-Settings.Add("colorBg", { type = "color", default = Color(235, 238, 242, 250), page = "appearance" })
-Settings.Add("colorHeader", { type = "color", default = Color(32, 35, 42, 255), page = "appearance" })
-Settings.Add("colorText", { type = "color", default = Color(240, 245, 255, 255), page = "appearance" })
-Settings.Add("taskbar", { type = "bool", default = true, page = "taskbar", section = "taskbar" })
-Settings.Add("taskbarSide", { type = "enum", values = { "bottom", "top", "left", "right" }, default = "bottom", page = "taskbar", section = "taskbar" })
-Settings.Add("taskbarSize", { type = "int", min = 20, max = 64, default = 32, page = "taskbar", section = "taskbar" })
-Settings.Add("taskbarAutoHide", { type = "bool", default = false, page = "taskbar", section = "taskbar" })
-Settings.Add("taskbarLabels", { type = "bool", default = true, page = "taskbar", section = "taskbar" })
-Settings.Add("taskbarColorBg", { type = "color", default = Color(20, 22, 30, 220), page = "taskbar", section = "colors" })
-Settings.Add("taskbarColorText", { type = "color", default = Color(220, 225, 235, 255), page = "taskbar", section = "colors" })
-Settings.Add("taskbarColorAccent", { type = "color", default = Color(60, 140, 255, 255), page = "taskbar", section = "colors" })
+Settings.Add("autoRestore", { type = "bool", default = true, page = "general", section = "behavior", label = "opt.autorestore" })
+Settings.Add("idleOpacity", { type = "int", min = 10, max = 100, default = 100, page = "general", section = "behavior", label = "opt.idle_alpha" })
+Settings.Add("snap", { type = "bool", default = true, page = "general", section = "snapping", label = "opt.snap" })
+Settings.Add("snapDistance", { type = "int", min = 0, max = 40, default = 12, page = "general", section = "snapping", label = "opt.snap_dist" })
+Settings.Add("colorBg", { type = "color", default = Color(235, 238, 242, 250), page = "appearance", section = "colors", label = "color.panel_bg" })
+Settings.Add("colorHeader", { type = "color", default = Color(32, 35, 42, 255), page = "appearance", section = "colors", label = "color.header_bar" })
+Settings.Add("colorText", { type = "color", default = Color(240, 245, 255, 255), page = "appearance", section = "colors", label = "color.header_text" })
+Settings.Add("taskbar", { type = "bool", default = true, page = "taskbar", section = "taskbar", label = "opt.taskbar_enable" })
+Settings.Add("taskbarSide", { type = "enum", values = { "bottom", "top", "left", "right" }, default = "bottom", page = "taskbar", section = "taskbar",
+	label = "lbl.position", choices = { bottom = "pos.bottom", top = "pos.top", left = "pos.left", right = "pos.right" } })
+Settings.Add("taskbarSize", { type = "int", min = 20, max = 64, default = 32, page = "taskbar", section = "taskbar", label = "opt.bar_thickness" })
+Settings.Add("taskbarAutoHide", { type = "bool", default = false, page = "taskbar", section = "taskbar", label = "opt.reveal_hover" })
+Settings.Add("taskbarLabels", { type = "bool", default = true, page = "taskbar", section = "taskbar", label = "opt.show_labels" })
+Settings.Add("taskbarColorBg", { type = "color", default = Color(20, 22, 30, 220), page = "taskbar", section = "colors", label = "color.background" })
+Settings.Add("taskbarColorText", { type = "color", default = Color(220, 225, 235, 255), page = "taskbar", section = "colors", label = "color.text" })
+Settings.Add("taskbarColorAccent", { type = "color", default = Color(60, 140, 255, 255), page = "taskbar", section = "colors", label = "color.accent" })
 -- Key settings (pinnedpanels_key_<action>) are declared by actions.lua, one per bindable action (§18.2).

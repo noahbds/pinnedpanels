@@ -2,6 +2,7 @@
 -- Files listed here must exist and be non-empty; order is load order.
 
 local FILES = {
+	"util.lua",
 }
 
 if SERVER then

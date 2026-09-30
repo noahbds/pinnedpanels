@@ -13,6 +13,7 @@ local FILES = {
 	"vgui/theme.lua",
 	"vgui/controls.lua",
 	"vgui/tabs.lua",
+	"vgui/crop_editor.lua",
 	"vgui/window.lua",
 	"vgui/hud.lua",
 	"vgui/taskbar.lua",

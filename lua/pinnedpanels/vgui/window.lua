@@ -10,6 +10,10 @@ local EDGE = 5
 local CORNER = 16
 local BTN_W, BTN_H, BTN_Y = 26, 18, 3
 local MIN_W, MIN_H = 150, 100
+local MIN_CROPPED = 60
+local AUTOSIZE_ANIM = 0.12
+local AUTOSIZE_MAX_W, AUTOSIZE_MAX_H = 0.6, 0.92
+local AUTOSIZE_DEADBAND = 12
 
 -- Slot 1 is the rightmost button.
 local BUTTONS = { "close", "max", "min" }
@@ -33,6 +37,9 @@ function PANEL:Init()
 	self.hosts = {}
 	self.titleText = ""
 	self.ppTakesKeyboard = true
+	self.strip = self:Add("PinnedPanelsTabStrip")
+	self.strip:Dock(TOP)
+	self.strip:SetVisible(false)
 end
 
 function PANEL:SetWindowId(id)
@@ -40,34 +47,54 @@ function PANEL:SetWindowId(id)
 	self:Refresh()
 end
 
--- The tab to show: the active one, or the first available one while the active one is dormant (E1).
-local function shownTab(rec)
+-- The tab shown: the active one, or the first available one while the active one is dormant (E1).
+-- Returns the tab and its index in the record.
+function PANEL:ShownTab()
+	local rec = self.rec
 	local tab = rec.tabs[rec.active]
-	if tab and Sources.Get(tab.src) then return tab end
-	for _, t in ipairs(rec.tabs) do
-		if Sources.Get(t.src) then return t end
+	if tab and Sources.Get(tab.src) then return tab, rec.active end
+	for i, t in ipairs(rec.tabs) do
+		if Sources.Get(t.src) then return t, i end
 	end
 end
 
--- Re-reads the record: geometry (unless a gesture is in progress), title and the shown tab.
+function PANEL:ShownHost()
+	local tab = self:ShownTab()
+	return tab and self.hosts[tab.src]
+end
+
+-- The crop in effect: none while maximized (B27, E28) or while the crop editor is open.
+function PANEL:ActiveCrop(tab)
+	if not tab or self.rec.state == "maximized" or self.editing then return nil end
+	return tab.crop
+end
+
+-- Re-reads the record: geometry (unless a gesture or animation is in progress), title, tabs and crop.
 function PANEL:Refresh()
 	local rec = Layout.Get(self.id)
 	if not rec then return end
 	self.rec = rec
-	if not (self.drag or self.resize) then
+	if not (self.drag or self.resize or self.animating or self.editing) then
 		self:SetPos(rec.x, rec.y)
 		self:SetSize(rec.w, rec.h)
 	end
 
-	local tab = shownTab(rec)
+	local tab, shown = self:ShownTab()
+	local crop = self:ActiveCrop(tab)
 	local title = rec.title or (tab and Layout.TabTitle(tab)) or ""
 	if rec.clickThrough then title = title .. "  " .. PP.L("ind.clickthrough") end
+	if crop then title = title .. "  " .. PP.L("ind.cropped") end
 	self.titleText = title
 
-	local keep = {}
-	for _, t in ipairs(rec.tabs) do
-		if Sources.Get(t.src) then keep[t.src] = true end
+	local items = {}
+	for i, t in ipairs(rec.tabs) do
+		if Sources.Get(t.src) then items[#items + 1] = { index = i, title = Layout.TabTitle(t) } end
 	end
+	self.strip:SetVisible(#items > 1)
+	self.strip:Setup(rec, items, shown)
+
+	local keep = {}
+	for _, it in ipairs(items) do keep[rec.tabs[it.index].src] = true end
 	for src, host in pairs(self.hosts) do
 		if not keep[src] then
 			host:Remove()
@@ -82,7 +109,15 @@ function PANEL:Refresh()
 	end
 	for src, host in pairs(self.hosts) do
 		host:SetVisible(tab ~= nil and src == tab.src)
+		host:SetFilterBar(rec.filterBar)
 	end
+	if tab then self.hosts[tab.src]:SetCrop(crop) end
+	self:InvalidateLayout()
+end
+
+function PANEL:MinSize()
+	if self:ActiveCrop(self:ShownTab()) then return MIN_CROPPED, MIN_CROPPED end
+	return MIN_W, MIN_H
 end
 
 -- ── Hit-testing ─────────────────────────────────────────────
@@ -110,7 +145,7 @@ end
 -- Click-through windows let clicks through everywhere but the header, unless ALT is held (F11, G25).
 function PANEL:TestHover(x, y)
 	local rec = self.rec
-	if rec and rec.clickThrough and not Input.AltHeld() then
+	if rec and rec.clickThrough and not Input.AltHeld() and not self.editing then
 		local _, ly = self:ScreenToLocal(x, y)
 		return ly >= 0 and ly < HEADER
 	end
@@ -138,9 +173,14 @@ end
 
 function PANEL:OnMousePressed(code)
 	self:MoveToFront()
-	if code ~= MOUSE_LEFT then return end
+	PP.Desktop.SetFocused(self.id)
 	local rec = self.rec
 	local zone = self:Zone(self:CursorPos())
+	if code == MOUSE_RIGHT then
+		if zone then PP.Actions.OpenWindowMenu(self.id) end
+		return
+	end
+	if code ~= MOUSE_LEFT then return end
 	if BUTTON_SLOT[zone] then
 		self.pressed = zone
 		self:MouseCapture(true)
@@ -156,14 +196,17 @@ function PANEL:OnMousePressed(code)
 		if rec.state == "maximized" then
 			local fx = (mx - x) / w
 			Layout.ToggleMaximize(self.id)
+			self:Refresh()
 			w, h = rec.w, rec.h
 			x = math.Round(mx - fx * w)
-			self:SetSize(w, h)
 			self:SetPos(x, y)
 		end
 		self.drag = { dx = mx - x, dy = my - y }
 	else
-		self.resize = { zone = ZONES[zone], mx = mx, my = my, x = x, y = y, w = w, h = h }
+		local tab, index = self:ShownTab()
+		local crop = self:ActiveCrop(tab)
+		self.resize = { zone = ZONES[zone], mx = mx, my = my, x = x, y = y, w = w, h = h, index = index,
+			crop = crop and { l = crop.l, t = crop.t, r = crop.r, b = crop.b } }
 	end
 	self.others = PP.Desktop.SnapRects(self.id)
 	self:MouseCapture(true)
@@ -179,37 +222,53 @@ function PANEL:DragTo()
 	self:SetPos(x, y)
 end
 
--- Moves only the dragged edges; each snaps to lines on its own axis (a size-0 rect).
+-- Moves only the dragged edges; each snaps to lines on its own axis (a size-0 rect). On a cropped tab
+-- the dragged edge trims or reveals content instead, up to the uncropped edge (F16).
 function PANEL:ResizeTo()
 	local r, z = self.resize, self.resize.zone
 	local mx, my = input.GetCursorPos()
 	local ux, uy, uw, uh = Geom.Usable()
 	local snap, dist = snapping(), Settings.Get("snapDistance")
+	local minW, minH = self:MinSize()
+	local crop = r.crop
 	local x, y, w, h = r.x, r.y, r.w, r.h
 	local right, bottom = r.x + r.w, r.y + r.h
 
 	if z.e then
 		local edge = math.min(right + mx - r.mx, ux + uw)
 		if snap then edge = Geom.SnapAxis(edge, 0, ux, uw, self.others, "x", dist) end
-		w = math.max(MIN_W, edge - x)
+		w = math.max(minW, edge - x)
+		if crop then w = math.min(w, r.w + crop.r) end
 	elseif z.w then
 		local edge = math.max(r.x + mx - r.mx, ux)
 		if snap then edge = Geom.SnapAxis(edge, 0, ux, uw, self.others, "x", dist) end
-		w = math.max(MIN_W, right - edge)
+		w = math.max(minW, right - edge)
+		if crop then w = math.min(w, r.w + crop.l) end
 		x = right - w
 	end
 	if z.s then
 		local edge = math.min(bottom + my - r.my, uy + uh)
 		if snap then edge = Geom.SnapAxis(edge, 0, uy, uh, self.others, "y", dist) end
-		h = math.max(MIN_H, edge - y)
+		h = math.max(minH, edge - y)
+		if crop then h = math.min(h, r.h + crop.b) end
 	elseif z.n then
 		local edge = math.max(r.y + my - r.my, uy)
 		if snap then edge = Geom.SnapAxis(edge, 0, uy, uh, self.others, "y", dist) end
-		h = math.max(MIN_H, bottom - edge)
+		h = math.max(minH, bottom - edge)
+		if crop then h = math.min(h, r.h + crop.t) end
 		y = bottom - h
 	end
 	self:SetPos(x, y)
 	self:SetSize(w, h)
+
+	if crop then
+		local dw, dh = w - r.w, h - r.h
+		r.newCrop = {
+			l = z.w and crop.l - dw or crop.l, r = z.e and crop.r - dw or crop.r,
+			t = z.n and crop.t - dh or crop.t, b = z.s and crop.b - dh or crop.b,
+		}
+		self:ShownHost():SetCrop(r.newCrop)
+	end
 end
 
 function PANEL:OnMouseReleased(code)
@@ -229,11 +288,51 @@ function PANEL:OnMouseReleased(code)
 		return
 	end
 	if self.drag or self.resize then
+		local resize = self.resize
 		self.drag, self.resize, self.others = nil, nil, nil
 		local x, y = self:GetPos()
 		local w, h = self:GetSize()
+		if resize and resize.newCrop then Layout.SetCrop(self.id, resize.index, resize.newCrop) end
 		Layout.SetGeometry(self.id, x, y, w, h)
 	end
+end
+
+-- ── Auto-size (F17) ─────────────────────────────────────────
+
+-- Fits the window to its shown tab's content, animated, then measures once more when the animation ends
+-- (as v1: panels often settle after the first resize). Cropped tabs keep their size.
+function PANEL:AutoSize(settle)
+	local tab = self:ShownTab()
+	local host = tab and self.hosts[tab.src]
+	if not host or tab.crop then return end
+	if self.rec.state == "maximized" then
+		Layout.ToggleMaximize(self.id)
+		self:Refresh()
+	end
+	local nw, nh, ref = host:NaturalSize()
+	if not nh then return end
+
+	local w, h = self:GetSize()
+	local newW = w
+	if nw then
+		newW = math.Clamp(nw + (w - ref:GetWide()) + 16, MIN_W, math.floor(ScrW() * AUTOSIZE_MAX_W))
+		if math.abs(newW - w) <= AUTOSIZE_DEADBAND then newW = w end
+	end
+	local newH = math.Clamp(nh + (h - ref:GetTall()) + 4, MIN_H, math.floor(ScrH() * AUTOSIZE_MAX_H))
+	if newW == w and math.abs(newH - h) <= 2 then return end
+
+	local x, y = self:GetPos()
+	x, y, newW, newH = Geom.Fit(x, y, newW, newH, Geom.Usable())
+	Layout.SetGeometry(self.id, x, y, newW, newH, true)
+	if settle then return end
+	self.animating = true
+	self:MoveTo(x, y, AUTOSIZE_ANIM, 0, -1)
+	self:SizeTo(newW, newH, AUTOSIZE_ANIM, 0, -1, function()
+		if not IsValid(self) then return end
+		self.animating = false
+		self:Refresh()
+		self:AutoSize(true)
+	end)
 end
 
 -- ── Painting ────────────────────────────────────────────────

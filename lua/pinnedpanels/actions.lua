@@ -302,7 +302,7 @@ Actions.Add({
 Actions.Add({
 	id = "record", scope = "global", icon = "icon16/bullet_red.png", label = "act.record",
 	sub = "sub.record", palette = true, bindable = true,
-	run = function() PP.Recipes.Record() end,
+	run = function() PP.Record.Toggle() end,
 })
 
 Actions.Add({

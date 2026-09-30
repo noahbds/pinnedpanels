@@ -265,7 +265,7 @@ function Desktop.Teardown()
 	Desktop.taskbar = nil
 	PP.Manage.ReleaseAll()
 	PP.Embed.ReleaseAll()
-	PP.Recipes.StopRecording()
+	PP.Record.Stop()
 	if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() end
 end
 

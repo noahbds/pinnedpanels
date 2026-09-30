@@ -65,7 +65,7 @@ function PAGE:Init()
 	record:SetLabel(PP.L("btn.record"))
 	record:SetIcon("icon16/bullet_red.png")
 	record:SetTooltip(PP.L("tip.record"))
-	record.DoClick = function() PP.Recipes.Record() end
+	record.DoClick = function() PP.Record.Toggle() end
 
 	self.list = self:Add("PinnedPanelsScroll")
 	self.list:Dock(FILL)

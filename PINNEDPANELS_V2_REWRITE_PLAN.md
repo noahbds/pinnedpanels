@@ -5,7 +5,7 @@
 >
 > **What this addon is:** a **client-only** Derma UI addon. It floats spawn-menu tool panels and content tabs on the HUD, with a taskbar, groups, crop, keyboard navigation, a command palette and a layout editor. There is no gameplay code, no networking and no server logic. The server's only job is `AddCSLuaFile`, because the client can't `include` files that weren't sent (G1).
 >
-> **No backward compatibility (proposed, D1).** v2 does not read `pinnedpanels_save.json` / `pinnedpanels_settings.json` or keep v1 convar and command names. Confirm D1 in Phase 0. If the Workshop build has users, a one-shot importer (≤ 100 lines, removed in 2.1) is the fallback.
+> **No backward compatibility (D1, confirmed in Phase 0).** v2 does not read `pinnedpanels_save.json` / `pinnedpanels_settings.json` or keep v1 convar and command names.
 >
 > **Sources:** all 44 v1 Lua files (code and translations) and the 35-commit history; the [GMod wiki](https://wiki.facepunch.com/gmod/); and the GMod base Lua source ([Facepunch/garrysmod](https://github.com/Facepunch/garrysmod)) wherever the wiki is silent: spawn-menu build order, `ControlPanel`, `DMenu`, `DBinder`, `DTextEntry`, skins, `hook` (§5.2).
 >
@@ -142,7 +142,7 @@ The ideas that do most of the work:
 ### 3.2 Steps
 
 **Phase 0:**
-1. `git branch legacy/v1 main && git push -u origin legacy/v1`; `git tag -a 1.0.0 main -m "Final v1 release" && git push origin 1.0.0`; protect `legacy/v1` on GitHub.
+1. `git branch legacy/v1 5b6def9 && git push -u origin legacy/v1`; `git tag -a 1.0.0 5b6def9 -m "Final v1 release" && git push origin 1.0.0`; protect `legacy/v1` on GitHub. (`5b6def9`, not `main`: `main` already carries the plan commit `04a8496`.)
 2. `git switch -c PinnedPanels_Rewrite_Branch main`; commit this plan.
 3. `git branch -d feature/localization`.
 4. `.gitignore`: add `**/.DS_Store`; either stop tracking `.vscode/settings.json` or drop it from `.gitignore`.
@@ -901,7 +901,8 @@ Kept small: most of this addon is VGUI and is tested in game.
 Each phase ends with the addon loading cleanly and its acceptance passing. Record deviations and in-game findings under each phase.
 
 ### Phase 0 — Groundwork (½ day)
-- [ ] Branches and tag (§3.2); confirm D1 and D4
+- [x] Branches and tag (§3.2); confirm D1 and D4
+  - *Done 2026-09-30:* `legacy/v1` and `1.0.0` at `5b6def9`, pushed; `feature/localization` deleted; D1 (no compat) and D4 (`pinnedpanels_`) confirmed. Branch protection on `legacy/v1` is left to the repo owner.
 - [ ] **⚑ verify spike on v1** (≈ 1 hour), results written into §5.2:
   - G30/E27: pinned windows during the escape menu (`ParentToHUD` + `MakePopup`)
   - G26/E36: `SetPopupStayAtBack(true)` keeps a popup behind the spawn menu and `Derma_Query`
@@ -1052,10 +1053,10 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| D1 | Read v1 layouts/settings? | importer · **none** | **None** if the Workshop build has no real user base; otherwise a one-shot importer removed in 2.1. Confirm in Phase 0 |
+| D1 | Read v1 layouts/settings? | importer · **none** | **None** — confirmed in Phase 0 |
 | D2 | Unify pins and groups | separate kinds · **windows with tabs** | **Windows with tabs** — removes hidden frames (B9), group rebuilds, per-tab sync code and the pin/group data split |
 | D3 | Settings storage | JSON file · `cookie` · **client convars** | **Convars**: engine persistence and clamping, console access, change callbacks, stock convar binding for controls |
-| D4 | Command/convar prefix | `pp_` · **`pinnedpanels_`** | **`pinnedpanels_`** (G32, B18) |
+| D4 | Command/convar prefix | `pp_` · **`pinnedpanels_`** | **`pinnedpanels_`** (G32, B18) — confirmed in Phase 0 |
 | D5 | Translations | Lua tables + in-addon override · **`.properties`** | **`.properties`** — native fallback, `#key` in Derma, no Lua loaded for strings; follows the game language (the spawn menu already rebuilds on change, G11) |
 | D6 | Styling | Derma skin · **our controls paint from theme tokens** | **Theme tokens**: a skin on a window would be inherited by hosted tool panels (G22) and `SetSkin` refreshes every panel |
 | D7 | v1's "pin a live DFrame" code | keep · **drop and rebuild** | **Drop the v1 code** (B16); the feature is redesigned in §33 |

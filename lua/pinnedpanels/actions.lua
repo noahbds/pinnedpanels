@@ -628,7 +628,7 @@ concommand.Add("pinnedpanels_list", function()
 end, nil, "List pinned windows and their tabs")
 
 -- pinnedpanels_debug panels: what the desktop holds, to check that merging and splitting leave nothing
--- behind (B9). nav: keyboard navigation's state. "perf" arrives with Phase 7.
+-- behind (B9). nav: keyboard navigation's state. "perf" arrives with Phase 12.
 concommand.Add("pinnedpanels_debug", function(_, _, args)
 	if args[1] == "nav" then
 		local Nav, el = PP.Nav, PP.Nav.element

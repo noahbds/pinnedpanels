@@ -226,7 +226,7 @@ end)
 local function isMulti(ctx) return #ctx.window.tabs > 1 end
 local function notLocked(ctx) return not ctx.window.locked end
 -- Tabs built from a function, which a rebuild runs again (E10); content tabs and adopted panels aren't.
-local REBUILDABLE = { tool = true, postprocess = true, desktop = true }
+local REBUILDABLE = { tool = true, postprocess = true, desktop = true, active = true }
 local function rebuildable(ctx) return REBUILDABLE[ctx.tab.src:match("^(%a+):")] == true end
 local function tabTitle(ctx) return Layout.TabTitle(ctx.tab) end
 

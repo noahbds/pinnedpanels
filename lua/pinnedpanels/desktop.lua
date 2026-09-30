@@ -187,6 +187,20 @@ cvars.AddChangeCallback("gmod_language", function()
 	end)
 end, "PinnedPanels.Desktop")
 
+-- The active tool window follows the tool gun (FF1): its tab builds the new tool's panel and its title changes.
+cvars.AddChangeCallback("gmod_toolmode", function()
+	Util.NextFrame(nil, function()
+		for _, win in pairs(Desktop.panels) do
+			local host = IsValid(win) and win.hosts[Sources.ACTIVE]
+			if host then
+				host:Rebuild()
+				win:Refresh()
+			end
+		end
+		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+	end)
+end, "PinnedPanels.Desktop")
+
 -- ── Services ────────────────────────────────────────────────
 
 -- One tab host may build per frame across all windows (§16.2).

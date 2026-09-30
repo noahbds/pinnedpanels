@@ -1,6 +1,7 @@
 -- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>"), spawn-menu
 -- content tabs ("creation:<name>"), C-menu desktop widgets ("desktop:<id>", G47) and post-process panels
--- ("postprocess:<name>", G64), rebuilt on every PostReloadToolsMenu (G11). Builds their content. Embedded
+-- ("postprocess:<name>", G64) and the active tool ("active:tool", FF1), rebuilt on every PostReloadToolsMenu
+-- (G11). Builds their content. Embedded
 -- panels ("adopt:<n>", §33.6) aren't in the catalogue: Embed answers for them while it holds them.
 
 local PP = PinnedPanels
@@ -8,13 +9,14 @@ PP.Sources = PP.Sources or {}
 local Sources = PP.Sources
 
 Sources.HUB_TAB = "#pinnedpanels.spawn.tab"
+Sources.ACTIVE = "active:tool"
 Sources.catalogue = Sources.catalogue or {}
 Sources.tools = Sources.tools or {}
 Sources.creations = Sources.creations or {}
 Sources.natives = Sources.natives or {}
 Sources.inFallback = false
 
-local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 }, postprocess = { 280, 400 }, desktop = { 400, 400 } }
+local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 }, postprocess = { 280, 400 }, desktop = { 400, 400 }, active = { 280, 400 } }
 local MAX_DESKTOP_W, MAX_DESKTOP_H = 0.6, 0.8
 
 -- "#tool.weld.name" → the current language's text; unknown phrases fall back to the key without "#".
@@ -58,8 +60,12 @@ function Sources.Rebuild()
 		end
 	end
 
-	-- Built natively like tools: our tab gives the widget its window, or the effect its control panel.
+	-- Built natively like tools: our tab gives the widget its window, or the effect its control panel. The
+	-- active tool window shows whichever tool the tool gun has (FF1).
 	local natives = {}
+	local active = { kind = "active", key = Sources.ACTIVE, name = "tool", text = "#pinnedpanels.active.name", category = PP.L("native.toolgun") }
+	catalogue[active.key] = active
+	natives[1] = active
 	for id, w in pairs(list.Get("DesktopWindows")) do
 		if isstring(id) and istable(w) and isfunction(w.init) then
 			local e = {
@@ -111,8 +117,18 @@ end
 -- Resolved at call time so a language change shows up without a rebuild (L19).
 function Sources.Title(src)
 	local e = Sources.catalogue[src]
+	if e and e.kind == "active" then
+		local tool = Sources.ActiveTool()
+		return PP.L("active.title", tool and phrase(tool.text) or PP.L("active.no_tool"))
+	end
 	if e then return phrase(e.text) end
 	return phrase(src:match("^%a+:(.+)$") or src)
+end
+
+-- The catalogue entry of the tool selected on the tool gun, if it is one we know.
+function Sources.ActiveTool()
+	local mode = GetConVar("gmod_toolmode")
+	return mode and Sources.catalogue["tool:" .. mode:GetString()] or nil
 end
 
 function Sources.DefaultSize(src)
@@ -162,19 +178,22 @@ local function controlPanel(parent)
 end
 
 -- The same ControlPanel + FillViaTable the spawn menu uses (G14).
+-- A tab that only says why it is empty.
+local function notice(parent, text)
+	local scroll = vgui.Create("PinnedPanelsScroll", parent)
+	scroll:Dock(FILL)
+	local label = scroll:Add("DLabel")
+	label:SetText(text)
+	label:SetWrap(true)
+	label:SetAutoStretchVertical(true)
+	label:Dock(TOP)
+	label:DockMargin(8, 8, 8, 8)
+	label:SetTextColor(PP.Theme.textMuted)
+	return scroll
+end
+
 local function buildTool(e, parent)
-	if not isfunction(e.item.CPanelFunction) then
-		local scroll = vgui.Create("PinnedPanelsScroll", parent)
-		scroll:Dock(FILL)
-		local label = scroll:Add("DLabel")
-		label:SetText(PP.L("pin.no_cp"))
-		label:SetWrap(true)
-		label:SetAutoStretchVertical(true)
-		label:Dock(TOP)
-		label:DockMargin(8, 8, 8, 8)
-		label:SetTextColor(PP.Theme.textMuted)
-		return scroll
-	end
+	if not isfunction(e.item.CPanelFunction) then return notice(parent, PP.L("pin.no_cp")) end
 
 	local scroll, cp = controlPanel(parent)
 	local before = #cp:GetChildren()
@@ -224,7 +243,14 @@ local function buildDesktop(e, parent)
 	return frame
 end
 
-local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, desktop = buildDesktop }
+-- The active tool window builds the current tool's panel; the desktop rebuilds it when the tool changes.
+local function buildActive(_, parent)
+	local tool = Sources.ActiveTool()
+	if not tool then return notice(parent, PP.L("active.none")) end
+	return buildTool(tool, parent)
+end
+
+local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, desktop = buildDesktop, active = buildActive }
 
 -- Each call returns a new, independent container (G13).
 local function buildCreation(e, parent)

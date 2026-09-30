@@ -401,7 +401,7 @@ end
 -- A language change (E11): control panels (tools, post-process) are built again so they follow the game
 -- language like the spawn menu's own copies; other tabs keep what they show (they hold browsing or
 -- editing state) unless they failed.
-local CONTROL_PANELS = { tool = true, postprocess = true }
+local CONTROL_PANELS = { tool = true, postprocess = true, active = true }
 function HOST:Relocalize()
 	self.filter:SetPlaceholderText(PP.L("filter.controls"))
 	if self.built and (CONTROL_PANELS[self.src:match("^(%a+):")] or not self.content) then self:Rebuild() end

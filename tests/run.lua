@@ -4,11 +4,13 @@
 
 local MODULES = {
 	"lua/pinnedpanels/util.lua",
+	"lua/pinnedpanels/settings.lua",
 }
 
 local FILES = {
 	"tests/stub_test.lua",
 	"tests/util_test.lua",
+	"tests/settings_test.lua",
 }
 
 dofile("tests/stub.lua")

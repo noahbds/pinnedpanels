@@ -9,6 +9,15 @@ local MODULES = {
 	"lua/pinnedpanels/layout.lua",
 	"lua/pinnedpanels/input.lua",
 	"lua/pinnedpanels/sources.lua",
+	"lua/pinnedpanels/desktop.lua",
+	"lua/pinnedpanels/actions.lua",
+	"lua/pinnedpanels/vgui/theme.lua",
+	"lua/pinnedpanels/vgui/controls.lua",
+	"lua/pinnedpanels/vgui/tabs.lua",
+	"lua/pinnedpanels/vgui/window.lua",
+	"lua/pinnedpanels/vgui/hud.lua",
+	"lua/pinnedpanels/vgui/hub.lua",
+	"lua/pinnedpanels/vgui/hub_catalog.lua",
 }
 
 local FILES = {
@@ -19,6 +28,7 @@ local FILES = {
 	"tests/layout_test.lua",
 	"tests/input_test.lua",
 	"tests/sources_test.lua",
+	"tests/desktop_test.lua",
 }
 
 dofile("tests/stub.lua")

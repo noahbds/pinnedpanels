@@ -482,6 +482,8 @@ function Stub.Reset()
 		phrases = {}, notifications = {}, errors = {}, files = {}, failWrites = false,
 		tools = {}, creationTabs = {}, activated = nil,
 	}
+	Stub.Derma()
 end
 
+dofile("tests/derma_stub.lua")
 Stub.Reset()

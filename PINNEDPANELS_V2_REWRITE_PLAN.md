@@ -931,14 +931,22 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - The unit-test stub has its own small JSON codec instead of vendored `dkjson`.
 
 ### Phase 2 — Windows on screen (3 days)
-- [ ] `sources.lua` + fallback helper (+ test) [F7, F8, F35, L2, L28, G11–G16, G18, R4–R6, B26, E2, E8–E10, E12]
-- [ ] `vgui/theme.lua`, `vgui/controls.lua` core [G22, G29, D6]
-- [ ] `vgui/window.lua` [F9, F11, L22, L24, G21, G25, G26, E17, E18]
-- [ ] `vgui/tabs.lua` single-tab host (clip, scroll throttle) [L3, B6]
-- [ ] `desktop.lua` (reconcile, restore queue, opacity, interactivity) [L11, G27, B1, B9, E1, E24]
-- [ ] `vgui/hud.lua` [L8, B19]
-- [ ] Minimal hub: Tools and Content pages [F1–F3, L1, L4]
-- **Accept:** pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back.
+- [x] `sources.lua` + fallback helper (+ test) [F7, F8, F35, L2, L28, G11–G16, G18, R4–R6, B26, E2, E8–E10, E12]
+- [x] `vgui/theme.lua`, `vgui/controls.lua` core [G22, G29, D6]
+- [x] `vgui/window.lua` [F9, F11, L22, L24, G21, G25, G26, E17, E18]
+- [x] `vgui/tabs.lua` single-tab host (clip, scroll throttle) [L3, B6]
+- [x] `desktop.lua` (reconcile, restore queue, opacity, interactivity) [L11, G27, B1, B9, E1, E24]
+- [x] `vgui/hud.lua` [L8, B19]
+- [x] Minimal hub: Tools and Content pages [F1–F3, L1, L4]
+- **Accept** (in game, still to check): pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back. The same flows pass headlessly in `tests/desktop_test.lua`.
+- *Deviations:*
+  - `actions.lua` starts here with the cursor key and `pinnedpanels_cursor`, `_pin`, `_list`, `_reload`, so Phase 2 can be tried in game. Phase 3 turns it into the action list.
+  - With `autoRestore` off, the windows saved at join are *held*: kept in the document, not shown until `Desktop.ShowHeld()` (Pinned page in Phase 4). Pinning something else doesn't show them.
+  - Windows keep v1's `ParentToHUD()` + `MakePopup()` until the Phase 0 spike settles G30/E27.
+  - No right-click menu yet (actions, Phase 3), and minimizing has no taskbar to restore from until Phase 3.
+  - The theme keeps v1's specific button and row colours, so it has about 40 tokens, not 20.
+  - `storage.lua` is 291 lines (budget 220): `Sanitize` is most of it, and it's still one job (the file format). `layout.lua` is 557 (budget 500).
+  - Tooling: `tests/derma_stub.lua` is a headless stand-in for Derma, so window, desktop and hub wiring get unit tests too.
 
 ### Phase 3 — Window features (3 days) → `2.0.0-alpha.1`
 - [ ] Multi-tab windows: tab strip, `MoveTab`, per-tab size, accents [F15]

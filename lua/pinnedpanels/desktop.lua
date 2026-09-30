@@ -116,7 +116,8 @@ end
 function Desktop.SnapRects(exceptId)
 	local rects = {}
 	for id, win in pairs(Desktop.panels) do
-		if id ~= exceptId and IsValid(win) and win:IsVisible() then rects[#rects + 1] = Layout.Get(id) end
+		local rec = Layout.Get(id)
+		if id ~= exceptId and rec and IsValid(win) and win:IsVisible() then rects[#rects + 1] = rec end
 	end
 	return rects
 end

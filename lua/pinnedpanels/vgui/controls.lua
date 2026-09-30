@@ -114,6 +114,7 @@ local function dialog(title, w, h)
 	frame:SetDeleteOnClose(true)
 	frame:MakePopup()
 	frame.Paint = paintDialog
+	frame.ppOurs = true -- never offered by the picker (R11)
 	return frame
 end
 

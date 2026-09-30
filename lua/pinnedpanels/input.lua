@@ -10,6 +10,8 @@ local Input = PP.Input
 Input.reasons = Input.reasons or {}
 Input.clickerOn = Input.clickerOn or false
 Input.cursorMode = Input.cursorMode or false
+-- Other addons' windows under management take the keyboard like ours (§33.5); keyed by panel.
+Input.keyboardOwners = Input.keyboardOwners or setmetatable({}, { __mode = "k" })
 
 local binds = {}   -- id -> { key, press, release, repeating }
 local watched = {} -- key -> true
@@ -190,12 +192,12 @@ hook.Add("StartChat", "PinnedPanels.Input", function() chatOpen = true end)
 hook.Add("FinishChat", "PinnedPanels.Input", function() chatOpen = false end)
 
 -- ── Text focus ──────────────────────────────────────────────
--- Our windows and dialogs (marked ppTakesKeyboard) take the keyboard only while a text entry inside them
--- has focus, never on hover (R8, B32, E14).
+-- Our windows and dialogs (marked ppTakesKeyboard) and managed windows take the keyboard only while a
+-- text entry inside them has focus, never on hover (R8, B32, E14).
 
 local function windowOf(p)
 	while IsValid(p) do
-		if p.ppTakesKeyboard then return p end
+		if p.ppTakesKeyboard or Input.keyboardOwners[p] then return p end
 		p = p:GetParent()
 	end
 end

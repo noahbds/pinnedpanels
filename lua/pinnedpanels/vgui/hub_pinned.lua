@@ -1,6 +1,6 @@
 -- The hub's Pinned page (F4): every window, including hidden, minimized, dormant (its addon isn't loaded,
--- E1) and empty named groups. Multi-tab windows expand to their tabs. The page only calls Layout, Desktop
--- and Actions; it never changes the document itself (L26).
+-- E1), waiting (an adopted panel that isn't open, §33.9) and empty named groups. Multi-tab windows expand
+-- to their tabs. The page only calls Layout, Desktop and Actions; it never changes the document itself (L26).
 
 local PP = PinnedPanels
 local Layout, Sources, Desktop, T = PP.Layout, PP.Sources, PP.Desktop, PP.Theme
@@ -8,6 +8,7 @@ local Layout, Sources, Desktop, T = PP.Layout, PP.Sources, PP.Desktop, PP.Theme
 local ROW_H, TAB_ROW_H = 40, 30
 
 local function kindOf(rec)
+	if rec.kind == "managed" then return "managed" end
 	if rec.title or #rec.tabs > 1 then return "group" end
 	return rec.tabs[1].src:match("^(%a+):") or "tool"
 end
@@ -16,6 +17,7 @@ local KIND = {
 	group = { label = "kind.group", icon = "icon16/folder.png", color = T.success },
 	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
 	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
+	managed = { label = "kind.managed", icon = "icon16/application_link.png", color = T.warning },
 }
 
 local function paintRow(row, w, h)
@@ -42,15 +44,28 @@ local PAGE = {}
 
 function PAGE:Init()
 	self.expanded = {}
+	self.bar = self:Add("Panel")
+	self.bar:Dock(TOP)
+	self.bar:SetTall(28)
+	self.bar:DockMargin(16, 16, 16, 0)
+	local pick = self.bar:Add("PinnedPanelsButton")
+	pick:Dock(LEFT)
+	pick:SetWide(220)
+	pick:SetLabel(PP.L("btn.pick"))
+	pick:SetIcon("icon16/application_form_add.png")
+	pick:SetTooltip(PP.L("tip.pick"))
+	pick.DoClick = function() PP.Picker.Open() end
+
 	self.list = self:Add("PinnedPanelsScroll")
 	self.list:Dock(FILL)
-	self.list:DockMargin(16, 16, 16, 16)
+	self.list:DockMargin(16, 8, 16, 16)
 	self:Rebuild()
 	hook.Add("PinnedPanelsChanged", self, function(_, kind)
 		if kind ~= "geometry" then self:Rebuild() end
 	end)
 	hook.Add("PinnedPanelsCatalogChanged", self, self.Rebuild)
 	hook.Add("PinnedPanelsHeldChanged", self, self.Rebuild)
+	hook.Add("PinnedPanelsAdoptChanged", self, self.Rebuild)
 end
 
 -- A button docked to the right of a row, right to left in the order they are added.
@@ -72,6 +87,7 @@ function PAGE:AddWindowRow(rec)
 	local info = KIND[kind]
 	local id = rec.id
 	local dormant = Desktop.IsDormant(rec)
+	local adopt = #rec.tabs == 1 and rec.tabs[1].adopt
 
 	local row = self.list:Add("DPanel")
 	row:Dock(TOP)
@@ -90,9 +106,11 @@ function PAGE:AddWindowRow(rec)
 	if kind == "group" then title = title .. " " .. PP.L("group.panels", #rec.tabs) end
 	if rec.state == "minimized" then title = title .. " " .. PP.L("tag.minimized") end
 	if Desktop.held[id] then title = title .. " " .. PP.L("tag.hidden") end
+	if kind == "managed" and PP.Manage.OwnerHidden(id) then title = title .. " " .. PP.L("tag.closed_by_addon") end
+	if adopt then title = title .. "  ·  " .. PP.Recipes.AddonName(adopt.signature) .. "  ·  " .. PP.Recipes.Describe(adopt) end
 
 	if dormant then
-		button(row, PP.L("btn.remove"), "icon16/cross.png", 80, "tip.remove_dormant", function() Layout.Unpin(id) end, true)
+		button(row, PP.L("btn.remove"), "icon16/cross.png", 80, adopt and "tip.remove_waiting" or "tip.remove_dormant", function() Layout.Unpin(id) end, true)
 	elseif #rec.tabs == 0 then
 		button(row, PP.L("btn.delete"), "icon16/cross.png", 70, nil, function() Layout.Unpin(id) end, true)
 	else
@@ -105,7 +123,9 @@ function PAGE:AddWindowRow(rec)
 			end)
 		else
 			button(row, PP.L("btn.unpin"), "icon16/cross.png", 70, "tip.unpin_simple", function() Layout.Unpin(id) end, true)
-			button(row, PP.L("btn.group"), "icon16/folder_go.png", 70, "tip.add_group", function() PP.Actions.OpenChildren("group", id) end)
+			if kind ~= "managed" then
+				button(row, PP.L("btn.group"), "icon16/folder_go.png", 70, "tip.add_group", function() PP.Actions.OpenChildren("group", id) end)
+			end
 		end
 		button(row, PP.L("btn.move_front"), "icon16/shape_move_front.png", 104, "tip.move_front", function() Desktop.RestoreAndFront(id) end)
 		if Desktop.held[id] then
@@ -122,7 +142,7 @@ function PAGE:AddWindowRow(rec)
 	kindLabel:SetWide(dormant and 90 or 50)
 	kindLabel:DockMargin(0, 0, 6, 0)
 	kindLabel:SetContentAlignment(6)
-	kindLabel:SetText(dormant and PP.L("tag.unavailable") or PP.L(info.label))
+	kindLabel:SetText(dormant and PP.L(adopt and "tag.waiting" or "tag.unavailable") or PP.L(info.label))
 	kindLabel:SetTextColor(dormant and T.danger or info.color)
 
 	local label = row:Add("DLabel")

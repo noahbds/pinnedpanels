@@ -18,6 +18,7 @@ Actions.byId = {}
 --   palette = true?, sub = "loc.key"? (palette subtitle), bindable = true?, key = default,
 --   visible(ctx)?, enabled(ctx)?, children(ctx) → { { text, icon?, run, enabled? } | { spacer = true } }?,
 --   run(ctx), release(ctx)? (bindable keys only),
+--   managed = true? (also offered for managed windows, which are other addons' windows, §33.4),
 -- }
 -- ctx = { id, window, index, tab, menu = "window" | "tab" | "taskbar" | nil }
 -- icon may also be function(ctx) → path, for toggles whose icon shows their state (menus only).
@@ -51,6 +52,7 @@ end
 local function available(def, ctx)
 	if def.scope ~= "global" and not ctx then return false end
 	if def.scope == "tab" and not ctx.tab then return false end
+	if ctx and ctx.window.kind == "managed" and not def.managed then return false end
 	return not def.visible or def.visible(ctx) == true
 end
 
@@ -290,6 +292,12 @@ Actions.Add({
 })
 
 Actions.Add({
+	id = "pick", scope = "global", icon = "icon16/application_form_add.png", label = "act.pick",
+	sub = "sub.pick", palette = true, bindable = true,
+	run = function() PP.Picker.Open() end,
+})
+
+Actions.Add({
 	id = "unpin_all", scope = "global", icon = "icon16/cross.png", label = "act.unpin_all", sub = "sub.remove_every", palette = true,
 	run = function()
 		local ids = {}
@@ -311,19 +319,19 @@ Actions.Add({
 -- ── Window: view ────────────────────────────────────────────
 
 Actions.Add({
-	id = "restore", scope = "window", icon = "icon16/arrow_up.png", label = "btn.restore",
+	id = "restore", scope = "window", managed = true, icon = "icon16/arrow_up.png", label = "btn.restore",
 	taskbarLabel = "tb.restore", menu = { group = "taskbar", taskbar = 1 },
 	run = function(ctx) Desktop.RestoreAndFront(ctx.id) end,
 })
 
 Actions.Add({
-	id = "front", scope = "window", icon = "icon16/arrow_up.png", label = "ctx.bring_front", name = "kb.bring_front",
+	id = "front", scope = "window", managed = true, icon = "icon16/arrow_up.png", label = "ctx.bring_front", name = "kb.bring_front",
 	menu = { group = "view", window = 20 }, bindable = true,
 	run = function(ctx) Desktop.RestoreAndFront(ctx.id) end,
 })
 
 Actions.Add({
-	id = "minimize", scope = "window", icon = "icon16/application_put.png", label = "ctx.minimize", name = "kb.minimize",
+	id = "minimize", scope = "window", managed = true, icon = "icon16/application_put.png", label = "ctx.minimize", name = "kb.minimize",
 	menu = { group = "view", window = 21 }, bindable = true,
 	run = function(ctx) Layout.Minimize(ctx.id) end,
 })
@@ -336,7 +344,7 @@ Actions.Add({
 
 -- Hidden for this session; the Pinned page and palette show it again.
 Actions.Add({
-	id = "hide", scope = "window", icon = "icon16/eye.png", label = "ctx.hide_panel", name = "kb.toggle_hide",
+	id = "hide", scope = "window", managed = true, icon = "icon16/eye.png", label = "ctx.hide_panel", name = "kb.toggle_hide",
 	menu = { group = "view", window = 22 }, bindable = true,
 	run = function(ctx)
 		if Desktop.held[ctx.id] then Desktop.Show(ctx.id) else Desktop.Hide(ctx.id) end
@@ -408,7 +416,7 @@ Actions.Add({
 })
 
 Actions.Add({
-	id = "quick_key", scope = "window", icon = "icon16/lightning.png", name = "ctx.assign_quick",
+	id = "quick_key", scope = "window", managed = true, icon = "icon16/lightning.png", name = "ctx.assign_quick",
 	label = function(ctx)
 		local key = ctx.window.quickKey
 		if not key then return PP.L("ctx.assign_quick") end
@@ -434,7 +442,7 @@ Actions.Add({
 })
 
 Actions.Add({
-	id = "clickthrough", scope = "window", name = "ctx.clickthrough",
+	id = "clickthrough", scope = "window", managed = true, name = "ctx.clickthrough",
 	icon = function(ctx) return ctx.window.clickThrough and "icon16/shape_square.png" or "icon16/shape_square_go.png" end,
 	label = function(ctx) return PP.L(ctx.window.clickThrough and "ctx.disable_ct" or "ctx.clickthrough") end,
 	menu = { group = "style", window = 44 },
@@ -443,6 +451,15 @@ Actions.Add({
 		Layout.SetClickThrough(ctx.id, on)
 		if on then notification.AddLegacy(PP.L("clickthrough.notify"), NOTIFY_GENERIC, 6) end
 	end,
+})
+
+-- A managed window that isn't a text field (an editor, say) can take the keyboard when clicked (§33.5).
+Actions.Add({
+	id = "needs_keyboard", scope = "window", managed = true, name = "ctx.needs_keyboard", label = "ctx.needs_keyboard",
+	icon = function(ctx) return ctx.window.tabs[1].adopt.needsKeyboard and "icon16/tick.png" or "icon16/keyboard.png" end,
+	menu = { group = "style", window = 45 },
+	visible = function(ctx) return ctx.window.kind == "managed" end,
+	run = function(ctx) Layout.SetAdopt(ctx.id, 1, { needsKeyboard = not ctx.window.tabs[1].adopt.needsKeyboard }) end,
 })
 
 -- ── Window: groups (F15) ────────────────────────────────────
@@ -535,7 +552,7 @@ Actions.Add({
 -- ── Window: opacity, position ───────────────────────────────
 
 Actions.Add({
-	id = "opacity", scope = "window", icon = "icon16/contrast.png", label = "ctx.idle_opacity",
+	id = "opacity", scope = "window", managed = true, icon = "icon16/contrast.png", label = "ctx.idle_opacity",
 	menu = { group = "opacity", window = 60 },
 	children = function(ctx)
 		local current = ctx.window.opacity
@@ -559,7 +576,7 @@ Actions.Add({
 })
 
 Actions.Add({
-	id = "lock", scope = "window", name = "ctx.lock",
+	id = "lock", scope = "window", managed = true, name = "ctx.lock",
 	icon = function(ctx) return ctx.window.locked and "icon16/lock_open.png" or "icon16/lock.png" end,
 	label = function(ctx) return PP.L(ctx.window.locked and "ctx.unlock" or "ctx.lock") end,
 	menu = { group = "position", window = 70 },
@@ -568,7 +585,7 @@ Actions.Add({
 
 -- The geometry clipboard lives for the session (F29).
 Actions.Add({
-	id = "copy_geometry", scope = "window", icon = "icon16/page_copy.png", label = "ctx.copy_pos",
+	id = "copy_geometry", scope = "window", managed = true, icon = "icon16/page_copy.png", label = "ctx.copy_pos",
 	menu = { group = "position", window = 71 },
 	run = function(ctx)
 		local r = ctx.window
@@ -577,7 +594,7 @@ Actions.Add({
 })
 
 Actions.Add({
-	id = "paste_geometry", scope = "window", icon = "icon16/page_paste.png", label = "ctx.paste_pos",
+	id = "paste_geometry", scope = "window", managed = true, icon = "icon16/page_paste.png", label = "ctx.paste_pos",
 	menu = { group = "position", window = 72 },
 	enabled = function(ctx) return Actions.clipboard ~= nil and notLocked(ctx) end,
 	run = function(ctx)
@@ -587,7 +604,7 @@ Actions.Add({
 })
 
 Actions.Add({
-	id = "unpin", scope = "window", icon = "icon16/cross.png", label = "ctx.unpin", name = "kb.unpin",
+	id = "unpin", scope = "window", managed = true, icon = "icon16/cross.png", label = "ctx.unpin", name = "kb.unpin",
 	taskbarLabel = "tb.unpin", menu = { group = "unpin", window = 90, taskbar = 3 }, bindable = true,
 	run = function(ctx) Layout.Unpin(ctx.id) end,
 })
@@ -618,10 +635,11 @@ end, "Pin a tool or content tab, e.g. pinnedpanels_pin tool:weld")
 
 concommand.Add("pinnedpanels_list", function()
 	for _, w in ipairs(Layout.Windows()) do
-		print(string.format("%-5s %-9s %5d,%-5d %5dx%-5d %s%s", w.id, w.state, w.x, w.y, w.w, w.h,
-			Layout.Title(w), Desktop.held[w.id] and "  (hidden)" or ""))
+		print(string.format("%-5s %-9s %5d,%-5d %5dx%-5d %s%s%s", w.id, w.state, w.x, w.y, w.w, w.h,
+			Layout.Title(w), w.kind == "managed" and "  (managed)" or "", Desktop.held[w.id] and "  (hidden)" or ""))
 		for i, t in ipairs(w.tabs) do
-			print(string.format("      %s %s%s", i == w.active and "*" or " ", t.src, Sources.Get(t.src) and "" or "  (unavailable)"))
+			local here = Sources.Get(t.src) or (t.adopt and PP.Recipes.IsLive(w, t))
+			print(string.format("      %s %s%s", i == w.active and "*" or " ", t.src, here and "" or (t.adopt and "  (waiting)" or "  (unavailable)")))
 		end
 	end
 	print(string.format("[Pinned Panels] %d window(s).", #Layout.Windows()))
@@ -650,8 +668,8 @@ concommand.Add("pinnedpanels_debug", function(_, _, args)
 			end
 		end
 	end
-	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), taskbar %s, %d Lua panels in total",
-		#Layout.Windows(), controls, hosts, built, IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
+	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), %d managed, taskbar %s, %d Lua panels in total",
+		#Layout.Windows(), controls, hosts, built, table.Count(PP.Manage.live), IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
 end, nil, "Pinned Panels diagnostics: pinnedpanels_debug panels")
 
 -- Re-runs the loader (G2): windows rebuild from the saved document, with no duplicate hooks or panels (E25).

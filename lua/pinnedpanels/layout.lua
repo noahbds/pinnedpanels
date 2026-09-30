@@ -77,9 +77,9 @@ function Layout.Find(src)
 	end
 end
 
--- Custom titles win over the source's localized one (L19).
+-- Custom titles win over the source's localized one (L19); an adopted panel is named by its signature.
 function Layout.TabTitle(tab)
-	return tab.title or PP.Sources.Title(tab.src)
+	return tab.title or (tab.adopt and PP.Recipes.Title(tab.adopt)) or PP.Sources.Title(tab.src)
 end
 
 function Layout.Title(w)
@@ -275,6 +275,8 @@ function Layout.MoveTab(fromId, i, toId, toIndex)
 	local from = byId[fromId]
 	local tab = from and from.tabs[i]
 	if not tab then return nil end
+	-- A managed window is another addon's window: nothing moves in or out of it (§33.4).
+	if from.kind == "managed" or (toId and byId[toId] and byId[toId].kind == "managed") then return nil end
 
 	if toId == fromId then
 		toIndex = math.Clamp(toIndex or #from.tabs, 1, #from.tabs)
@@ -367,6 +369,50 @@ function Layout.ClearTabs(id)
 	pushClosed(win)
 	win.tabs, win.active = {}, 1
 	changed("tabs", id)
+	return true
+end
+
+-- ── Adopted panels (§33) ────────────────────────────────────
+-- A panel another addon made. Managed ("manage"), it stays where its addon put it and its window record
+-- has kind = "managed"; embedded ("embed", "part"), it lives in a tab like any source. Either way its tab
+-- is "adopt:<n>" and carries the adopt record (§33.10).
+
+local ADOPT_FIELDS = { mode = true, signature = true, recipe = true, needsKeyboard = true, noGeometry = true }
+
+-- A new window holding one adopted tab. Returns the window id and the tab's src.
+function Layout.PinAdopted(adopt, x, y, w, h)
+	local n = doc.nextId
+	while Layout.Find("adopt:" .. n) do n = n + 1 end
+	doc.nextId = n
+	local src = "adopt:" .. n
+	x, y, w, h = Geom.Fit(math.Round(x), math.Round(y), math.max(math.Round(w), MIN_SIZE), math.max(math.Round(h), MIN_SIZE), Geom.Usable())
+	local win = newWindow({ { src = src, adopt = adopt } }, x, y, w, h)
+	if adopt.mode == "manage" then win.kind = "managed" end
+	return win.id, src
+end
+
+-- Changes fields of tab i's adopt record. A new mode moves it between a managed window and a pinned one,
+-- so managed mode needs the tab to be alone in its window.
+function Layout.SetAdopt(id, i, fields)
+	local win = byId[id]
+	local tab = win and win.tabs[i]
+	if not (tab and tab.adopt) then return false end
+	if fields.mode == "manage" and #win.tabs > 1 then return false end
+	for k, v in pairs(fields) do
+		if ADOPT_FIELDS[k] then tab.adopt[k] = v end
+	end
+	local kind = tab.adopt.mode == "manage" and "managed" or nil
+	if win.kind == kind then
+		changed("style", id)
+		return true
+	end
+	win.kind = kind
+	if kind and win.state == "maximized" then
+		local r = win.restore or win
+		win.state, win.restore = "normal", nil
+		win.x, win.y, win.w, win.h = r.x, r.y, r.w, r.h
+	end
+	changed("windows", id)
 	return true
 end
 
@@ -531,7 +577,9 @@ end
 function Layout.Arrange()
 	local list = {}
 	for _, win in ipairs(doc.windows) do
-		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 then list[#list + 1] = win end
+		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 and not (win.kind == "managed" and win.tabs[1].adopt.noGeometry) then
+			list[#list + 1] = win
+		end
 	end
 	table.sort(list, function(a, b) return Layout.Title(a):lower() < Layout.Title(b):lower() end)
 

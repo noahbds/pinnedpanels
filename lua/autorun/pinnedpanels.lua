@@ -9,6 +9,8 @@ local FILES = {
 	"input.lua",
 	"sources.lua",
 	"desktop.lua",
+	"recipes.lua",
+	"manage.lua",
 	"actions.lua",
 	"nav.lua",
 	"nav_controls.lua",
@@ -25,6 +27,7 @@ local FILES = {
 	"vgui/hub_layout.lua",
 	"vgui/hub_settings.lua",
 	"vgui/palette.lua",
+	"vgui/picker.lua",
 }
 
 if SERVER then

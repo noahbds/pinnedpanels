@@ -2,7 +2,6 @@ local PP = PinnedPanels
 local Layout, Storage, Geom = PP.Layout, PP.Storage, PP.Geom
 
 local function setup()
-	PP.Sources = PP.Sources or { Title = function(src) return src:match(":(.+)$") end }
 	Layout.Load(nil)
 	Stub.Frame()
 end

@@ -7,6 +7,7 @@ local FILES = {
 	"storage.lua",
 	"layout.lua",
 	"input.lua",
+	"sources.lua",
 }
 
 if SERVER then

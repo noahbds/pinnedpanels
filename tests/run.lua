@@ -8,6 +8,7 @@ local MODULES = {
 	"lua/pinnedpanels/storage.lua",
 	"lua/pinnedpanels/layout.lua",
 	"lua/pinnedpanels/input.lua",
+	"lua/pinnedpanels/sources.lua",
 }
 
 local FILES = {
@@ -17,6 +18,7 @@ local FILES = {
 	"tests/storage_test.lua",
 	"tests/layout_test.lua",
 	"tests/input_test.lua",
+	"tests/sources_test.lua",
 }
 
 dofile("tests/stub.lua")

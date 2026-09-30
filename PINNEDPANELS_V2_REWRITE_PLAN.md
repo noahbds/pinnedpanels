@@ -9,7 +9,7 @@
 >
 > **Sources:** all 44 v1 Lua files (code and translations) and the 35-commit history; the [GMod wiki](https://wiki.facepunch.com/gmod/); and the GMod base Lua source ([Facepunch/garrysmod](https://github.com/Facepunch/garrysmod)) wherever the wiki is silent: spawn-menu build order, `ControlPanel`, `DMenu`, `DBinder`, `DTextEntry`, skins, `hook` (§5.2).
 >
-> **Goal:** rebuild Pinned Panels from scratch with **every v1 feature**, structured the way a GMod UI addon should be: **registered Derma controls**, **one layout document**, **one input dispatcher**, and **one action list**. It should not lose data, patch globals or depend on timing guesses.
+> **Goal:** rebuild Pinned Panels from scratch with **every v1 feature**, then add the **new features of §32 and §33** (pin any panel, active tool window, profiles, …) so 2.0 is a visible upgrade (D22), structured the way a GMod UI addon should be: **registered Derma controls**, **one layout document**, **one input dispatcher**, and **one action list**. It should not lose data, patch globals or depend on timing guesses.
 
 ---
 
@@ -55,8 +55,8 @@
 30. [v1 bugs not to carry over](#30-v1-bugs-not-to-carry-over)
 31. [Open decisions](#31-open-decisions)
 
-**Part V — Future**
-32. [Future features](#32-future-features)
+**Part V — New features**
+32. [New features](#32-new-features)
 33. [Pinning any panel from the game or from Workshop addons](#33-pinning-any-panel-from-the-game-or-from-workshop-addons)
 
 **Appendices:** [A. Events & hooks](#appendix-a--events--hooks) · [B. Glossary](#appendix-b--glossary)
@@ -107,15 +107,17 @@ The ideas that do most of the work:
 - **Be a good guest** in other people's games (§8): no global patching, no keys taken unless used, no movement blocked by hovering a text box, no disk churn.
 - **Behave the same in singleplayer, when paused, and under `host_timescale`** (G5, B28).
 - **Readable**: no file over ~500 lines, one control or concern per file.
+- **New features** (§32, §33) ship in 2.0 too, in Phases 6–10, so players see more than a rewrite (D22).
 
 ### Non-goals
-- New features during the rewrite; add them to Future features (§32). The only additions are small fixes for platform limits found in research: a "Rebuild content" action (E10) and restoring the cursor position like GMod's own menus (D16, optional).
+- Features beyond §32 and §33. New ideas go into §32 and get a phase; they are never built inside the current phase. Before Phase 6 the only additions were small fixes for platform limits: a "Rebuild content" action (E10) and restoring the cursor position like GMod's own menus (D16).
 - A visual redesign: keep the v1 look.
 - Server-side features or networking of any kind.
 - Compatibility with v1 data, convars or commands (D1).
 
-### Success metrics (checked in Phase 7)
+### Success metrics (checked in Phase 12)
 - [ ] Every F-item passes the manual matrix (§28.2).
+- [ ] Every FF-item (§32) and the §33.14 targets have a ticked Phase 6–10 item or a D-decision.
 - [ ] Every L- and G-item has a named test, matrix row or rule check.
 - [ ] `grep -rn "timer.Simple" lua` → only inside `Util.NextFrame`.
 - [ ] `grep -rn 'hook.Add( *"Think"' lua` → 1 match (`input.lua`).
@@ -148,11 +150,12 @@ The ideas that do most of the work:
 4. `.gitignore`: add `**/.DS_Store`; either stop tracking `.vscode/settings.json` or drop it from `.gitignore`.
 5. First code commit: "Remove v1 tree, add v2 skeleton".
 
-**During development:** commit to the rewrite branch; `main` gets nothing but the final merge. Pre-release tags: `2.0.0-alpha.N` (Phase 3), `2.0.0-beta.N` (Phase 5), `2.0.0-rc.N` (Phase 7).
+**During development:** commit to the rewrite branch; `main` gets nothing but the final merge. Pre-release tags: `2.0.0-alpha.N` (Phase 3), `2.0.0-beta.N` (Phase 5, and after each of Phases 6–10), `2.0.0-rc.N` (Phase 12).
 
 **Cutover:** every §2 metric ticked; one long building session in singleplayer and one on a multiplayer server with rc; merge PR "Pinned Panels v2" with a **merge commit**; tag `2.0.0`; update the Workshop item; add an "Archived" banner to `legacy/v1`'s README; delete the rewrite branch.
 
 ### 3.3 Release notes template (2.0.0)
+- **New**: pin any window from the game or other addons (§33); an active-tool window, single-control pins, profiles, visibility rules, roll-up, undo, drag tabs, jump hints and the rest of §32.
 - **Fresh start**: v2 doesn't read v1 layouts or settings (D1).
 - **Renamed**: commands and convars now start with `pinnedpanels_` (D4), because `pp_` is GMod's post-processing namespace (G32).
 - **Changed defaults**: arrow-key navigation runs only in cursor mode unless enabled everywhere (D8).
@@ -909,7 +912,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - G8: chat open is visible to Lua only via `StartChat`/`FinishChat` (not `vgui.GetKeyboardFocus`)
   - §33.15: the "pin any panel" spike (where windows live, Manage, Embed, reproduce the v1 failure, Record, real addons)
 - [x] Remove the v1 tree; add loader, `addon.json`. Rule checks, unit tests and CI were added, then removed after Phase 2 (D20, D21)
-  - *Deviation:* `README.md` still describes v1 until Phase 7.
+  - *Deviation:* `README.md` still describes v1 until Phase 12.
 - **Accept:** the game boots and prints `Pinned Panels 2.0 loaded`.
 
 ### Phase 1 — Data and input (2 days)
@@ -919,7 +922,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `layout.lua` operations headless (+ tests) [F12, F15, F18, F24, F27, F28, F32, L6, L7, B8, B17, B20, B27, E3–E5, E20–E22, E28, E33]
 - [x] `input.lua` (+ tests) [F10, F21, F22, F37, R7, R8, G6–G9, G20, B10, B11, B28, B32, E13, E14, E31, E32, E35]
 - [x] English `.properties`, `L()` [F33, L18, G39] (the converter and lang check were written, then removed, D21)
-- **Accept** (in game, still to check): a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
+- **Accept** (confirmed in game by the owner, 2026-09-30): a corrupted `layout.json` is quarantined with a notification; hotkeys don't fire in chat, console, escape menu or after alt-tab.
 - *Deviations:*
   - `input.lua` has no key repeat and no `CreateMove` suppression yet. Only keyboard nav uses them, so they arrive in Phase 5. `PlayerBindPress` suppression is in.
   - Input announces cursor-mode, ALT and spawn-menu changes with an internal `PinnedPanelsInputChanged` event (Appendix A).
@@ -934,7 +937,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `desktop.lua` (reconcile, restore queue, opacity, interactivity) [L11, G27, B1, B9, E1, E24]
 - [x] `vgui/hud.lua` [L8, B19]
 - [x] Minimal hub: Tools and Content pages [F1–F3, L1, L4]
-- **Accept** (in game, still to check): pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back.
+- **Accept** (confirmed in game by the owner, 2026-09-30): pin 10 tools, 3 content tabs and 2 option pages; drag/resize/snap; restart; everything returns. Disable an addon, restart: its windows are dormant; re-enable: they come back.
 - *Deviations:*
   - `actions.lua` starts here with the cursor key and `pinnedpanels_cursor`, `_pin`, `_list`, `_reload`, so Phase 2 can be tried in game. Phase 3 turns it into the action list.
   - With `autoRestore` off, the windows saved at join are *held*: kept in the document, not shown until `Desktop.ShowHeld()` (Pinned page in Phase 4). Pinning something else doesn't show them.
@@ -950,7 +953,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] Minimize/maximize, `vgui/taskbar.lua` [F12, F13, B15, B23, B29, E23]
 - [x] `actions.lua` + window/tab/taskbar menus, colour dialog, rename, lock, geometry copy/paste, equip, rebuild content [F14, F26–F29, F34, F35, G32, D15, D17, E10]
 - [x] Quick keys, peek, arrange, reopen [F18, F21, F22, F24]
-- **Accept** (in game, still to check): every v1 context-menu entry exists; merging 3 tools into one window and splitting them back leaves no extra panels (`pinnedpanels_debug panels`); idle and restore budgets met.
+- **Accept** (confirmed in game by the owner, 2026-09-30): every v1 context-menu entry exists; merging 3 tools into one window and splitting them back leaves no extra panels (`pinnedpanels_debug panels`); idle and restore budgets met.
 - *Deviations:*
   - "Hide" is for this session only (the desktop's held set, like autoRestore off); the Pinned page, the palette or the window's quick key show it again. It isn't saved.
   - The tab strip switches tabs on click and opens the tab menu on right-click. There's no drag to reorder or drag-hover switching; the tab menu has Move Left/Right/To Its Own Window.
@@ -965,7 +968,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] Layout editor [F5, B22]
 - [x] Settings pages, key binders with conflicts, Groups, Data with import preview [F6, F26, G19, R3, E15, E30, E34]
 - [x] Palette [F23, L16, B14]
-- **Accept** (in game, still to check): every §21.2 setting is visible and resets; importing a bomb string is rejected with a message and changes nothing.
+- **Accept** (confirmed in game by the owner, 2026-09-30): every §21.2 setting is visible and resets; importing a bomb string is rejected with a message and changes nothing.
 - *Deviations:*
   - Resizing a cropped window's box in the layout editor keeps its crop insets (v1 adjusted them).
   - An import applies in place after the confirm; nothing reloads.
@@ -975,7 +978,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [x] `nav_controls.lua` [L20, L21]
 - [x] Keyboard-driven DMenus, window and element menus [L9, G17, B4, B5, E29, D9]
 - [x] Taskbar and popup zones
-- **Accept** (in game, still to check): everything the mouse can do inside a pinned window, the keyboard can do.
+- **Accept** (confirmed in game by the owner, 2026-09-30): everything the mouse can do inside a pinned window, the keyboard can do.
 - *Found in game:*
   - Derma's control tables are nil while autorun files load; look them up at call time.
   - Panels take their parent's mouse-input state when created (v1's crop code relied on this), so the clip keeps mouse input on and a tab's chain accepts the mouse while its content builds (L22 revised).
@@ -986,13 +989,60 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - Only the colour dialog is a popup zone so far.
   - `pinnedpanels_debug nav` prints the state.
 
-### Phase 6 — Parity & translations (2 days)
+### Phase 6 — Pin any panel (≈ 15 days) (§33, FF16) → `2.0.0-beta`
+Built on the 2.0 pieces as §33.13 describes: `manage.lua`, `embed.lua`, `recipes.lua`, `vgui/picker.lua`.
+- [ ] The §33.15 spike, in game (it was listed in Phase 0 but not run); results into §33.2 and §33.14
+- [ ] 6a: picker, **Manage** mode, `session`/`watch` recipes; managed windows in the taskbar, Pinned page and layout editor [§33.5, §33.7, §33.8, R11, R12, G40–G43, G49, G51, G57–G59, G65]
+- [ ] 6b: native registries (`desktop:`, `postprocess:`), `class:` recipes, static command match, catching reopened windows [§33.9, G46–G48, G53, G54, G64]
+- [ ] 6c: **Record** mode [§33.9, R14, G60–G62]
+- [ ] 6d: **Embed** (a window's contents and a part), switching between Manage and Embed [§33.6, R15, G44, G45, G50, G52, G56]
+- [ ] 6e: compatibility pass (§33.14) and a "known to work" list in the README
+- **Accept:** every §33.14 target gets its expected mode and recipe; releasing a window restores every property we changed; an imported layout never runs a command by itself (R16).
+
+### Phase 7 — Everyday features (≈ 6 days)
+- [ ] FF1 Active tool window (`active:tool` source following `gmod_toolmode`)
+- [ ] FF2 Pin a single control (`convar:` source, *Quick controls* window)
+- [ ] FF5 Context-menu mode (`showWith = "contextmenu"`, a cursor reason while C is held)
+- [ ] FF6 Roll-up (double-click the header)
+- [ ] FF10 Layout undo/redo (`pinnedpanels_undo` / `_redo`)
+- [ ] FF13 Server tool restrictions shown in tool tabs
+- **Accept:** switching tools on the tool gun updates the active tool window; a pinned control keeps working after its tool rebuilds its panel; undo reverts moves, resizes, unpins, merges and crops.
+
+### Phase 8 — The right windows at the right time (≈ 6 days)
+- [ ] FF3 Layout profiles (including managed windows from Phase 6)
+- [ ] FF4 Visibility rules per window
+- [ ] FF23 Hide for screenshots (camera) and a "hide all" toggle
+- [ ] FF17 Recent and favourite tools in the hub and palette
+- [ ] FF7 Drag tabs between windows and out to split
+- **Accept:** switching profiles from the palette and a key restores each profile's windows exactly; rules show and hide windows without per-frame work (§9).
+
+### Phase 9 — Power users and other addons (≈ 8 days)
+- [ ] FF18 Jump hints for keyboard navigation
+- [ ] FF19 Modifier shortcuts (Ctrl/Shift/Alt + key)
+- [ ] FF22 UI scale for our own chrome
+- [ ] FF25 Public API (`PinnedPanels.API`: sources, actions, nav adapters, pin/unpin, events), documented
+- [ ] FF26 Wiremod and Advanced Duplicator 2 adapters, as the first API users
+- **Accept:** another addon can register a source, an action and a nav adapter through the API alone.
+
+### Phase 10 — The remaining features (≈ 10 days)
+- [ ] FF8 Docks
+- [ ] FF9 Linked windows
+- [ ] FF11 Hover fade-in
+- [ ] FF12 Auto-layout presets
+- [ ] FF14 Automatic rebuild when a tool rebuilds its panel
+- [ ] FF15 Pin a spawnlist folder
+- [ ] FF20 Keyboard cheat sheet
+- [ ] FF21 Theme presets with export/import
+- [ ] FF24 More languages (after Phase 11's translations)
+- **Accept:** every FF-item is ticked here or in Phases 7–9, or has a D-decision.
+
+### Phase 11 — Parity & translations (2 days)
 - [ ] Side-by-side v1/v2 screenshots of every screen and menu; close gaps or record a decision
-- [ ] 8 translations converted and completed [F33, B25]
+- [ ] 8 translations converted and completed, including every string added in Phases 6–10 [F33, B25]
 - [ ] Live language switch across every screen [E11]
 - **Accept:** every F-item has a working v2 owner or a D-decision.
 
-### Phase 7 — Hardening & release (2 days) → `2.0.0-rc.1` → cutover
+### Phase 12 — Hardening & release (2 days) → `2.0.0-rc.1` → cutover
 - [ ] Manual matrix (§28.2)
 - [ ] Performance pass (§9)
 - [ ] Good-guest pass (§8): import fixtures pasted in game; movement with hovered text boxes; F-key binds; slow motion and pause
@@ -1000,9 +1050,9 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
 - [ ] Cutover (§3.2)
 - **Accept:** every §2 metric ticked.
 
-**Total:** ~18–20 focused days.
+**Total:** ~18–20 focused days for Phases 0–5 and 11–12, plus ≈ 45 for Phases 6–10.
 
-**After 2.0:** see Future features (§32). Ideas that come up during the rewrite go there, not into the current phase.
+**New ideas** go into §32 and get a phase; they are never added to the phase in progress.
 
 ## 27. Definition of done
 - [ ] One thing per commit, IDs referenced.
@@ -1034,13 +1084,13 @@ None (D20). Bugs are reported from in-game testing and fixed against the matrix 
 
 | Risk | Mitigation |
 |---|---|
-| Hidden v1 behaviour lost | §5.1 table, `git log -p` per file on `legacy/v1`, Phase 6 side-by-side parity |
+| Hidden v1 behaviour lost | §5.1 table, `git log -p` per file on `legacy/v1`, Phase 11 side-by-side parity |
 | A ⚑ item fails (e.g. `TestHover` on popups, finding foreign DMenus) | each has a named fallback in its section; the spike decides before the dependent phase |
 | Tools whose panels only fill via hooks | L2 fallback, matrix row with popular packs, error + *Retry* instead of a blank tab |
 | Pinned tool copies going stale (G15) | "Rebuild content" action; automatic tracking is FF14 (§32) |
 | Lazy tabs surprise features that expect all tabs built | filter, auto-size, nav act on the active tab only (as v1) |
 | Unifying pins and groups confuses v1 users | every group action exists; the Groups settings page stays |
-| Scope creep | Future features list (§32); phase acceptance gates |
+| Scope creep | New ideas go into §32 and a later phase, never the current one; phase acceptance gates |
 
 ## 30. v1 bugs not to carry over
 
@@ -1101,17 +1151,18 @@ None (D20). Bugs are reported from in-game testing and fixed against the matrix 
 | D16 | Restore cursor position when toggling cursor mode (like the spawn menu, G9) | yes · no | **Yes if trivial** (two calls); otherwise move to §32 |
 | D17 | "Rebuild content" action for tool tabs (G15) | add · skip | **Add**: small, fixes a real staleness limit |
 | D18 | Global name | **`PinnedPanels`** · `PP` | **Keep `PinnedPanels`** |
-| D19 | When to ship "pin any panel" (§33) | in 2.0 · **as the core of 2.1** | **Core of 2.1** (§33.16, ≈ 15 days), with the §33.15 spike in Phase 0 so the approach is proven before 2.0's window, input and source code is finalized. 2.1-a (picker + Manage) alone delivers the original vision for most windows |
+| D19 | When to ship "pin any panel" (§33) | **in 2.0** · as the core of 2.1 | **In 2.0**, as Phase 6 (changed after Phase 5, D22). Its §33.15 spike opens the phase. Step 6a (picker + Manage) alone delivers the original vision for most windows |
 | D20 | Unit tests | offline suite · **none** | **None**: the owner tests in game and reports problems (decided after Phase 2; the suite was removed) |
 | D21 | Tool scripts and CI | `tools/` + CI · **none** | **None**: rules are checked by review, translations and the Phase 0 spike by hand (decided after Phase 2; `tools/` and CI were removed) |
+| D22 | Where §32's features ship | 2.1–2.3 releases · **2.0** | **2.0**, as Phases 6–10 before parity and translations, so players see changes beyond the rewrite (decided after Phase 5) |
 
 ---
 
-# Part V — Future
+# Part V — New features
 
-## 32. Future features
+## 32. New features
 
-None of this is in 2.0 (§2 non-goals). Each item says what it is, why it fits Pinned Panels, how the v2 design supports it, and what it costs. IDs are **FF**-numbers so issues and commits can cite them. Anything else that comes up during the rewrite gets added here instead of being built.
+All of this is part of 2.0, built in Phases 6–10 (§26, D22). Each item says what it is, why it fits Pinned Panels, how the v2 design supports it, and what it costs. IDs are **FF**-numbers so issues and commits can cite them. New ideas get added here and scheduled into a phase instead of being built on the spot.
 
 **Effort:** S ≈ ½ day · M ≈ 1–2 days · L ≈ 3+ days. **Value:** how much it changes day-to-day building, from ★ to ★★★.
 
@@ -1123,7 +1174,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 |---|---|---|---|---|
 | FF1 | **Active tool window** — a special tab that always shows the control panel of the tool currently selected on the tool gun | The most common reason to open the spawn menu is to tweak the current tool. One window that follows you replaces pinning 20 tools | A new source kind `active:tool` in `sources.lua`; watches the `gmod_toolmode` client convar with `cvars.AddChangeCallback` and rebuilds its host with the new tool's panel (§14.2). Lazy building and the tab host already exist | M · ★★★ |
 | FF2 | **Pin a single control** — right-click any slider, checkbox or dropdown inside a pinned panel → "Pin this control" into a compact *Quick controls* window | Most builders only touch 2–3 settings per tool (weld strength, rope width, material). A strip of just those beats whole panels | Stock convar-bound controls keep their convar in `m_strConVar` (on the inner button for checkboxes, on the scratch/text area for sliders, S `derma/init.lua`, `dnumslider.lua`, `dcheckbox.lua`). v2 walks up from the right-clicked element to find it, reads the label, and stores `{ convar, label, kind, min, max }` as a new source kind `convar:`. Rebuilt with our own convar-bound controls, so it survives tool rebuilds (G15). Controls with no convar get the entry greyed out | M · ★★★ |
-| FF3 | **Layout profiles** — named layouts ("Building", "Posing", "Wiring", "Screenshots") switched from the palette, a key, or the Pinned page | Different jobs need different windows; today you unpin and re-pin | The document already holds everything; a profile is one more document in `data/pinnedpanels/profiles/<name>.json` through the same `storage.lua` (atomic write, sanitize). Switching = `Storage.Replace` + desktop reconcile | M · ★★★ |
+| FF3 | **Layout profiles** — named layouts ("Building", "Posing", "Wiring", "Screenshots") switched from the palette, a key, or the Pinned page | Different jobs need different windows; today you unpin and re-pin | The document already holds everything; a profile is one more document in `data/pinnedpanels/profiles/<name>.json` through the same `storage.lua` (atomic write, sanitize). Switching = `Layout.Replace` + desktop reconcile | M · ★★★ |
 | FF4 | **Visibility rules** per window: show only while holding the tool gun / a given weapon / a given tool mode, hide in vehicles, hide while dead, hide while holding the camera | Windows that appear only when relevant keep the screen clean without manual hiding | A `rules` field on the window record; `desktop` re-evaluates them on the `gmod_toolmode` change callback and by checking the active weapon, alive and vehicle state a few times per second (not per frame). Pairs with FF1 and FF3 | M · ★★ |
 | FF5 | **Context-menu mode** — windows can be set to appear (and be interactive) only while the C menu is held, like GMod's own tool panel | Many players want panels out of the way until they reach for them, with zero new keys to learn | `OnContextMenuOpen` / `OnContextMenuClose` (W) feed one more reason into `Input.Cursor` and a `showWith = "contextmenu"` window field. Also the simplest answer to "make windows interactive while C is held" | S · ★★ |
 
@@ -1137,7 +1188,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 | FF9 | **Linked windows** — windows snapped together move together | Keeps a built arrangement intact while repositioning it | `links` computed from snapped edges on drag end; drag moves the linked set; ALT breaks the link | M · ★ |
 | FF10 | **Layout undo/redo** (move, resize, close, merge, crop) | Mis-drags and accidental unpins are common; "reopen closed" only covers one case | `Layout` is the single writer, so each operation can push the previous record(s) to a small ring buffer (50 steps). `pinnedpanels_undo` / `_redo` actions | S · ★★ |
 | FF11 | **Hover fade-in** — idle windows fade to full opacity when the cursor approaches | Idle opacity keeps windows readable at a glance without cursor mode | Opacity rule gains a "cursor near" term (§16.3), only while cursor mode or a cursor reason is active | S · ★ |
-| FF12 | **Auto-layout presets** — "stack right", "grid", "cascade" in addition to Arrange | One-click tidy-up for different screen shapes | Pure functions in `util.lua` next to `Arrange`, unit-testable | S · ★ |
+| FF12 | **Auto-layout presets** — "stack right", "grid", "cascade" in addition to Arrange | One-click tidy-up for different screen shapes | Pure functions next to `Layout.Arrange` | S · ★ |
 
 ### 32.3 Tools & content
 
@@ -1147,7 +1198,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 | FF14 | **Automatic rebuild when a tool rebuilds its panel** | Removes the one staleness case left in 2.0 (G15, E10) | Detect when the spawn menu's copy (`controlpanel.Get(mode)`) was cleared and refilled — for example by comparing its child list when our tab is shown — then rebuild ours. Needs a spike to avoid creating panels just to look | M · ★ |
 | FF15 | **Pin a spawnlist folder** — one spawnlist (or a search) as its own window instead of the whole Spawnlists tab | Builders reuse a handful of prop folders; a small icon grid is faster than the full browser | A `spawnlist:` source that builds a content container from `spawnmenu.GetPropTable()` / `GetCustomPropTable()` entries with `spawnmenu.CreateContentIcon` (S `spawnmenu` module) | M · ★★ |
 | FF16 | **Pin any panel** from the game or Workshop addons — the addon's original goal | See §33 for feasibility, limits and design | Picker + Manage / Embed + recipes + Record (§33) | L · ★★★ |
-| FF17 | **Recent & favourite tools** in the hub and palette; the palette ranks by use | Speeds up the most common action in the addon | Usage counts in a cookie (session-independent, not in the layout); `Fuzzy.Score` gets a small bonus term | S · ★★ |
+| FF17 | **Recent & favourite tools** in the hub and palette; the palette ranks by use | Speeds up the most common action in the addon | Usage counts in a cookie (session-independent, not in the layout); `Util.Fuzzy` gets a small bonus term | S · ★★ |
 
 ### 32.4 Keyboard
 
@@ -1173,12 +1224,13 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 | FF25 | **Public API** — `PinnedPanels.RegisterSource`, `RegisterAction`, `Nav.Control`, `Pin`/`Unpin`, stable events | Lets other addons make their own panels pinnable and keyboard-navigable without patching Pinned Panels | The registries already exist internally (§14, §18, §19.4); the work is freezing their shape, versioning it (`PinnedPanels.API`) and documenting it | M · ★★ |
 | FF26 | **Wiremod / Advanced Duplicator 2 adapters** as the first API users | Popular build addons with complex panels; proves the API | Nav control adapters for their custom controls, and a source for AD2's file browser | M · ★ |
 
-### 32.7 Suggested order
+### 32.7 Order
 
-1. **2.1 — "Pin anything"**: FF16 / §33 (D19), then FF1 Active tool window, FF2 Pin a single control, FF5 Context-menu mode, FF6 Roll-up, FF10 Undo, FF13 Server restrictions. All build directly on 2.0 pieces and change daily use the most.
-2. **2.2 — "Right windows at the right time"**: FF3 Profiles, FF4 Visibility rules, FF23 Hide for screenshots, FF17 Recent & favourites, FF7 Drag tabs.
-3. **2.3 — "Power users & extensibility"**: FF18 Jump hints, FF19 Modifier shortcuts, FF25 Public API, FF26 Adapters, FF22 UI scale.
-4. **Later / on demand**: FF8 Docks, FF9 Linked windows, FF11, FF12, FF14, FF15, FF20, FF21, FF24.
+1. **Phase 6 — "Pin anything"**: FF16 / §33 (D19).
+2. **Phase 7 — everyday features**: FF1 Active tool window, FF2 Pin a single control, FF5 Context-menu mode, FF6 Roll-up, FF10 Undo, FF13 Server restrictions. All build directly on the 2.0 core and change daily use the most.
+3. **Phase 8 — "Right windows at the right time"**: FF3 Profiles, FF4 Visibility rules, FF23 Hide for screenshots, FF17 Recent & favourites, FF7 Drag tabs.
+4. **Phase 9 — "Power users & extensibility"**: FF18 Jump hints, FF19 Modifier shortcuts, FF25 Public API, FF26 Adapters, FF22 UI scale.
+5. **Phase 10 — the rest**: FF8 Docks, FF9 Linked windows, FF11, FF12, FF14, FF15, FF20, FF21, FF24.
 
 ### 32.8 Considered and rejected
 
@@ -1191,7 +1243,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 
 ## 33. Pinning any panel from the game or from Workshop addons
 
-The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop addon's settings window, the E2 editor, Super DOF, a gamemode menu, part of another addon's UI. v1 tried (`PinFrame` / `ScanFrames`) and it never worked. This section is the result of a deeper research pass (wiki, the GMod base Lua source, the Facepunch issue tracker). **2.1 is built around it** (D19).
+The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop addon's settings window, the E2 editor, Super DOF, a gamemode menu, part of another addon's UI. v1 tried (`PinFrame` / `ScanFrames`) and it never worked. This section is the result of a deeper research pass (wiki, the GMod base Lua source, the Facepunch issue tracker). **2.0 includes it, as Phase 6** (D19).
 
 ### 33.1 Verdict
 
@@ -1446,7 +1498,7 @@ Live bookkeeping (original properties, moved children, placeholders) is never sa
 | Windows whose addon repositions them every frame | The addon wins every frame | Managed without geometry; embed if it's a window |
 | Reopening a window opened by the server or by an F-key bind without the player's action | No client-side opener exists; F-keys aren't visible to `PlayerBindPress` (G6) | `watch` recipe: it's taken over as soon as the player opens it |
 
-### 33.13 Code for 2.1
+### 33.13 Code (Phase 6)
 
 | File | Lines | Job |
 |---|---:|---|
@@ -1465,7 +1517,7 @@ Live bookkeeping (original properties, moved children, placeholders) is never sa
 
 ### 33.14 Compatibility targets
 
-The test list for 2.1, with the expected result:
+The test list for Phase 6, with the expected result:
 
 | Target | How it's opened | Expected mode · recipe |
 |---|---|---|
@@ -1479,7 +1531,7 @@ The test list for 2.1, with the expected result:
 | A Derma HUD addon using `ParentToHUD` | always on | Manage (found through `vgui.GetAll`, G51); geometry only if it doesn't fight |
 | The spawn menu's Utilities list or another window's sub-panel | — | Embed part |
 
-### 33.15 Phase 0 spike (≈ ½ day, on v1)
+### 33.15 Spike (≈ ½ day, at the start of Phase 6)
 
 Pass criteria in brackets.
 
@@ -1499,17 +1551,17 @@ Pass criteria in brackets.
    - Same inside a `net.Receive` handler on a listen server. [the `net.Receivers` entry is found]
 6. **Real addons**: E2 editor (keyboard), AD2, one settings window, one `DHTML` window (does it reload when moved?). [results written into §33.14]
 
-### 33.16 2.1 roadmap
+### 33.16 Phase 6 steps
 
 | Step | Content | Days |
 |---|---|---:|
-| 2.1-a | Picker + **Manage** + `session`/`watch` recipes + managed windows in taskbar, Pinned list, layout editor, profiles | 4 |
-| 2.1-b | Native registries (`desktop:`, `postprocess:`), `class:`, static command match, catching | 3 |
-| 2.1-c | **Record** mode | 2 |
-| 2.1-d | **Embed** (contents and part), switch between Manage/Embed | 4 |
-| 2.1-e | Compatibility pass (§33.14), a public "known to work" list in the README, polish | 2 |
+| 6a | Picker + **Manage** + `session`/`watch` recipes + managed windows in taskbar, Pinned page, layout editor (profiles, FF3, include them in Phase 8) | 4 |
+| 6b | Native registries (`desktop:`, `postprocess:`), `class:`, static command match, catching | 3 |
+| 6c | **Record** mode | 2 |
+| 6d | **Embed** (contents and part), switch between Manage/Embed | 4 |
+| 6e | Compatibility pass (§33.14), a public "known to work" list in the README, polish | 2 |
 
-≈ 15 days. 2.1-a alone already delivers the original vision for most windows ("pin it, keep it on screen while playing, it comes back when the addon opens it").
+≈ 15 days. 6a alone already delivers the original vision for most windows ("pin it, keep it on screen while playing, it comes back when the addon opens it").
 
 ### 33.17 Risks
 
@@ -1527,7 +1579,7 @@ Pass criteria in brackets.
 
 ## Appendix A — Events & hooks
 
-**Our events** (internal to the addon in 2.0; a public API is FF25, §32):
+**Our events** (internal until the public API, FF25, Phase 9):
 
 | Event | Args | Fired by |
 |---|---|---|

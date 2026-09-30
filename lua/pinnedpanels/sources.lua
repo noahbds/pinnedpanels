@@ -286,6 +286,13 @@ function Sources.CanEquip(src)
 	return e ~= nil and e.kind == "tool" and isstring(e.item.Command) and e.item.Command ~= ""
 end
 
+-- The tool gun mode a tab is about, for server restrictions (FF13): a tool, or the active tool, never an
+-- option page.
+function Sources.ToolName(src)
+	local e = src == Sources.ACTIVE and Sources.ActiveTool() or Sources.catalogue[src]
+	if e and Sources.CanEquip(e.key) then return e.name end
+end
+
 function Sources.Equip(src)
 	if not Sources.CanEquip(src) then return false end
 	spawnmenu.ActivateTool(Sources.catalogue[src].name)

@@ -1,7 +1,7 @@
 -- Tabs (§15.2). PinnedPanelsTabStrip shows a window's tabs when it has two or more (F15).
 -- PinnedPanelsTabHost holds one tab's content: built when first shown, one per frame (D13, E24), with an
--- optional filter bar (F19), remembered category collapse (F20, D14) and the size measurement behind
--- auto-size (F17). Its PinnedPanelsClip crops by moving the content inside it, never by reparenting (F16).
+-- optional filter bar (F19), remembered category collapse (F20, D14), the size measurement behind
+-- auto-size (F17) and a banner when the server restricts the tool (FF13). Its PinnedPanelsClip crops by moving the content inside it, never by reparenting (F16).
 -- PinnedPanelsScroll throttles layout (L3, B6).
 
 local PP = PinnedPanels
@@ -12,6 +12,7 @@ local Layout, Sources, Theme = PP.Layout, PP.Sources, PP.Theme
 -- THROTTLE seconds, and a skipped layout always runs later (trailing edge), unlike v1's leading-edge wrapper.
 
 local THROTTLE = 0.1
+local RESTRICT_EVERY = 1.5
 
 local SCROLL = {}
 
@@ -339,6 +340,14 @@ function HOST:Init()
 	self.filter:SetVisible(false)
 	self.filter.OnChange = function() self:ApplyFilter() end
 
+	self.restrict = self:Add("DLabel")
+	self.restrict:Dock(TOP)
+	self.restrict:DockMargin(0, 0, 0, 4)
+	self.restrict:SetWrap(true)
+	self.restrict:SetAutoStretchVertical(true)
+	self.restrict:SetTextColor(Theme.danger)
+	self.restrict:SetVisible(false)
+
 	self.clip = self:Add("PinnedPanelsClip")
 	self.clip:Dock(FILL)
 end
@@ -350,6 +359,31 @@ end
 -- Think only runs while the host is visible (G4), so hidden tabs and minimized windows wait.
 function HOST:Think()
 	if not self.built and PP.Desktop.ClaimBuild() then self:Build() end
+	if RealTime() >= (self.nextRestrict or 0) then
+		self.nextRestrict = RealTime() + RESTRICT_EVERY
+		self:CheckRestriction()
+	end
+end
+
+-- Like the spawn menu, restrictions are polled while the tab is visible: toolmode_allow_* is replicated,
+-- and change callbacks don't run for replicated convars on the client (G33).
+function HOST:CheckRestriction()
+	local name = PP.Sources.ToolName(self.src)
+	local text
+	if name then
+		local allow = GetConVar("toolmode_allow_" .. name)
+		local ply = LocalPlayer()
+		if allow and not allow:GetBool() then
+			text = PP.L("restrict.disabled")
+		elseif IsValid(ply) and not ply:HasWeapon("gmod_tool") then
+			text = PP.L("restrict.no_toolgun")
+		end
+	end
+	if text == self.restrictText then return end
+	self.restrictText = text
+	self.restrict:SetText(text or "")
+	self.restrict:SetVisible(text ~= nil)
+	self:InvalidateLayout()
 end
 
 function HOST:Build()
@@ -396,6 +430,7 @@ end
 -- "Rebuild content": a tool that rebuilt its spawn-menu panel doesn't update pinned copies (E10, G15).
 function HOST:Rebuild()
 	self.built = false
+	self.nextRestrict = nil
 end
 
 -- A language change (E11): control panels (tools, post-process) are built again so they follow the game
@@ -404,6 +439,7 @@ end
 local CONTROL_PANELS = { tool = true, postprocess = true, active = true }
 function HOST:Relocalize()
 	self.filter:SetPlaceholderText(PP.L("filter.controls"))
+	self.restrictText, self.nextRestrict = nil, nil
 	if self.built and (CONTROL_PANELS[self.src:match("^(%a+):")] or not self.content) then self:Rebuild() end
 end
 

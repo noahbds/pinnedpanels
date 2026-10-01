@@ -1,6 +1,6 @@
 -- Adopted panels' identity and return (§33.8, §33.9): a panel's signature, the refusals (R11), how a pinned
--- panel comes back (its recipe) and catching it when it appears. Taking and releasing a panel is Manage's
--- job (and Embed's); this file decides which panel and when. Record mode is record.lua.
+-- panel comes back (its recipe) and catching it when it appears. Taking and releasing a panel is Embed's
+-- job; this file decides which panel and when. Record mode is record.lua.
 
 local PP = PinnedPanels
 PP.Recipes = PP.Recipes or {}
@@ -179,9 +179,9 @@ local function ours(p)
 	return false
 end
 
--- Whether a panel is already pinned: a managed window, an embedded window's shell or an embedded panel.
+-- Whether a panel is already pinned: an embedded window's shell or an embedded panel.
 function Recipes.Owner(p)
-	return PP.Manage.byPanel[p] or PP.Embed.shells[p] or PP.Embed.byPanel[p]
+	return PP.Embed.shells[p] or PP.Embed.byPanel[p]
 end
 
 -- Why panel (root's window, or root itself) can't be pinned: a localization key, or nil.
@@ -253,12 +253,12 @@ function Recipes.Native(panel)
 end
 
 -- What pinning panel (root, or a part of root) would do (§33.9): build it natively if it is a desktop
--- widget, else manage it; it comes back through the one command defined where it was built, else by
+-- widget, else embed it; it comes back through the one command defined where it was built, else by
 -- recreating its registered class, else when its addon opens it.
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
 	local info = {
-		mode = panel ~= root and "part" or "manage", part = panel ~= root, signature = sig, native = Recipes.Native(panel),
+		mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, native = Recipes.Native(panel),
 		commands = Recipes.CommandsIn(sig.src),
 	}
 	if #info.commands == 1 then
@@ -272,16 +272,12 @@ function Recipes.Suggest(panel, root)
 	return info
 end
 
--- The modes the picker offers for a suggestion: a window can be managed or embedded, a part embedded.
+-- The modes the picker offers for a suggestion: a desktop widget can be built natively; anything is
+-- embedded, a whole window or a part.
 function Recipes.Modes(info)
 	local modes = {}
 	if info.native then modes[1] = "native" end
-	if info.part then
-		modes[#modes + 1] = "part"
-	else
-		modes[#modes + 1] = "manage"
-		modes[#modes + 1] = "embed"
-	end
+	modes[#modes + 1] = info.part and "part" or "embed"
 	return modes
 end
 
@@ -302,40 +298,9 @@ end
 
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 function Recipes.Take(panel, root, mode, recipe)
-	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root) }
-	if mode == "manage" then return PP.Manage.Take(root, adopt) end
-	adopt.needsKeyboard = root:IsKeyboardInputEnabled()
+	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root), needsKeyboard = root:IsKeyboardInputEnabled() }
 	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
 	return PP.Embed.Take(mode == "part" and panel or root, adopt)
-end
-
--- Moves an adopted panel between Manage and Embed (§33.6): "Embed for full features" on a managed window,
--- "Return to managed mode" on an embedded one, which then gets a window of its own.
-function Recipes.SwitchMode(id, index, mode)
-	local rec = Layout.Get(id)
-	local tab = rec and rec.tabs[index]
-	if not (tab and tab.adopt) then return end
-	if mode == "embed" then
-		local panel = PP.Manage.Panel(id)
-		if not IsValid(panel) then return end
-		PP.Manage.Release(id)
-		Layout.SetAdopt(id, index, { mode = "embed" })
-		local _, top = panel:GetDockPadding()
-		if IsValid(panel.lblTitle) and top > 0 then Layout.SetCrop(id, index, { l = 0, t = top, r = 0, b = 0 }) end
-		PP.Embed.Attach(tab.src, panel, "embed")
-		Desktop.Front(id)
-		return
-	end
-	local e = PP.Embed.live[tab.src]
-	if not e or e.mode ~= "embed" then return end
-	local shell = e.shell
-	PP.Embed.Release(tab.src)
-	if #rec.tabs > 1 then id = Layout.MoveTab(id, index, nil) end
-	Layout.SetCrop(id, 1, nil)
-	local x, y = shell:GetPos()
-	Layout.SetGeometry(id, x, y, shell:GetWide(), shell:GetTall(), true)
-	Layout.SetAdopt(id, 1, { mode = "manage" })
-	PP.Manage.Attach(id, shell)
 end
 
 -- A line saying how a pinned panel comes back.
@@ -352,8 +317,7 @@ end
 -- ── Waiting and catching (§33.9) ────────────────────────────
 
 -- Whether tab (of window rec) has its panel now.
-function Recipes.IsLive(rec, tab)
-	if tab.adopt.mode == "manage" then return PP.Manage.live[rec.id] ~= nil end
+function Recipes.IsLive(_, tab)
 	return PP.Embed.live[tab.src] ~= nil
 end
 
@@ -376,10 +340,6 @@ end
 -- the player just opened it.
 function Recipes.Attach(w, panel, opened)
 	local mode = w.tab.adopt.mode
-	if mode == "manage" then
-		PP.Manage.Attach(w.rec.id, panel, opened)
-		return true
-	end
 	if opened and panel:IsVisible() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode then PP.Input.SetCursorMode(true) end
 	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
 	if not IsValid(panel) then return false end

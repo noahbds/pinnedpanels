@@ -338,8 +338,6 @@ function Layout.MoveTab(fromId, i, toId, toIndex)
 	local from = byId[fromId]
 	local tab = from and from.tabs[i]
 	if not tab then return nil end
-	-- A managed window is another addon's window: nothing moves in or out of it (§33.4).
-	if from.kind == "managed" or (toId and byId[toId] and byId[toId].kind == "managed") then return nil end
 
 	if toId == fromId then
 		toIndex = math.Clamp(toIndex or #from.tabs, 1, #from.tabs)
@@ -436,11 +434,10 @@ function Layout.ClearTabs(id)
 end
 
 -- ── Adopted panels (§33) ────────────────────────────────────
--- A panel another addon made. Managed ("manage"), it stays where its addon put it and its window record
--- has kind = "managed"; embedded ("embed", "part"), it lives in a tab like any source. Either way its tab
--- is "adopt:<n>" and carries the adopt record (§33.10).
+-- A panel another addon made, embedded in a tab like any source (D23): a window's contents ("embed") or
+-- one part of a window ("part"). Its tab is "adopt:<n>" and carries the adopt record (§33.10).
 
-local ADOPT_FIELDS = { mode = true, signature = true, recipe = true, needsKeyboard = true, noGeometry = true }
+local ADOPT_FIELDS = { recipe = true, needsKeyboard = true }
 
 -- A new window holding one adopted tab. Returns the window id and the tab's src.
 function Layout.PinAdopted(adopt, x, y, w, h)
@@ -449,33 +446,18 @@ function Layout.PinAdopted(adopt, x, y, w, h)
 	doc.nextId = n
 	local src = "adopt:" .. n
 	x, y, w, h = Geom.Fit(math.Round(x), math.Round(y), math.max(math.Round(w), MIN_SIZE), math.max(math.Round(h), MIN_SIZE), Geom.Usable())
-	local win = newWindow({ { src = src, adopt = adopt } }, x, y, w, h)
-	if adopt.mode == "manage" then win.kind = "managed" end
-	return win.id, src
+	return newWindow({ { src = src, adopt = adopt } }, x, y, w, h).id, src
 end
 
--- Changes fields of tab i's adopt record. A new mode moves it between a managed window and a pinned one,
--- so managed mode needs the tab to be alone in its window.
+-- Changes tab i's recipe or needsKeyboard.
 function Layout.SetAdopt(id, i, fields)
 	local win = byId[id]
 	local tab = win and win.tabs[i]
 	if not (tab and tab.adopt) then return false end
-	if fields.mode == "manage" and #win.tabs > 1 then return false end
 	for k, v in pairs(fields) do
 		if ADOPT_FIELDS[k] then tab.adopt[k] = v end
 	end
-	local kind = tab.adopt.mode == "manage" and "managed" or nil
-	if win.kind == kind then
-		changed("style", id)
-		return true
-	end
-	win.kind = kind
-	if kind and win.state == "maximized" then
-		local r = win.restore or win
-		win.state, win.restore = "normal", nil
-		win.x, win.y, win.w, win.h = r.x, r.y, r.w, r.h
-	end
-	changed("windows", id)
+	changed("style", id)
 	return true
 end
 
@@ -542,7 +524,7 @@ end
 -- Roll-up (FF6): a normal window shrinks to its header and keeps its size for when it unrolls.
 function Layout.ToggleRoll(id)
 	local win = byId[id]
-	if not win or win.kind == "managed" then return false end
+	if not win then return false end
 	if win.state == "rolled" then
 		win.state = "normal"
 	elseif win.state == "normal" then
@@ -700,9 +682,7 @@ end
 function Layout.Arrange()
 	local list = {}
 	for _, win in ipairs(doc.windows) do
-		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 and not (win.kind == "managed" and win.tabs[1].adopt.noGeometry) then
-			list[#list + 1] = win
-		end
+		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 then list[#list + 1] = win end
 	end
 	table.sort(list, function(a, b) return Layout.Title(a):lower() < Layout.Title(b):lower() end)
 

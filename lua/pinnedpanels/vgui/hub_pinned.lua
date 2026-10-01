@@ -8,7 +8,6 @@ local Layout, Sources, Desktop, T = PP.Layout, PP.Sources, PP.Desktop, PP.Theme
 local ROW_H, TAB_ROW_H = 40, 30
 
 local function kindOf(rec)
-	if rec.kind == "managed" then return "managed" end
 	if rec.title or #rec.tabs > 1 then return "group" end
 	return rec.tabs[1].src:match("^(%a+):") or "tool"
 end
@@ -17,7 +16,6 @@ local KIND = {
 	group = { label = "kind.group", icon = "icon16/folder.png", color = T.success },
 	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
 	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
-	managed = { label = "kind.managed", icon = "icon16/application_link.png", color = T.warning },
 	adopt = { label = "kind.embedded", icon = "icon16/application_add.png", color = T.warning },
 	desktop = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
 	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
@@ -119,7 +117,6 @@ function PAGE:AddWindowRow(rec)
 	if kind == "group" then title = title .. " " .. PP.L("group.panels", #rec.tabs) end
 	if rec.state == "minimized" then title = title .. " " .. PP.L("tag.minimized") end
 	if Desktop.held[id] then title = title .. " " .. PP.L("tag.hidden") end
-	if kind == "managed" and PP.Manage.OwnerHidden(id) then title = title .. " " .. PP.L("tag.closed_by_addon") end
 	if adopt then title = title .. "  ·  " .. PP.Recipes.AddonName(adopt.signature) .. "  ·  " .. PP.Recipes.Describe(adopt) end
 
 	if dormant then
@@ -149,9 +146,7 @@ function PAGE:AddWindowRow(rec)
 			end)
 		else
 			button(row, PP.L("btn.unpin"), "icon16/cross.png", 70, "tip.unpin_simple", function() Layout.Unpin(id) end, true)
-			if kind ~= "managed" then
-				button(row, PP.L("btn.group"), "icon16/folder_go.png", 70, "tip.add_group", function() PP.Actions.OpenChildren("group", id) end)
-			end
+			button(row, PP.L("btn.group"), "icon16/folder_go.png", 70, "tip.add_group", function() PP.Actions.OpenChildren("group", id) end)
 		end
 		button(row, PP.L("btn.move_front"), "icon16/shape_move_front.png", 104, "tip.move_front", function() Desktop.RestoreAndFront(id) end)
 		if Desktop.held[id] then

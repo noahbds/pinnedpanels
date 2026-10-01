@@ -1,5 +1,4 @@
--- PinnedPanelsTaskbar (§20.2, F13): minimized windows as entries along one screen edge, and managed windows
--- their addon closed (§33.5). Shown while
+-- PinnedPanelsTaskbar (§20.2, F13): minimized windows as entries along one screen edge. Shown while
 -- windows are interactive, fades with RealFrameTime (G5) and can slide away until the cursor comes near.
 -- Entries, titles and icons are worked out on changes, never while painting (B23).
 
@@ -15,11 +14,9 @@ local ICONS = {
 	tool = Material("icon16/wrench.png"),
 	creation = Material("icon16/application_view_list.png"),
 	group = Material("icon16/folder.png"),
-	managed = Material("icon16/application_link.png"),
 }
 
 local function kindOf(rec)
-	if rec.kind == "managed" then return "managed" end
 	if #rec.tabs > 1 then return "group" end
 	return rec.tabs[1] and rec.tabs[1].src:match("^(%a+):") or "tool"
 end
@@ -38,16 +35,12 @@ function BAR:Init()
 	self:SetAlpha(0)
 end
 
--- Minimized windows that have a window control (not held, not only unavailable tabs) or a managed panel.
+-- Minimized windows that have a window control (not held, not only unavailable tabs).
 function BAR:Rebuild()
 	local entries = {}
-	local Manage = PP.Manage
 	for _, rec in ipairs(Layout.Windows()) do
-		local closed = Manage.OwnerHidden(rec.id) and not PP.Desktop.held[rec.id]
-		if (rec.state == "minimized" and IsValid(PP.Desktop.PanelOf(rec.id)) and not PP.Desktop.held[rec.id]) or closed then
-			local title = Layout.Title(rec)
-			if closed then title = title .. " " .. PP.L("tag.closed_by_addon") end
-			entries[#entries + 1] = { id = rec.id, title = title, icon = ICONS[kindOf(rec)] or ICONS.tool }
+		if rec.state == "minimized" and IsValid(PP.Desktop.panels[rec.id]) then
+			entries[#entries + 1] = { id = rec.id, title = Layout.Title(rec), icon = ICONS[kindOf(rec)] or ICONS.tool }
 		end
 	end
 	table.sort(entries, function(a, b) return a.title:lower() < b.title:lower() end)

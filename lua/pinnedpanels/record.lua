@@ -141,7 +141,7 @@ local function recorded(result)
 		end
 	end
 	Derma_Query(PP.L("record.found", Recipes.SigTitle(cand), how(result)), PP.L("record.title"),
-		PP.L("picker.mode_manage"), take("manage"), PP.L("picker.mode_embed"), take("embed"), PP.L("btn.cancel"), function() end)
+		PP.L("picker.mode_embed"), take("embed"), PP.L("btn.cancel"), function() end)
 end
 
 -- Starts recording, or stops it when it is running.

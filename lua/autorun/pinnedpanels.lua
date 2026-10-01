@@ -10,6 +10,7 @@ local FILES = {
 	"sources.lua",
 	"desktop.lua",
 	"recipes.lua",
+	"openers.lua",
 	"record.lua",
 	"embed.lua",
 	"quick.lua",

@@ -123,13 +123,15 @@ end
 local function recorded(result)
 	if not result then return notification.AddLegacy(PP.L("record.nothing"), NOTIFY_ERROR, 6) end
 	local panel, v = result.panel, result.via
-	local recipe = v and v.kind == "command" and { kind = "command", command = v.name, args = v.args, confirmed = true } or { kind = "watch" }
+	-- No opener on the stack (a hook polling keys, say): the bind pressed just before is the next best.
+	local recipe = v and v.kind == "command" and { kind = "command", command = v.name, args = v.args, confirmed = true }
+		or (not v and PP.Openers.FromBind()) or { kind = "watch" }
 	local cand = Recipes.Signature(panel)
 	for _, rec in ipairs(Layout.Windows()) do
 		for i, tab in ipairs(rec.tabs) do
 			local strong = tab.adopt and select(2, Recipes.Match(tab.adopt.signature, cand))
 			if strong then
-				if not v then return notification.AddLegacy(PP.L("record.no_opener", Recipes.Title(tab.adopt)), NOTIFY_HINT, 8) end
+				if recipe.kind == "watch" and not v then return notification.AddLegacy(PP.L("record.no_opener", Recipes.Title(tab.adopt)), NOTIFY_HINT, 8) end
 				Layout.SetAdopt(rec.id, i, { recipe = recipe })
 				return notification.AddLegacy(PP.L("record.updated", Recipes.Title(tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_GENERIC, 8)
 			end

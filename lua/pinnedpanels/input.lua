@@ -111,7 +111,7 @@ end
 -- The game bind of a key we act on doesn't run too (R7). F1-F12 never reach this hook (G6). The last bind
 -- pressed is kept for Record mode, which reports how a window was opened (§33.9).
 hook.Add("PlayerBindPress", "PinnedPanels.Input", function(_, bind, pressed, code)
-	if pressed then Input.lastBind = bind end
+	if pressed then Input.lastBind, Input.lastBindTime = bind, RealTime() end
 	if pressed and code and watched[code] and not gated() then return true end
 end)
 

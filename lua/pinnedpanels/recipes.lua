@@ -10,7 +10,6 @@ local Layout, Desktop = PP.Layout, PP.Desktop
 local CATCH_TIMER, CATCH_INTERVAL, HUD_EVERY = "PinnedPanels.Catch", 0.5, 2
 local SCAN_LIMIT = 200
 local MAX_TITLE = 64
-local MAX_COMMANDS = 10
 local OPEN_GRACE = 3 -- seconds in which a window we opened ourselves is expected
 
 -- Files whose functions say nothing about who made a panel: Derma, the base libraries and us.
@@ -226,18 +225,6 @@ end
 
 -- ── Suggestions ─────────────────────────────────────────────
 
--- Lua console commands defined in the file that built a window (G48): likely its opener. Ours are left out.
-function Recipes.CommandsIn(src)
-	local out = {}
-	if not src then return out end
-	for name, fn in pairs(concommand.GetTable()) do
-		if isfunction(fn) and name:sub(1, 13) ~= "pinnedpanels_" and fileOf(fn) == src then out[#out + 1] = name end
-	end
-	table.sort(out)
-	while #out > MAX_COMMANDS do table.remove(out) end
-	return out
-end
-
 -- A desktop widget's window (G47): a panel at or above this one titled like a widget we can build.
 function Recipes.Native(panel)
 	local byTitle = {}
@@ -253,16 +240,17 @@ function Recipes.Native(panel)
 end
 
 -- What pinning panel (root, or a part of root) would do (§33.9): build it natively if it is a desktop
--- widget, else embed it; it comes back through the one command defined where it was built, else by
--- recreating its registered class, else when its addon opens it.
+-- widget, else embed it; it comes back through the command that stands out among those related to it
+-- (Openers.Best), else by recreating its registered class, else when its addon opens it.
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
 	local info = {
 		mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, native = Recipes.Native(panel),
-		commands = Recipes.CommandsIn(sig.src),
+		commands = PP.Openers.Commands(sig),
 	}
-	if #info.commands == 1 then
-		info.recipe = { kind = "command", command = info.commands[1], confirmed = true }
+	local best = PP.Openers.Best(info.commands)
+	if best then
+		info.recipe = { kind = "command", command = best, confirmed = true }
 	elseif sig.class and vgui.GetControlTable(sig.class) then
 		info.recipe = { kind = "class", class = sig.class }
 	else
@@ -290,7 +278,7 @@ function Recipes.Choices(info)
 	end
 	local class = info.signature.class
 	if class and vgui.GetControlTable(class) then add({ kind = "class", class = class }) end
-	for _, command in ipairs(info.commands) do add({ kind = "command", command = command, confirmed = true }) end
+	for _, c in ipairs(info.commands) do add({ kind = "command", command = c.name, confirmed = true }) end
 	add({ kind = "watch" })
 	add({ kind = "session" })
 	return list
@@ -361,6 +349,16 @@ local function ask(w, panel, sig)
 		PP.L("btn.no"), function() end)
 end
 
+-- A waiting window the player just opened with a bind teaches its pin that command (§33.9), so we can open
+-- it ourselves next time. Only pins that had no opener learn; a known one is kept.
+local function learn(w)
+	if w.tab.adopt.recipe.kind ~= "watch" then return end
+	local recipe = PP.Openers.FromBind()
+	if not recipe then return end
+	Layout.SetAdopt(w.rec.id, w.index, { recipe = recipe })
+	notification.AddLegacy(PP.L("record.updated", Recipes.Title(w.tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_GENERIC, 6)
+end
+
 -- Looks at top-level panels not seen yet and gives each one to the waiting tab it matches best.
 function Recipes.Catch()
 	local waiting = Recipes.Waiting()
@@ -395,7 +393,12 @@ function Recipes.Catch()
 				end
 				if best then
 					local ours = (expecting[best.rec.id] or 0) > RealTime()
-					if bestStrong then Recipes.Attach(best, p, not ours) else ask(best, p, cand) end
+					if bestStrong then
+						Recipes.Attach(best, p, not ours)
+						if not ours then learn(best) end
+					else
+						ask(best, p, cand)
+					end
 					waiting = Recipes.Waiting()
 					if #waiting == 0 then return end
 				end

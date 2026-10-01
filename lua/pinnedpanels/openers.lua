@@ -1,0 +1,143 @@
+-- How another addon's window is opened (§33.9): ranking the Lua console commands that could open it, and
+-- learning one from the key bind the player pressed.
+
+local PP = PinnedPanels
+PP.Openers = PP.Openers or {}
+local Openers = PP.Openers
+
+local MAX_COMMANDS = 10
+local MAX_UPVALUES, MAX_FIELDS = 30, 64
+local AUTO_SCORE, AUTO_MARGIN = 7, 2
+local BIND_WINDOW = 2 -- seconds between pressing a bind and its window appearing
+
+-- Words that make a command look like an opener, and words that mean it does something else. A risky
+-- command is listed for the player to choose but never suggested or learned on its own.
+local OPEN_WORDS = { menu = 3, open = 3, gui = 2, panel = 2, window = 2, editor = 2, config = 2, settings = 2, options = 2, browser = 2, show = 1, toggle = 1 }
+local RISKY = {
+	remove = true, delete = true, reset = true, clear = true, kill = true, spawn = true, undo = true, save = true, load = true,
+	reload = true, ban = true, kick = true, give = true, buy = true, sell = true, drop = true, admin = true, exec = true,
+	run = true, close = true, hide = true, dump = true, debug = true, cleanup = true, restart = true, disconnect = true,
+}
+local STOP_WORDS = { the = true, ["and"] = true, ["for"] = true, with = true, your = true }
+-- Folders shared by many addons, which say nothing about which addon a file belongs to.
+local SHARED_ROOTS = { ["lua/autorun/"] = true, ["lua/vgui/"] = true, ["lua/includes/"] = true, ["lua/entities/"] = true,
+	["lua/weapons/"] = true, ["lua/effects/"] = true, ["lua/matproxy/"] = true, ["lua/postprocess/"] = true }
+
+local function fileOf(fn)
+	local info = debug.getinfo(fn, "S")
+	return info and info.short_src
+end
+
+local function rootOf(src)
+	local root = src:match("^(addons/[^/]+/)") or src:match("^(gamemodes/[^/]+/)") or src:match("^(lua/[^/]+/)")
+	return root and not SHARED_ROOTS[root] and root or nil
+end
+
+-- Lower-case words of a name: "wire_expression2_editor" or "Expression2EditorFrame" → expression2, editor, …
+local function words(text)
+	local out = {}
+	if not isstring(text) then return out end
+	text = text:gsub("^#", ""):gsub("(%l)(%u)", "%1_%2"):lower()
+	for w in text:gmatch("%w+") do
+		if #w >= 3 and not STOP_WORDS[w] then out[#out + 1] = w end
+	end
+	return out
+end
+
+local function set(list)
+	local out = {}
+	for _, v in ipairs(list) do out[v] = true end
+	return out
+end
+
+local function ours(name)
+	return name:sub(1, 13) == "pinnedpanels_"
+end
+
+function Openers.Risky(name)
+	for _, w in ipairs(words(name)) do
+		if RISKY[w] then return true end
+	end
+	return false
+end
+
+-- A command whose own variables hold a function from the window's file (or a table of them) leads to it.
+-- Upvalues are read with the deprecated debug.getupvalue while it exists (G62); without it this adds nothing.
+local function upvalueEvidence(fn, src)
+	if not debug.getupvalue then return 0 end
+	for i = 1, MAX_UPVALUES do
+		local ok, name, v = pcall(debug.getupvalue, fn, i)
+		if not ok or name == nil then break end
+		if isfunction(v) and fileOf(v) == src then return 6 end
+		if istable(v) then
+			local n = 0
+			for _, f in pairs(v) do
+				n = n + 1
+				if n > MAX_FIELDS then break end
+				if isfunction(f) and fileOf(f) == src then return 4 end
+			end
+		end
+	end
+	return 0
+end
+
+-- The Lua commands that could open a window with this signature, best first: { { name, score, risky } }.
+-- Only commands related to the window count: defined in its file, in its addon, or holding its functions.
+-- Their names then score for opener words and for the window's title and class words.
+function Openers.Commands(sig)
+	local out = {}
+	local src = sig.src
+	if not src then return out end
+	local root = rootOf(src)
+	local titleWords, classWords = set(words(sig.title)), set(words(sig.class))
+	for name, fn in pairs(concommand.GetTable()) do
+		if isfunction(fn) and not ours(name) and not name:find("^[%+%-]") then
+			local from = fileOf(fn)
+			local score = 0
+			if from == src then
+				score = 6
+			elseif root and rootOf(from) == root then
+				score = 3
+			elseif sig.addon and file.Exists(from, sig.addon) then
+				score = 3
+			end
+			score = score + upvalueEvidence(fn, src)
+			if score > 0 then
+				for _, w in ipairs(words(name)) do
+					score = score + (OPEN_WORDS[w] or 0) + (titleWords[w] and 2 or 0) + (classWords[w] and 1 or 0)
+				end
+				out[#out + 1] = { name = name, score = score, risky = Openers.Risky(name), sameFile = from == src }
+			end
+		end
+	end
+	table.sort(out, function(a, b)
+		if a.score ~= b.score then return a.score > b.score end
+		return a.name < b.name
+	end)
+	while #out > MAX_COMMANDS do table.remove(out) end
+	return out
+end
+
+-- The command to suggest, if one stands out: the only command in the window's file, or the best one
+-- scoring at least AUTO_SCORE when it is clearly ahead or defined in the window's own file. Risky
+-- commands never qualify.
+function Openers.Best(commands)
+	local first, second = commands[1], commands[2]
+	if not first or first.risky then return nil end
+	if #commands == 1 and first.sameFile then return first.name end
+	if first.score < AUTO_SCORE then return nil end
+	if first.sameFile or not second or first.score - second.score >= AUTO_MARGIN then return first.name end
+end
+
+-- The command behind the bind the player pressed just now, if it is a Lua command that isn't ours or risky.
+-- F-keys never reach PlayerBindPress (G6), so those binds can't be learned.
+function Openers.FromBind()
+	local Input = PP.Input
+	local bind = Input.lastBind
+	if not bind or RealTime() - (Input.lastBindTime or 0) > BIND_WINDOW then return nil end
+	local command, args = bind:match("^%s*([^%s;]+)%s*([^;]*)")
+	if not command then return nil end
+	command, args = command:lower(), string.Trim(args)
+	if command:find("^[%+%-]") or ours(command) or Openers.Risky(command) or not isfunction(concommand.GetTable()[command]) then return nil end
+	return { kind = "command", command = command, args = args ~= "" and args or nil, confirmed = true }
+end

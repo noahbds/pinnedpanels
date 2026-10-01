@@ -501,7 +501,6 @@ lua/pinnedpanels/
 ├─ input.lua .............................. 300  the one Think: gating, edges, repeat, action/quick/peek keys, cursor mode, ALT, cursor owner, suppression, text-entry focus
 ├─ recipes.lua ............................ 500  adopted panels: signature, matching, refusals (R11), suggestions, recipes, catching, opening, mode switch (§33.8, §33.9)
 ├─ record.lua ............................. 160  Record mode: timed vgui wrap, call-stack opener search (§33.9)
-├─ manage.lua ............................. 280  managed windows: take/apply/release, watcher, focus rule (§33.5)
 ├─ embed.lua .............................. 280  embedded windows and parts: box, ghost shell, placeholder, watcher, release (§33.6)
 ├─ quick.lua .............................. 190  quick controls: reading a control's convar, the Quick Controls tab, its menus (FF2)
 ├─ actions.lua ............................ 350  action list → window menu, taskbar menu, palette entries, key convars, conflict check, console commands
@@ -524,7 +523,7 @@ lua/pinnedpanels/
    └─ hub_settings.lua .................... 350  settings pages
 ```
 
-**Totals:** 24 Lua files, ≈ 6,700 lines for Phases 0–5; Phase 6 adds 5 (≈ 1,550 lines), Phase 7 adds `quick.lua`. Budgets flag problems; a file more than 25% over should be checked for doing two jobs.
+**Totals:** 24 Lua files, ≈ 6,700 lines for Phases 0–5; Phase 6 adds 4 (≈ 1,250 lines; `manage.lua` was removed, D23), Phase 7 adds `quick.lua`. Budgets flag problems; a file more than 25% over should be checked for doing two jobs.
 
 ---
 
@@ -585,7 +584,7 @@ tab = {
 
 One tab: no tab strip, looks exactly like a v1 pin. Several tabs: tab strip with the accent colour, like a v1 group. "New group" creates an empty titled window that shows only in the Pinned list until it gets a tab.
 
-Phase 6 adds `window.kind`, the `desktop:`, `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10). Phase 7 adds `state = "rolled"` (FF6), `showWith = "contextmenu"` (FF5), the `active:tool` source (FF1) and `quick:<n>` tabs with `tab.controls` (FF2).
+Phase 6 adds the `desktop:`, `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10). Phase 7 adds `state = "rolled"` (FF6), `showWith = "contextmenu"` (FF5), the `active:tool` source (FF1) and `quick:<n>` tabs with `tab.controls` (FF2).
 
 ### 13.2 File
 
@@ -998,17 +997,17 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - `pinnedpanels_debug nav` prints the state.
 
 ### Phase 6 — Pin any panel (≈ 15 days) (§33, FF16) → `2.0.0-beta`
-Built on the 2.0 pieces as §33.13 describes: `manage.lua`, `embed.lua`, `recipes.lua`, `vgui/picker.lua`.
+Built on the 2.0 pieces as §33.13 describes: `embed.lua`, `recipes.lua`, `record.lua`, `vgui/picker.lua`. Manage mode (`manage.lua`) was built in 6a and dropped after the owner tested it in game: Embed only (D23).
 - [ ] The §33.15 spike, in game (it was listed in Phase 0 but not run); results into §33.2 and §33.14. *Still to run by the owner; 6a–6d follow §33 as written, so every ⚑ there is unverified.*
-- [x] 6a: picker, **Manage** mode, `session`/`watch` recipes; managed windows in the taskbar, Pinned page and layout editor [§33.5, §33.7, §33.8, R11, R12, G40–G43, G49, G51, G57–G59, G65]
+- [x] 6a: picker, **Manage** mode (removed, D23), `session`/`watch` recipes; managed windows in the taskbar, Pinned page and layout editor [§33.5, §33.7, §33.8, R11, R12, G40–G43, G49, G51, G57–G59, G65]
 - [x] 6b: native registries (`desktop:`, `postprocess:`), `class:` recipes, static command match, catching reopened windows [§33.9, G46–G48, G53, G54, G64]
 - [x] 6c: **Record** mode [§33.9, R14, G60–G62]
-- [x] 6d: **Embed** (a window's contents and a part), switching between Manage and Embed [§33.6, R15, G44, G45, G50, G52, G56]
+- [x] 6d: **Embed** (a window's contents and a part) [§33.6, R15, G44, G45, G50, G52, G56]
 - [ ] 6e: compatibility pass (§33.14) and a "known to work" list in the README. *Needs the game.*
-- **Accept** (in game, still to check): every §33.14 target gets its expected mode and recipe; releasing a window restores every property we changed; an imported layout never runs a command by itself (R16).
-- *Checked outside the game:* a headless run of the Phase 6 flows under the Phase 1–2 Derma stub (not committed, D20): picker, manage, minimize, lock, fighting, save and import, catching, command reopening, switching modes both ways, part embedding and grouping, owner removal, Record, reload. It found two bugs, both fixed: the catcher took an older copy of a window over the one just opened; a caught embedded window didn't turn cursor mode on.
+- **Accept** (in game, still to check): every §33.14 target gets its expected mode and recipe; unpinning an embedded panel gives its window back exactly as it was; an imported layout never runs a command by itself (R16).
+- *Checked outside the game:* a headless run of the Phase 6 flows under the Phase 1–2 Derma stub (not committed, D20): picker, embedding, minimize, save and import (an old Manage-mode pin loads embedded), catching, command reopening, part embedding and grouping, owner removal, Record, reload. It found two bugs, both fixed: the catcher took an older copy of a window over the one just opened; a caught embedded window didn't turn cursor mode on.
 - *Deviations:*
-  - The adopt record is on the tab (`tab.adopt`), so embedded tabs group like any tab. `window.kind` is `"managed"` or nil (§33.10).
+  - The adopt record is on the tab (`tab.adopt`), so embedded tabs group like any tab (§33.10).
   - The picker walks the panel tree itself instead of using `vgui.GetHoveredPanel()`, because its overlay takes the clicks. It starts on the window under the cursor (the usual pick); Down / wheel down walks into parts.
   - Suggested recipe order: the one command defined in the window's file, else its registered non-stock class, else `watch`. A desktop widget's window suggests the native `desktop:` source.
   - Not built: the experimental `clone` recipe (§33.9, off by default in the design) and marking a pin unavailable when its addon isn't mounted (it just waits; the Pinned page shows its addon).
@@ -1016,13 +1015,12 @@ Built on the 2.0 pieces as §33.13 describes: `manage.lua`, `embed.lua`, `recipe
   - A window the player opens that gets caught turns cursor mode on, so it can be used straight away. Windows we open ourselves (on join, or with the Pinned page's Open) don't.
   - On join, with autoRestore, windows already open are taken, then `class:` and allowed `command:` windows are opened once. `pinnedpanels_reload` doesn't open them again; they are still open and get caught.
   - Imported commands wait for **Allow** on the Pinned page, with a confirmation (R16).
-  - Managed windows get only the §33.4 ✓ actions, plus "Takes the Keyboard When Clicked" and "Embed for Full Features". Right-clicking their own title bar opens our window menu. Click-through turns their mouse off entirely (header too) until ALT.
-  - A managed window moved through its own title bar is stored and snapped once when the mouse is released. After 3 checks in a row where its addon moved it, we stop positioning it and say so; the layout editor shows it as locked. Release puts back its original position and size too.
+  - Embedded tabs have "Takes the Keyboard When Clicked" in their tab and window menus.
   - Embedding crops the DFrame title strip (its top dock padding) so child positions stay the same. The emptied window follows the tab's size.
   - Tab hosts hand their content back before clearing or losing it (`Sources.Unbuild`), so adopted panels are never removed with ours. Embedded panels get no collapse cookies (R12), and the filter puts their rows back first.
   - Record mode is `record.lua` (`recipes.lua` would have been 650 lines). Pressing Record again stops it. The timed wrap uses `Util.BeginOverride`; if another addon wrapped `vgui.Create` on top, ours stays as a pass-through and says so. The bind pressed comes from `input.lua`'s `PlayerBindPress` hook.
   - Desktop widgets build into a chromeless DFrame inside the tab. Post-process panels are control panels that rebuild, relocalize and auto-size like tools. Both are on a new Widgets page in the hub and in the palette. "Rebuild Content" covers them.
-  - New actions: `pick`, `record`, `needs_keyboard`, `embed`, `unembed`. `pinnedpanels_debug panels` counts managed and embedded panels.
+  - New actions: `pick`, `record`, `needs_keyboard`. `pinnedpanels_debug panels` counts embedded panels.
   - Strings are English only; Phase 11 translates them.
 
 ### Phase 7 — Everyday features (≈ 6 days)
@@ -1043,7 +1041,7 @@ Built on the 2.0 pieces as §33.13 describes: `manage.lua`, `embed.lua`, `recipe
   - FF13: `CanTool` refusals aren't shown; they depend on what the tool is pointed at. A banner also says when the player has no tool gun. Option pages get no banner.
 
 ### Phase 8 — The right windows at the right time (≈ 6 days)
-- [ ] FF3 Layout profiles (including managed windows from Phase 6)
+- [ ] FF3 Layout profiles (including embedded panels from Phase 6)
 - [ ] FF4 Visibility rules per window
 - [ ] FF23 Hide for screenshots (camera) and a "hide all" toggle
 - [ ] FF17 Recent and favourite tools in the hub and palette
@@ -1185,10 +1183,11 @@ None (D20). Bugs are reported from in-game testing and fixed against the matrix 
 | D16 | Restore cursor position when toggling cursor mode (like the spawn menu, G9) | yes · no | **Yes if trivial** (two calls); otherwise move to §32 |
 | D17 | "Rebuild content" action for tool tabs (G15) | add · skip | **Add**: small, fixes a real staleness limit |
 | D18 | Global name | **`PinnedPanels`** · `PP` | **Keep `PinnedPanels`** |
-| D19 | When to ship "pin any panel" (§33) | **in 2.0** · as the core of 2.1 | **In 2.0**, as Phase 6 (changed after Phase 5, D22). Its §33.15 spike opens the phase. Step 6a (picker + Manage) alone delivers the original vision for most windows |
+| D19 | When to ship "pin any panel" (§33) | **in 2.0** · as the core of 2.1 | **In 2.0**, as Phase 6 (changed after Phase 5, D22). Its §33.15 spike opens the phase. Manage mode was later dropped for Embed only (D23) |
 | D20 | Unit tests | offline suite · **none** | **None**: the owner tests in game and reports problems (decided after Phase 2; the suite was removed) |
 | D21 | Tool scripts and CI | `tools/` + CI · **none** | **None**: rules are checked by review, translations and the Phase 0 spike by hand (decided after Phase 2; `tools/` and CI were removed) |
 | D22 | Where §32's features ship | 2.1–2.3 releases · **2.0** | **2.0**, as Phases 6–10 before parity and translations, so players see changes beyond the rewrite (decided after Phase 5) |
+| D23 | How another addon's panel is pinned (§33.4) | Manage and Embed · **Embed only** | **Embed only** (decided by the owner after testing Phase 6 in game): Embed does what Manage did and better, since the panel is in one of our windows (moves, groups, crops, rolls up like any pinned window). Manage mode was built in 6a and removed; layouts that saved a Manage-mode pin load it as an embedded tab |
 
 ---
 
@@ -1231,7 +1230,7 @@ These change what the addon *is*, and each is cheap because of a v2 design choic
 | FF13 | **Server tool restrictions shown in windows** — a banner like the spawn menu's when a pinned tool is disabled on this server (`toolmode_allow_<tool>` = 0 or `CanTool` refuses) or the player has no tool gun | Avoids "why doesn't my weld work" on servers that restrict tools; parity with the spawn menu | The spawn menu polls these every 1.5 s because `toolmode_allow_*` is replicated and change callbacks don't fire for it on the client (S `toolpanel.lua`, G33). The tab host does the same while visible | S · ★★ |
 | FF14 | **Automatic rebuild when a tool rebuilds its panel** | Removes the one staleness case left in 2.0 (G15, E10) | Detect when the spawn menu's copy (`controlpanel.Get(mode)`) was cleared and refilled — for example by comparing its child list when our tab is shown — then rebuild ours. Needs a spike to avoid creating panels just to look | M · ★ |
 | FF15 | **Pin a spawnlist folder** — one spawnlist (or a search) as its own window instead of the whole Spawnlists tab | Builders reuse a handful of prop folders; a small icon grid is faster than the full browser | A `spawnlist:` source that builds a content container from `spawnmenu.GetPropTable()` / `GetCustomPropTable()` entries with `spawnmenu.CreateContentIcon` (S `spawnmenu` module) | M · ★★ |
-| FF16 | **Pin any panel** from the game or Workshop addons — the addon's original goal | See §33 for feasibility, limits and design | Picker + Manage / Embed + recipes + Record (§33) | L · ★★★ |
+| FF16 | **Pin any panel** from the game or Workshop addons — the addon's original goal | See §33 for feasibility, limits and design | Picker + Embed + recipes + Record (§33, D23) | L · ★★★ |
 | FF17 | **Recent & favourite tools** in the hub and palette; the palette ranks by use | Speeds up the most common action in the addon | Usage counts in a cookie (session-independent, not in the layout); `Util.Fuzzy` gets a small bonus term | S · ★★ |
 
 ### 32.4 Keyboard
@@ -1283,8 +1282,8 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 
 **Possible for every panel made in Lua**, which covers nearly all addon and gamemode UI. **Impossible for everything that isn't a Lua panel** (§33.12). Three things make it work:
 
-1. **Manage, don't move.** By default v2 does **not** reparent another addon's window. It leaves the window where the addon put it and *manages* it with public, reversible panel methods (`SetPos`, `SetSize`, `SetVisible`, `SetAlpha`, `SetMouseInputEnabled`, `SetKeyboardInputEnabled`, `MoveToFront`). That's enough for geometry memory, minimize to taskbar, idle fade, click-through, lock, quick keys, peek, profiles, and — the big one — **keeping an addon's window on screen while you play**. Nothing is reparented, so none of the popup bugs apply (G45, G52).
-2. **Embed only on request.** For full Pinned Panels features (groups, crop, filter, keyboard nav), v2 can move the window's *contents* (never the window) into a pinned window. This is riskier and depends on how the addon is written, so it's opt-in per window.
+1. **Embed the contents, never the window.** v2 moves the window's *contents* (or one part of it) into a pinned window and keeps the emptied window alive but invisible. The window itself is never reparented, so none of the popup bugs apply (G45, G52). The panel then gets everything a pinned window has: geometry memory, taskbar, idle fade, click-through, lock, quick keys, peek, groups, crop, filter, keyboard nav, and staying on screen while you play.
+2. *(Dropped, D23.)* The first design also had **Manage** mode as the default: leave the window where its addon put it and control it with public panel methods. It was built in 6a and removed after testing in game, because Embed does the same and better.
 3. **Recipes, not panels, are saved.** A live panel can't survive a restart. v2 saves how to get it back: native builders where the game exposes them (desktop widgets, post-process panels, registered classes), the console command that opens it, or a watch that grabs it when it reappears. A time-boxed **Record** mode finds the opener automatically by reading the call stack when the window is created (§33.9).
 
 **Why v1 failed** (all confirmed):
@@ -1317,10 +1316,10 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 | G44 | GMod moves **non-popup** panels between windows routinely: the context menu reparents `spawnmenu.ActiveControlPanel()` into itself and back to `OldParent` (S `contextmenu.lua`) | Moving a window's contents is a supported pattern (Embed, §33.6) |
 | G45 | Moving a **window** is not: *"Changing parents causes loss of input and I don't have time to figure out why"*; the context menu removes a moved window instead of moving it back. The only pop-out GMod does is `SetParent()` + `MakePopup()` (S `contextmenu.lua`, `editor_player.lua`) | Never reparent a foreign popup |
 | G52 | After `MakePopup`, a panel "unparents"; it stays parented but its position is in screen space (I #2606) | Confirms G45; explains v1's broken positions |
-| G43 | `Panel:IsPopup()`, `IsModal()`, `DoModal()` (W) | Popups → Manage; modal → refuse |
+| G43 | `Panel:IsPopup()`, `IsModal()`, `DoModal()` (W) | Popups → their contents are embedded; modal → refuse |
 | G57 | `DFrame` chrome is `btnClose`, `btnMaxim`, `btnMinim`, `lblTitle` (+ optional `imgIcon`); `DockPadding(5, 29, 5, 5)`; `Close()` = hide, **`Remove()` if `DeleteOnClose` (default true)**, then `OnClose()`; `SetDraggable`, `SetSizable`, `SetScreenLock`, `ShowCloseButton` are public (S `dframe.lua`) | Minimize must use `SetVisible(false)`, never `Close()`; lock uses `SetDraggable/SetSizable(false)`; Embed skips the chrome and mirrors the dock padding |
 | G58 | `Panel:Remove()` is deferred to the next frame; children are removed in later frames; `IsMarkedForDeletion()` tells (W) | Watchers check `IsMarkedForDeletion()`, not just `IsValid()` |
-| G59 | `Panel:MoveToFront()`: a non-popup always draws behind popups (W) | Managed popups and our windows are popups; z-order is managed with `MoveToFront` |
+| G59 | `Panel:MoveToFront()`: a non-popup always draws behind popups (W) | Our windows are popups; z-order is ours with `MoveToFront` |
 | G27 | `SetAlpha` multiplies children and doesn't block input (W) | Idle fade works on foreign windows; interactivity is separate |
 | G50 | `PaintAt` "briefly unparents and reparents the panel" each call; `PaintManual` needs `SetPaintedManually(true)` (W); GMod uses manual painting for the icon editor preview (S `iconeditor.lua`) | No live mirrors (§33.12) |
 
@@ -1341,8 +1340,8 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 
 | ID | Finding (source) | Consequence |
 |---|---|---|
-| G65 | `VGUIMousePressed(panel, mouseCode)` fires for mouse presses on any panel (W); Derma uses it to close menus (S `derma_menus.lua`) | Click-to-focus for managed and embedded windows that need the keyboard (§33.5) |
-| G20 | `DTextEntry` fires `OnTextEntryGetFocus`/`LoseFocus` (S) | Typing into fields of managed/embedded windows without keeping the keyboard the rest of the time |
+| G65 | `VGUIMousePressed(panel, mouseCode)` fires for mouse presses on any panel (W); Derma uses it to close menus (S `derma_menus.lua`) | Click-to-focus for embedded panels that need the keyboard (§33.6) |
+| G20 | `DTextEntry` fires `OnTextEntryGetFocus`/`LoseFocus` (S) | Typing into fields of embedded panels without keeping the keyboard the rest of the time |
 | G6 | `PlayerBindPress` is not called for F1–F12 (W) | Record mode can capture bound commands on other keys only |
 | G66 | The main menu, escape menu and server browser run in the separate **menu** Lua state; states share no globals or panels (W `States`) | Out of reach (§33.12) |
 
@@ -1350,66 +1349,33 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 
 | Where | What it is | Found through | Pinnable as |
 |---|---|---|---|
-| Children of the world panel | Normal windows (`DFrame`s, custom `EditablePanel` windows), usually popups | `vgui.GetWorldPanel():GetChildren()` (G41) | **Manage** (default) or **Embed** |
-| HUD-parented panels | Derma HUD elements and windows using `ParentToHUD` | `vgui.GetAll()` only (G51) | **Manage**; often repositioned by their owner every frame (then not worth it) |
+| Children of the world panel | Normal windows (`DFrame`s, custom `EditablePanel` windows), usually popups | `vgui.GetWorldPanel():GetChildren()` (G41) | **Embed** |
+| HUD-parented panels | Derma HUD elements and windows using `ParentToHUD` | `vgui.GetAll()` only (G51) | **Embed**; often repositioned by their owner every frame (then not worth it) |
 | Inside another window | A list, form or preview inside an addon's window, the spawn menu or the context menu | `vgui.GetHoveredPanel()` + walking parents (picker) | **Embed a part** |
 | Game registries | C-menu desktop widgets, post-process panels, tools, content tabs | `list.Get("DesktopWindows")`, `list.Get("PostProcess")`, `spawnmenu.*` | **Native** (our own instance) |
 | Engine and menu state | Console, chat, options, server browser, main/escape menu | not reachable | ✗ (§33.12) |
 | Drawn, not panels | HUDs drawn in `HUDPaint`, 3D2D screens | nothing to take | ✗ (§33.12) |
 
-### 33.4 The three integration modes
+### 33.4 The integration modes
 
-| | **Native** | **Manage** | **Embed** (window contents / a part) |
-|---|---|---|---|
-| What happens | We build our own instance (`init`, `cpanel`, class, tool, content tab) inside a normal pinned tab | The foreign window stays where it is; we control its public properties | Its content children move into a pinned tab; the original window is kept alive but invisible |
-| Reparenting | none (ours) | **none** | contents only (never a popup) |
-| Remember position/size | ✓ | ✓ (re-applied every time it appears) | ✓ |
-| Minimize to taskbar, restore | ✓ | ✓ (`SetVisible`) | ✓ |
-| Visible while playing (no cursor, no input) | ✓ | ✓ — the headline feature | ✓ |
-| Idle fade, click-through, lock, quick key, peek | ✓ | ✓ | ✓ |
-| Tabs / groups, crop, filter bar, keyboard nav, auto-size | ✓ | ✗ (it's their window) | ✓ |
-| Our header, colours, rename | ✓ | ✗ (their title bar) | ✓ |
-| Comes back after restart | ✓ always | via recipe (§33.9) | via recipe (§33.9) |
-| Risk of breaking the other addon | none | very low | medium (depends on the addon's code) |
-| Default for | registry sources | any top-level window | nothing — opt-in ("Embed for full features") |
+| | **Native** | **Embed** (window contents / a part) |
+|---|---|---|
+| What happens | We build our own instance (`init`, `cpanel`, class, tool, content tab) inside a normal pinned tab | Its content children move into a pinned tab; the original window is kept alive but invisible |
+| Reparenting | none (ours) | contents only (never a popup) |
+| Everything a pinned window does (geometry, taskbar, opacity, click-through, lock, quick key, peek, groups, crop, filter, keyboard nav, auto-size, our header and colours) | ✓ | ✓ |
+| Comes back after restart | ✓ always | via recipe (§33.9) |
+| Risk of breaking the other addon | none | medium (depends on the addon's code; see the known breakers in §33.6) |
+| Used for | registry sources | any other Lua window or part |
 
-### 33.5 Manage mode in detail (`manage.lua`)
+A third mode, **Manage** (the foreign window stays where it is and we control its public properties), was the first design's default. It was built and then dropped (D23).
 
-**Taking a window under management:**
-1. Record its **original state**: position, size, visibility, alpha, mouse/keyboard input flags, and for a `DFrame` also draggable, sizable and screen lock (G57).
-2. Create a *managed window record* in the layout document (`kind = "managed"`, signature, recipe, geometry, flags). It shows in the Pinned list, the layout editor (as a box without our header), the taskbar, the palette and profiles like any other window.
-3. Apply our state.
+### 33.5 Manage mode (dropped, D23)
 
-**What v2 applies, using public methods only:**
-
-| Our feature | Applied as |
-|---|---|
-| Geometry | `SetPos`/`SetSize` from the record; applied again every time the window (re)appears |
-| Minimize / restore | `SetVisible(false/true)` — never `Close()`, which usually removes the window (G57) |
-| Outside cursor mode | `SetMouseInputEnabled(false)`, `SetKeyboardInputEnabled(false)`: the window stays on screen and the player moves and aims normally. This is exactly what v1 does to its own popup windows |
-| In cursor mode / spawn menu open | `SetMouseInputEnabled(true)`; keyboard per the focus rule below |
-| Idle opacity, peek | `SetAlpha` (G27) |
-| Click-through | mouse input off even in cursor mode; ALT turns it back on |
-| Lock | `DFrame:SetDraggable(false)`, `SetSizable(false)`; we stop applying user moves |
-| Focus / bring to front | `MoveToFront()` (G59) |
-
-**Keyboard focus rule** (managed and embedded windows):
-- A text field inside gets focus → that window takes the keyboard (G20).
-- A window flagged **needs keyboard** (auto-set when it had keyboard input when taken; user-toggleable) also takes the keyboard when clicked in cursor mode (`VGUIMousePressed`, G65). This covers custom editors that aren't `DTextEntry`, like Wiremod's E2 editor.
-- Leaving cursor mode or clicking elsewhere gives the keyboard back to the game.
-
-**Keeping it applied** — a watcher at 4 Hz, only while at least one managed window exists:
-- *Removed* (`!IsValid` or `IsMarkedForDeletion`, G58) → the record goes **waiting**; the recipe decides whether it comes back (§33.9).
-- *Hidden by the addon* → the taskbar entry shows "closed by addon".
-- *Shown again, recreated, or re-popped* (`MakePopup` turns input back on) → re-apply our state.
-- *Moved by the user through its own title bar* → store the new geometry and snap it once after the mouse is released.
-- *Moved by the addon on every check* ("fighting", e.g. a HUD that positions itself every frame) → stop applying geometry and tell the user this window can't be positioned.
-
-**Release** (unpin, `pinnedpanels_reload`, or the window's recipe deleted): restore every recorded original property.
+Built in 6a and removed after testing in game: Embed gives the same result (a window that stays on screen while playing, minimizes, fades, locks) and more, because the panel is in one of our windows. A layout that saved a Manage-mode pin loads it as an embedded tab.
 
 ### 33.6 Embed mode in detail (`embed.lua`)
 
-**Embed a window's contents** — for full features, offered in the picker and on managed windows ("Embed for full features — may not work with every addon"):
+**Embed a window's contents** — what the picker does with a window:
 1. Snapshot `shell:GetChildren()` (G56). Skip the `DFrame` chrome (G57).
 2. Create an **inner panel** in a new tab host with the shell's size and dock padding. Add a crop of the title strip (29 px for a `DFrame`) so child positions, docking and the owner's layout math stay identical.
 3. For each child, record parent, z-order, dock, dock margins, position and size, then `SetParent(inner)` in the same order.
@@ -1428,9 +1394,12 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 - Children calling `self:GetParent()` expecting the original window (e.g. a button doing `self:GetParent():Close()`).
 - Owners positioning children with screen coordinates (`LocalToScreen`).
 - Owners that walk their own children by index.
-- Children that are popups themselves (never moved; they stay managed).
+- Children that are popups themselves (never moved; they stay in the addon's window).
 
-The picker suggests Manage when any of these show up, and every embedded tab has "Return to managed mode".
+**Keyboard focus rule**:
+- A text field inside gets focus → our window takes the keyboard (G20).
+- A tab flagged **needs keyboard** (auto-set when the window had keyboard input when taken; "Takes the Keyboard When Clicked" toggles it) also takes the keyboard when clicked in cursor mode (`VGUIMousePressed`, G65). This covers custom editors that aren't `DTextEntry`, like Wiremod's E2 editor.
+- Leaving cursor mode or clicking elsewhere gives the keyboard back to the game.
 
 ### 33.7 The picker (`vgui/picker.lua`)
 
@@ -1440,7 +1409,7 @@ Open it from the hub ("Pin something on screen…"), the palette, or `pinnedpane
   - **Lua class** or "unnamed class" (G53), base class, name, window title, size.
   - **Suggested mode and recipe** (§33.9).
 - **Mouse wheel / Up–Down**: walk to the parent or back to the child, to pick a whole window or just one part. **Left–Right**: cycle overlapping candidates.
-- **Click**: pin with the suggested mode. **Right-click**: choose Manage / Embed / Embed part. **Escape**: cancel.
+- **Click**: pin with the suggested mode (embed the window or the part, or build a desktop widget natively). **Right-click**: choose how it comes back. **Escape**: cancel.
 - **A second list view** ("Open windows") shows every top-level Lua window from the world panel plus `vgui.GetAll()` HUD windows (G41, G51), for windows that are hard to hover.
 - **Refused, with the reason on the card**: our own panels; modal panels (G43); DMenus, tooltips, drag previews; panels marked for deletion; the spawn menu and context menu **roots** (their inner parts are fine).
 
@@ -1469,8 +1438,8 @@ Example — Super DOF: `class` none (G53), name `"DFrame"`, `src` `lua/postproce
 | `tool:`, `creation:` (2.0) | Built natively (§14) | catalogue | every tool, spawn-menu content tabs |
 | `desktop:<id>` | Native: our tab provides the window and we call `init(icon, window)` (G47) | the picker sees the window came from a desktop widget, or the hub lists them | Player model editor, addon C-menu widgets |
 | `postprocess:<name>` | Native: a `ControlPanel` filled by the entry's `cpanel` (G64) | hub list | Bloom, Sharpen, Sobel, Toy Town, DOF |
-| `class:<ClassName>` | `vgui.Create(ClassName)` (G46), then Manage/Embed | panel has a registered, non-stock class (G54) | addon windows whose `Init` builds everything |
-| `command:<cmd> [args]` | Run the command, then **catch** the new window (up to 3 s) and Manage/Embed it | static match or Record mode | Super DOF (`pp_superdof`), addons with an "open menu" command |
+| `class:<ClassName>` | `vgui.Create(ClassName)` (G46), then Embed | panel has a registered, non-stock class (G54) | addon windows whose `Init` builds everything |
+| `command:<cmd> [args]` | Run the command, then **catch** the new window (up to 3 s) and embed it | static match or Record mode | Super DOF (`pp_superdof`), addons with an "open menu" command |
 | `watch` | No opener known: wait; take it whenever a matching window appears | fallback; server- or key-opened windows | gamemode menus opened through the server |
 | `clone` (experimental, off by default) | Build a class table from the instance's own functions and its base, `vgui.CreateFromTable` it | unnamed classes without an opener (G53) | self-contained unnamed windows; breaks addons that keep a reference to "their" window |
 | `session` | Not restored | last resort | one-off dialogs |
@@ -1496,17 +1465,15 @@ Example — Super DOF: `class` none (G53), name `"DFrame"`, `src` `lua/postproce
 ### 33.10 Data model additions
 
 ```
-window.kind = nil | "managed"               -- managed = a foreign window we control in place (§33.5); nil = ours
 tab.src     = … | "desktop:<id>" | "postprocess:<name>" | "adopt:<n>"
 tab.adopt = {                               -- only on "adopt:" tabs
-  mode      = "manage" | "embed" | "part",
+  mode      = "embed" | "part",           -- an old "manage" loads as "embed" (D23)
   signature = { src, addon, class, base, title, w, h, hud, popup, path? },   -- path = { { i, class }, … } for parts
   recipe    = { kind = "class"|"command"|"watch"|"session", class?, command?, args?, confirmed? },
   needsKeyboard = true | false,
-  noGeometry    = true | false,             -- its addon keeps moving it, so we stopped (§33.5)
 }
 ```
-A managed window has exactly one tab, the managed one; an embedded tab lives in an ordinary window and can be grouped. `n` comes from the document's `nextId`. `session` recipes are never saved. An import sets every command recipe's `confirmed` to false (R16). Live bookkeeping (original properties, moved children, placeholders) is never saved; it's rebuilt when the window is taken again.
+An embedded tab lives in an ordinary window and can be grouped. `n` comes from the document's `nextId`. `session` recipes are never saved. An import sets every command recipe's `confirmed` to false (R16). Live bookkeeping (original properties, moved children, placeholders) is never saved; it's rebuilt when the window is taken again.
 
 ### 33.11 Safety rules (added to §8)
 
@@ -1529,17 +1496,17 @@ A managed window has exactly one tab, the managed one; an embedded tab lives in 
 | 3D2D in-world screens | Their owner paints them manually in 3D (`PaintManual`) | — |
 | Modal dialogs (`DoModal`) | They hold all input by design (G43) | — |
 | DMenus, tooltips, drag previews | Transient | — |
-| A live mirror of a panel left in place | Only `PaintAt`/`PaintManual`, which re-parent or take over painting every frame (G50) and can't receive clicks | Manage mode (the window itself stays usable) |
-| Windows whose addon repositions them every frame | The addon wins every frame | Managed without geometry; embed if it's a window |
+| A live mirror of a panel left in place | Only `PaintAt`/`PaintManual`, which re-parent or take over painting every frame (G50) and can't receive clicks | Embed (the panel itself moves into a pinned window and stays usable) |
+| Windows whose addon repositions them every frame | The addon wins every frame | Embed it (its contents then live in our window) |
 | Reopening a window opened by the server or by an F-key bind without the player's action | No client-side opener exists; F-keys aren't visible to `PlayerBindPress` (G6) | `watch` recipe: it's taken over as soon as the player opens it |
 
 ### 33.13 Code (Phase 6)
 
 | File | Lines | Job |
 |---|---:|---|
-| `manage.lua` | ≈ 250 (281) | take/apply/release managed windows, watcher, focus rule |
+| `manage.lua` | ≈ 250 (281, removed) | Manage mode, dropped (D23) |
 | `embed.lua` | ≈ 300 (272) | contents and part embedding, ghost shell, watcher, release, focus rule for embedded panels |
-| `recipes.lua` | ≈ 300 (498) | signatures, matching, refusals, suggestions (native, static command match, class), catching, opening, mode switch |
+| `recipes.lua` | ≈ 300 (498) | signatures, matching, refusals, suggestions (native, static command match, class), catching, opening |
 | `record.lua` | (155) | Record mode, split out of `recipes.lua` |
 | `vgui/picker.lua` | ≈ 250 (330) | overlay, info card, hierarchy walk, open-windows list |
 | changes | ≈ 200 | `sources.lua` (native kinds, adopted tabs), `desktop.lua`, `layout.lua`, `storage.lua`, `input.lua`, `actions.lua`, tab hosts, hub pages, taskbar |
@@ -1557,14 +1524,14 @@ The test list for Phase 6, with the expected result:
 
 | Target | How it's opened | Expected mode · recipe |
 |---|---|---|
-| Super DOF (base game) | `pp_superdof` (G53) | Manage or Embed · `command:pp_superdof` (static match finds it) |
+| Super DOF (base game) | `pp_superdof` (G53) | Embed · `command:pp_superdof` (static match finds it) |
 | Bloom / Sharpen / Toy Town (base game) | Post Process tab | Native · `postprocess:` |
 | Player model editor (base game) | C-menu desktop widget | Native · `desktop:PlayerEditor` |
-| Wiremod E2 editor | tool / command | Manage (needs keyboard) · `command:` via Record |
-| Advanced Duplicator 2 file browser | tool panel / window | Embed part or Manage · `class:` or Record |
-| An addon settings window (any `DFrame`) | console command or button | Manage · Record |
-| DarkRP F4 menu (server-opened) | F4 → server → net | Manage · `watch` (Record reports "opened by the server") |
-| A Derma HUD addon using `ParentToHUD` | always on | Manage (found through `vgui.GetAll`, G51); geometry only if it doesn't fight |
+| Wiremod E2 editor | tool / command | Embed (needs keyboard) · `command:` via Record |
+| Advanced Duplicator 2 file browser | tool panel / window | Embed (the window or a part) · `class:` or Record |
+| An addon settings window (any `DFrame`) | console command or button | Embed · Record |
+| DarkRP F4 menu (server-opened) | F4 → server → net | Embed · `watch` (Record reports "opened by the server") |
+| A Derma HUD addon using `ParentToHUD` | always on | Embed (found through `vgui.GetAll`, G51) |
 | The spawn menu's Utilities list or another window's sub-panel | — | Embed part |
 
 ### 33.15 Spike (≈ ½ day, at the start of Phase 6)
@@ -1572,7 +1539,7 @@ The test list for Phase 6, with the expected result:
 Pass criteria in brackets.
 
 1. **Where windows live**: create a `DFrame` without parent, one with `MakePopup`, one with `ParentToHUD`. Check which are world-panel children (G41, G51). [matches the table in §33.3]
-2. **Manage**:
+2. **Manage** *(dropped, D23; keep only the part that still applies: an embedded window's text field gets the keyboard)*:
    - On a `MakePopup` `DFrame` with a text field and a slider: `SetMouseInputEnabled(false)` + `SetKeyboardInputEnabled(false)` while visible. [player moves and aims; window stays drawn]
    - Back in cursor mode: re-enable mouse. [clicking works]
    - Click the text field. [`OnTextEntryGetFocus` fires and typing works after enabling keyboard]
@@ -1591,24 +1558,24 @@ Pass criteria in brackets.
 
 | Step | Content | Days |
 |---|---|---:|
-| 6a | Picker + **Manage** + `session`/`watch` recipes + managed windows in taskbar, Pinned page, layout editor (profiles, FF3, include them in Phase 8) | 4 |
+| 6a | Picker + **Manage** + `session`/`watch` recipes + managed windows in taskbar, Pinned page, layout editor (Manage was later dropped, D23) | 4 |
 | 6b | Native registries (`desktop:`, `postprocess:`), `class:`, static command match, catching | 3 |
 | 6c | **Record** mode | 2 |
-| 6d | **Embed** (contents and part), switch between Manage/Embed | 4 |
+| 6d | **Embed** (contents and part) | 4 |
 | 6e | Compatibility pass (§33.14), a public "known to work" list in the README, polish | 2 |
 
-≈ 15 days. 6a alone already delivers the original vision for most windows ("pin it, keep it on screen while playing, it comes back when the addon opens it").
+≈ 15 days. With D23, 6a's picker and recipes plus 6d's Embed deliver the original vision ("pin it, keep it on screen while playing, it comes back when the addon opens it").
 
 ### 33.17 Risks
 
 | Risk | Mitigation |
 |---|---|
-| An addon re-enables input or re-centres its window constantly | watcher re-applies at 4 Hz; "fighting" detection stops geometry and tells the user |
-| Embed breaks an addon | opt-in only; "Return to managed mode"; release restores everything; compatibility list |
+| An addon re-enables input on its emptied window (re-pops it) | the embed watcher ghosts it again at 4 Hz |
+| Embed breaks an addon | unpinning releases everything as it was; compatibility list |
 | Record's temporary wrap conflicts with another addon wrapping `vgui.Create` | wrap for ≤ 30 s only on user request; restore by identity (only if our wrapper is still installed, else warn) |
 | `debug.getlocal`/`getupvalue` removed in a future GMod | only `debug.getinfo` is required; `getlocal` just adds command arguments |
 | Wrong window auto-taken on a weak signature | weak matches ask once; the user can undo (FF10) |
-| Performance with many managed windows | watchers run only while needed, at 2–4 Hz, on snapshots; no per-frame work |
+| Performance with many embedded panels | watchers run only while needed, at 2–4 Hz, on snapshots; no per-frame work |
 
 
 ---
@@ -1625,9 +1592,9 @@ Pass criteria in brackets.
 | `PinnedPanelsCursorMode` | `active` | `input` |
 | `PinnedPanelsSettingChanged` | `key, value` | `settings` |
 | `PinnedPanelsInputChanged` | — | `input` (cursor mode, ALT, spawn menu open/close) |
-| `PinnedPanelsAdoptChanged` | — | `manage`, `embed` (an adopted panel was taken, let go, or closed by its addon) |
+| `PinnedPanelsAdoptChanged` | — | `embed` (an adopted panel was taken, let go, or closed by its addon) |
 
-**GMod hooks used:** `Think` (one, `input`), `CreateMove`, `PlayerBindPress`, `StartChat`, `FinishChat`, `OnTextEntryGetFocus`, `OnTextEntryLoseFocus`, `OnSpawnMenuOpen`, `OnSpawnMenuClose`, `PostReloadToolsMenu`, `OnScreenSizeChanged`, `ShutDown`, `VGUIMousePressed` and `GUIMousePressed` (the §33.5 focus rule, FF2's menus), `OnContextMenuOpen` and `OnContextMenuClose` (FF5), and a `gmod_toolmode` change callback (FF1). Hook identifiers are `"PinnedPanels.<Area>"` or the owning control.
+**GMod hooks used:** `Think` (one, `input`), `CreateMove`, `PlayerBindPress`, `StartChat`, `FinishChat`, `OnTextEntryGetFocus`, `OnTextEntryLoseFocus`, `OnSpawnMenuOpen`, `OnSpawnMenuClose`, `PostReloadToolsMenu`, `OnScreenSizeChanged`, `ShutDown`, `VGUIMousePressed` and `GUIMousePressed` (the §33.6 focus rule, FF2's menus), `OnContextMenuOpen` and `OnContextMenuClose` (FF5), and a `gmod_toolmode` change callback (FF1). Hook identifiers are `"PinnedPanels.<Area>"` or the owning control.
 
 ## Appendix B — Glossary
 

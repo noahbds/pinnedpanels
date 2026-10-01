@@ -500,6 +500,7 @@ lua/pinnedpanels/
 ├─ desktop.lua ............................ 350  records → window controls: create/update/remove, lazy tabs, restore queue, z-order, interactivity, opacity, peek
 ├─ input.lua .............................. 300  the one Think: gating, edges, repeat, action/quick/peek keys, cursor mode, ALT, cursor owner, suppression, text-entry focus
 ├─ recipes.lua ............................ 500  adopted panels: signature, matching, refusals (R11), suggestions, recipes, catching, opening, mode switch (§33.8, §33.9)
+├─ openers.lua ............................ 230  ranked command match, learning from binds, desktop widgets opened like their icon (§33.9)
 ├─ record.lua ............................. 160  Record mode: timed vgui wrap, call-stack opener search (§33.9)
 ├─ embed.lua .............................. 280  embedded windows and parts: box, ghost shell, placeholder, watcher, release (§33.6)
 ├─ quick.lua .............................. 190  quick controls: reading a control's convar, the Quick Controls tab, its menus (FF2)
@@ -584,7 +585,7 @@ tab = {
 
 One tab: no tab strip, looks exactly like a v1 pin. Several tabs: tab strip with the accent colour, like a v1 group. "New group" creates an empty titled window that shows only in the Pinned list until it gets a tab.
 
-Phase 6 adds the `desktop:`, `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10). Phase 7 adds `state = "rolled"` (FF6), `showWith = "contextmenu"` (FF5), the `active:tool` source (FF1) and `quick:<n>` tabs with `tab.controls` (FF2).
+Phase 6 adds the `postprocess:` and `adopt:` sources and `tab.adopt` (§33.10). Phase 7 adds `state = "rolled"` (FF6), `showWith = "contextmenu"` (FF5), the `active:tool` source (FF1) and `quick:<n>` tabs with `tab.controls` (FF2).
 
 ### 13.2 File
 
@@ -997,7 +998,7 @@ Each phase ends with the addon loading cleanly and its acceptance passing. Recor
   - `pinnedpanels_debug nav` prints the state.
 
 ### Phase 6 — Pin any panel (≈ 15 days) (§33, FF16) → `2.0.0-beta`
-Built on the 2.0 pieces as §33.13 describes: `embed.lua`, `recipes.lua`, `record.lua`, `vgui/picker.lua`. Manage mode (`manage.lua`) was built in 6a and dropped after the owner tested it in game: Embed only (D23).
+Built on the 2.0 pieces as §33.13 describes: `embed.lua`, `recipes.lua`, `openers.lua`, `record.lua`, `vgui/picker.lua`. Manage mode (`manage.lua`) was built in 6a and dropped after the owner tested it in game: Embed only (D23).
 - [ ] The §33.15 spike, in game (it was listed in Phase 0 but not run); results into §33.2 and §33.14. *Still to run by the owner; 6a–6d follow §33 as written, so every ⚑ there is unverified.*
 - [x] 6a: picker, **Manage** mode (removed, D23), `session`/`watch` recipes; managed windows in the taskbar, Pinned page and layout editor [§33.5, §33.7, §33.8, R11, R12, G40–G43, G49, G51, G57–G59, G65]
 - [x] 6b: native registries (`desktop:`, `postprocess:`), `class:` recipes, static command match, catching reopened windows [§33.9, G46–G48, G53, G54, G64]
@@ -1009,7 +1010,7 @@ Built on the 2.0 pieces as §33.13 describes: `embed.lua`, `recipes.lua`, `recor
 - *Deviations:*
   - The adopt record is on the tab (`tab.adopt`), so embedded tabs group like any tab (§33.10).
   - The picker walks the panel tree itself instead of using `vgui.GetHoveredPanel()`, because its overlay takes the clicks. It starts on the window under the cursor (the usual pick); Down / wheel down walks into parts.
-  - Suggested recipe order: the one command defined in the window's file, else its registered non-stock class, else `watch`. A desktop widget's window suggests the native `desktop:` source.
+  - Suggested recipe order: a desktop widget's `desktop` recipe, else the ranked command match (§33.9), else its registered non-stock class, else `watch`. *Revised after in-game testing:* the first version only suggested a command when exactly one was defined in the window's own file, which missed most addons; and desktop widgets were built natively in our own DFrame, which some widgets didn't like. Widgets are now opened as the C menu does and embedded, and old `desktop:` tabs load as embedded ones.
   - Not built: the experimental `clone` recipe (§33.9, off by default in the design) and marking a pin unavailable when its addon isn't mounted (it just waits; the Pinned page shows its addon).
   - Catching looks at the newest windows first. Parts of the spawn and context menus can be caught although their roots can't be taken. A weak match asks once per window.
   - A window the player opens that gets caught turns cursor mode on, so it can be used straight away. Windows we open ourselves (on join, or with the Pinned page's Open) don't.
@@ -1332,7 +1333,7 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 | G61 | `hook.GetTable()` returns every hook name → id → function (W) | A window created inside a hook (e.g. a key hook) → `watch` recipe with a hint |
 | G62 | `debug.getinfo(fn or level, "fS")` returns the function and its `short_src`/`linedefined` in every realm (W). `debug.getlocal`/`getupvalue` still exist but are **deprecated**; `setlocal`/`setupvalue` were **removed for security** (W `debug`) | Identification and Record mode use `getinfo` only; `getlocal` is an optional extra (command arguments) |
 | G63 | `engine.GetAddons()` lists mounted Workshop addons (`title`, `wsid`, `file`, `mounted`); an addon's GMA title can be used as a file-search path (`file.Find`/`file.Exists(path, title)`) (W `engine.GetAddons`, `file.Find`, `File_Search_Paths`) | Map a window's source file to "Wiremod" / "Advanced Duplicator 2" for the picker and the Pinned list |
-| G47 | `list.Get("DesktopWindows")` entries `{ title, icon, width, height, onewindow, init(icon, window) }`; the context menu builds each with `init` (S `contextmenu.lua`, `editor_player.lua`) | Native `desktop:` source |
+| G47 | `list.Get("DesktopWindows")` entries `{ title, icon, width, height, onewindow, init(icon, window) }`; the context menu builds each with `init` (S `contextmenu.lua`, `editor_player.lua`) | `desktop` recipe: opened like the icon, then embedded |
 | G64 | `list.Get("PostProcess")` entries have either `cpanel(CPanel)` (e.g. Bloom) or `onclick` (e.g. Super DOF runs `pp_superdof`) (S `postprocess/bloom.lua`, `super_dof.lua`) | Native `postprocess:` source for `cpanel` entries; `command:` for `onclick` ones |
 | G46 | `vgui.Create(class)` creates the base, merges the class and calls `Init` (S `scriptedpanels.lua`) | `class:` recipe for self-building classes |
 
@@ -1352,7 +1353,7 @@ The original goal of Pinned Panels was to pin **any** frame or panel: a Workshop
 | Children of the world panel | Normal windows (`DFrame`s, custom `EditablePanel` windows), usually popups | `vgui.GetWorldPanel():GetChildren()` (G41) | **Embed** |
 | HUD-parented panels | Derma HUD elements and windows using `ParentToHUD` | `vgui.GetAll()` only (G51) | **Embed**; often repositioned by their owner every frame (then not worth it) |
 | Inside another window | A list, form or preview inside an addon's window, the spawn menu or the context menu | `vgui.GetHoveredPanel()` + walking parents (picker) | **Embed a part** |
-| Game registries | C-menu desktop widgets, post-process panels, tools, content tabs | `list.Get("DesktopWindows")`, `list.Get("PostProcess")`, `spawnmenu.*` | **Native** (our own instance) |
+| Game registries | C-menu desktop widgets, post-process panels, tools, content tabs | `list.Get("DesktopWindows")`, `list.Get("PostProcess")`, `spawnmenu.*` | **Native** (our own instance); desktop widgets are opened like their icon and **embedded** |
 | Engine and menu state | Console, chat, options, server browser, main/escape menu | not reachable | ✗ (§33.12) |
 | Drawn, not panels | HUDs drawn in `HUDPaint`, 3D2D screens | nothing to take | ✗ (§33.12) |
 
@@ -1436,17 +1437,17 @@ Example — Super DOF: `class` none (G53), name `"DFrame"`, `src` `lua/postproce
 | Recipe | How it comes back | Found by | Examples |
 |---|---|---|---|
 | `tool:`, `creation:` (2.0) | Built natively (§14) | catalogue | every tool, spawn-menu content tabs |
-| `desktop:<id>` | Native: our tab provides the window and we call `init(icon, window)` (G47) | the picker sees the window came from a desktop widget, or the hub lists them | Player model editor, addon C-menu widgets |
+| `desktop` (id) | Opened as the C menu's icon does (a DFrame in the C menu, sized and titled from the entry, then `init(icon, window)`), then embedded (G47) | the picker sees a window titled like a widget, or the hub's Widgets page lists them | Player model editor, addon C-menu widgets |
 | `postprocess:<name>` | Native: a `ControlPanel` filled by the entry's `cpanel` (G64) | hub list | Bloom, Sharpen, Sobel, Toy Town, DOF |
 | `class:<ClassName>` | `vgui.Create(ClassName)` (G46), then Embed | panel has a registered, non-stock class (G54) | addon windows whose `Init` builds everything |
-| `command:<cmd> [args]` | Run the command, then **catch** the new window (up to 3 s) and embed it | static match or Record mode | Super DOF (`pp_superdof`), addons with an "open menu" command |
+| `command:<cmd> [args]` | Run the command, then **catch** the new window (up to 3 s) and embed it | ranked command match, a bind the player pressed, or Record mode | Super DOF (`pp_superdof`), addons with an "open menu" command |
 | `watch` | No opener known: wait; take it whenever a matching window appears | fallback; server- or key-opened windows | gamemode menus opened through the server |
 | `clone` (experimental, off by default) | Build a class table from the instance's own functions and its base, `vgui.CreateFromTable` it | unnamed classes without an opener (G53) | self-contained unnamed windows; breaks addons that keep a reference to "their" window |
 | `session` | Not restored | last resort | one-off dialogs |
 
 **Automatic recipe detection**, in order:
-1. **Registries**: is it a desktop widget or post-process panel? → native.
-2. **Static match**: callbacks in `concommand.GetTable()` (G48) defined in the same file as the window (`src`). One match → suggest `command:`; several → list them.
+1. **Registries**: a post-process panel is native; a desktop widget's window → `desktop`.
+2. **Ranked command match** (`openers.lua`): every Lua command in `concommand.GetTable()` (G48) related to the window scores: defined in its file (+6) or its addon (same folder under `addons/`, `gamemodes/` or `lua/`, or a file of its mounted Workshop addon, +3); holding the window's functions in its upvalues (+6, or +4 in a table; deprecated `debug.getupvalue` while it exists, G62); opener words in its name (menu, open, editor, settings…); the window's title and class words. Commands of other addons aren't considered; destructive-sounding ones (remove, reset, close, spawn, ban…) are listed but never suggested. The best is suggested at 7+ points when clearly ahead or in the window's own file; the picker lists the top ten. Else the registered class (`class:`).
 3. **Record mode** (the reliable one):
    - The user clicks **Record**, then opens the window the normal way (menu, key, command, button). Recording lasts at most 30 s.
    - During recording, `vgui.Create` and `vgui.CreateFromTable` are wrapped **inside the audited override helper** (R5; restored on every path, on timeout and on `ShutDown`).
@@ -1455,21 +1456,22 @@ Example — Super DOF: `class` none (G53), name `"DFrame"`, `src` `lua/postproce
      - `net.Receivers` → "opened by the server" → `watch`;
      - `hook.GetTable()` → "opened by hook *X*" → `watch` with that hint;
      - `list.Get("DesktopWindows")` `init` functions → `desktop:`.
-   - Also listen to `PlayerBindPress` during recording to show which bind the player pressed (not F-keys, G6).
-4. Otherwise `watch`, with `session` as the explicit alternative.
+   - Also listen to `PlayerBindPress` during recording to show which bind the player pressed (not F-keys, G6). When nothing is found on the stack, that bind's Lua command is used.
+4. **Learning from binds**: a waiting `watch` pin whose window the player opens with a bind (within 2 s) takes that bind's Lua command as its recipe.
+5. Otherwise `watch`, with `session` as the explicit alternative.
 
-**Catching a window** (for `command:` and `watch`): compare the world panel's children with the previous snapshot whenever their count changes (at most twice a second, and only while something is waiting), plus a `vgui.GetAll()` scan once a second for HUD-parented targets (G51). Score candidates by signature (§33.8).
+**Catching a window** (for `command:` and `watch`): compare the world panel's children with the previous snapshot whenever their count changes (at most twice a second, and only while something is waiting), plus a `vgui.GetAll()` scan once a second for HUD-parented targets (G51) and the C menu's children for desktop widgets (G47). Score candidates by signature (§33.8); a widget's window matches by its widget.
 
-**Imported layouts**: `desktop:`, `postprocess:`, `class:` and `watch` are kept. `command:` becomes `watch` unless the user confirms each command. A shared layout string must never run commands on its own (extends R4).
+**Imported layouts**: `desktop`, `postprocess:`, `class:` and `watch` are kept. `command:` becomes `watch` unless the user confirms each command. A shared layout string must never run commands on its own (extends R4).
 
 ### 33.10 Data model additions
 
 ```
-tab.src     = … | "desktop:<id>" | "postprocess:<name>" | "adopt:<n>"
+tab.src     = … | "postprocess:<name>" | "adopt:<n>"      -- an old "desktop:<id>" loads as an embedded tab
 tab.adopt = {                               -- only on "adopt:" tabs
   mode      = "embed" | "part",           -- an old "manage" loads as "embed" (D23)
-  signature = { src, addon, class, base, title, w, h, hud, popup, path? },   -- path = { { i, class }, … } for parts
-  recipe    = { kind = "class"|"command"|"watch"|"session", class?, command?, args?, confirmed? },
+  signature = { src, addon, class, base, title, w, h, hud, popup, desktop?, path? },   -- path = { { i, class }, … } for parts
+  recipe    = { kind = "class"|"desktop"|"command"|"watch"|"session", class?, id?, command?, args?, confirmed? },
   needsKeyboard = true | false,
 }
 ```
@@ -1506,7 +1508,8 @@ An embedded tab lives in an ordinary window and can be grouped. `n` comes from t
 |---|---:|---|
 | `manage.lua` | ≈ 250 (281, removed) | Manage mode, dropped (D23) |
 | `embed.lua` | ≈ 300 (272) | contents and part embedding, ghost shell, watcher, release, focus rule for embedded panels |
-| `recipes.lua` | ≈ 300 (498) | signatures, matching, refusals, suggestions (native, static command match, class), catching, opening |
+| `recipes.lua` | ≈ 300 (≈ 520) | signatures, matching, refusals, suggestions, catching, opening |
+| `openers.lua` | (≈ 230) | ranked command match, learning from binds, desktop widgets opened like their icon |
 | `record.lua` | (155) | Record mode, split out of `recipes.lua` |
 | `vgui/picker.lua` | ≈ 250 (330) | overlay, info card, hierarchy walk, open-windows list |
 | changes | ≈ 200 | `sources.lua` (native kinds, adopted tabs), `desktop.lua`, `layout.lua`, `storage.lua`, `input.lua`, `actions.lua`, tab hosts, hub pages, taskbar |
@@ -1526,7 +1529,7 @@ The test list for Phase 6, with the expected result:
 |---|---|---|
 | Super DOF (base game) | `pp_superdof` (G53) | Embed · `command:pp_superdof` (static match finds it) |
 | Bloom / Sharpen / Toy Town (base game) | Post Process tab | Native · `postprocess:` |
-| Player model editor (base game) | C-menu desktop widget | Native · `desktop:PlayerEditor` |
+| Player model editor (base game) | C-menu desktop widget | Embed · `desktop` (PlayerEditor) |
 | Wiremod E2 editor | tool / command | Embed (needs keyboard) · `command:` via Record |
 | Advanced Duplicator 2 file browser | tool panel / window | Embed (the window or a part) · `class:` or Record |
 | An addon settings window (any `DFrame`) | console command or button | Embed · Record |

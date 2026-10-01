@@ -500,7 +500,7 @@ lua/pinnedpanels/
 ├─ desktop.lua ............................ 350  records → window controls: create/update/remove, lazy tabs, restore queue, z-order, interactivity, opacity, peek
 ├─ input.lua .............................. 300  the one Think: gating, edges, repeat, action/quick/peek keys, cursor mode, ALT, cursor owner, suppression, text-entry focus
 ├─ recipes.lua ............................ 500  adopted panels: signature, matching, refusals (R11), suggestions, recipes, catching, opening, mode switch (§33.8, §33.9)
-├─ openers.lua ............................ 230  ranked command match, learning from binds, desktop widgets opened like their icon (§33.9)
+├─ openers.lua ............................ 200  ranked command match, learning from binds, desktop widgets opened like their icon (§33.9)
 ├─ record.lua ............................. 160  Record mode: timed vgui wrap, call-stack opener search (§33.9)
 ├─ embed.lua .............................. 280  embedded windows and parts: box, ghost shell, placeholder, watcher, release (§33.6)
 ├─ quick.lua .............................. 190  quick controls: reading a control's convar, the Quick Controls tab, its menus (FF2)
@@ -1508,8 +1508,8 @@ An embedded tab lives in an ordinary window and can be grouped. `n` comes from t
 |---|---:|---|
 | `manage.lua` | ≈ 250 (281, removed) | Manage mode, dropped (D23) |
 | `embed.lua` | ≈ 300 (272) | contents and part embedding, ghost shell, watcher, release, focus rule for embedded panels |
-| `recipes.lua` | ≈ 300 (≈ 520) | signatures, matching, refusals, suggestions, catching, opening |
-| `openers.lua` | (≈ 230) | ranked command match, learning from binds, desktop widgets opened like their icon |
+| `recipes.lua` | ≈ 300 (465) | signatures, matching, refusals, suggestions, catching, opening |
+| `openers.lua` | (200) | ranked command match, learning from binds, desktop widgets opened like their icon |
 | `record.lua` | (155) | Record mode, split out of `recipes.lua` |
 | `vgui/picker.lua` | ≈ 250 (330) | overlay, info card, hierarchy walk, open-windows list |
 | changes | ≈ 200 | `sources.lua` (native kinds, adopted tabs), `desktop.lua`, `layout.lua`, `storage.lua`, `input.lua`, `actions.lua`, tab hosts, hub pages, taskbar |

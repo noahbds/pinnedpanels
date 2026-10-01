@@ -113,7 +113,8 @@ function PICKER:Select(panel)
 	self.selected, self.dirty = panel, nil
 	self.lines, self.refusal, self.info = {}, nil, nil
 	if not IsValid(panel) then return end
-	local root = self.root
+	local root = Recipes.RootFor(panel, self.root)
+	self.pickRoot = root
 	self.refusal = Recipes.Refusal(panel, root)
 	local sig = Recipes.Signature(panel)
 	local lines = self.lines
@@ -126,11 +127,7 @@ function PICKER:Select(panel)
 	else
 		local info = Recipes.Suggest(panel, root)
 		self.info = info
-		if info.mode == "native" then
-			lines[5] = PP.L("picker.click_native", PP.Sources.Title(info.native))
-		else
-			lines[5] = PP.L("picker.click_" .. info.mode) .. "  ·  " .. Recipes.Describe(info)
-		end
+		lines[5] = PP.L("picker.click_" .. info.mode) .. "  ·  " .. Recipes.Describe(info)
 	end
 end
 
@@ -146,34 +143,23 @@ function PICKER:Cycle(dir)
 end
 
 -- Pins the selection; the picker closes first so its cursor reason is gone before the window is taken.
--- A desktop widget is built as our own tab instead, and its window is left alone.
-function PICKER:Pin(mode, recipe)
-	local panel, root, info = self.selected, self.root, self.info
+function PICKER:Pin(recipe)
+	local panel, root, info = self.selected, self.pickRoot, self.info
 	self:Remove()
 	if not info or not IsValid(panel) then return end
-	mode = mode or info.mode
-	if mode == "native" then return PP.Desktop.PinSource(info.native) end
-	local id = Recipes.Take(panel, root, mode, recipe or info.recipe)
+	local id = Recipes.Take(panel, root, info.mode, recipe or info.recipe)
 	if id then notification.AddLegacy(PP.L("adopt.pinned", PP.Layout.Title(PP.Layout.Get(id))), NOTIFY_GENERIC, 6) end
 end
 
--- Right-click: each way of pinning it, with how it comes back.
+-- Right-click: how it comes back, then pin it with that.
 function PICKER:OpenMenu()
 	local info = self.info
 	if not info then return surface.PlaySound("buttons/button10.wav") end
 	local menu = DermaMenu()
 	self.menu = menu
-	for _, mode in ipairs(Recipes.Modes(info)) do
-		if mode == "native" then
-			menu:AddOption(PP.L("picker.mode_native"), function() self:Pin("native") end):SetIcon("icon16/application_view_tile.png")
-		else
-			local sub, option = menu:AddSubMenu(PP.L("picker.mode_" .. mode))
-			option:SetIcon(mode == info.mode and "icon16/tick.png" or "icon16/bullet_white.png")
-			for _, r in ipairs(Recipes.Choices(info)) do
-				sub:AddOption(Recipes.Describe({ recipe = r }), function() self:Pin(mode, r) end)
-					:SetIcon(r == info.recipe and "icon16/tick.png" or "icon16/bullet_white.png")
-			end
-		end
+	for _, r in ipairs(Recipes.Choices(info)) do
+		menu:AddOption(Recipes.Describe({ recipe = r }), function() self:Pin(r) end)
+			:SetIcon(r == info.recipe and "icon16/tick.png" or "icon16/bullet_white.png")
 	end
 	menu:Open()
 end

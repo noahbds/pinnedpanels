@@ -1,9 +1,11 @@
--- How another addon's window is opened (§33.9): ranking the Lua console commands that could open it, and
--- learning one from the key bind the player pressed.
+-- How another addon's window is opened (§33.9): ranking the Lua console commands that could open it,
+-- learning one from the key bind the player pressed, and C-menu desktop widgets (G47), which we open the way
+-- the C menu's own icon does so they are embedded like any window.
 
 local PP = PinnedPanels
 PP.Openers = PP.Openers or {}
 local Openers = PP.Openers
+local Layout = PP.Layout
 
 local MAX_COMMANDS = 10
 local MAX_UPVALUES, MAX_FIELDS = 30, 64
@@ -140,4 +142,59 @@ function Openers.FromBind()
 	command, args = command:lower(), string.Trim(args)
 	if command:find("^[%+%-]") or ours(command) or Openers.Risky(command) or not isfunction(concommand.GetTable()[command]) then return nil end
 	return { kind = "command", command = command, args = args ~= "" and args or nil, confirmed = true }
+end
+
+-- ── C-menu desktop widgets (G47) ────────────────────────────
+
+-- The widget a window is, by its title (the C menu titles each window after its list entry).
+function Openers.DesktopId(panel)
+	if not isfunction(panel.GetTitle) then return nil end
+	local title = panel:GetTitle()
+	if not isstring(title) or title == "" then return nil end
+	for _, e in ipairs(PP.Sources.natives) do
+		if e.kind == "desktop" and e.text == title then return e.name end
+	end
+end
+
+-- Opens a widget as the C menu's icon does: a DFrame in the C menu, sized and titled from its entry and
+-- filled by its init, under ProtectedCall (R13). The icon argument is a stand-in holding the window.
+function Openers.OpenDesktop(id)
+	local w = list.Get("DesktopWindows")[id]
+	if not (istable(w) and isfunction(w.init)) then return nil end
+	local frame = vgui.Create("DFrame", IsValid(g_ContextMenu) and g_ContextMenu or nil)
+	frame:SetSize(tonumber(w.width) or 400, tonumber(w.height) or 400)
+	frame:SetTitle(isstring(w.title) and w.title or id)
+	frame:Center()
+	local ok = ProtectedCall(function() w.init({ Window = frame }, frame) end)
+	if not ok and IsValid(frame) then frame:Remove() end
+	return IsValid(frame) and frame or nil
+end
+
+function Openers.CanOpenDesktop(id)
+	local w = list.Get("DesktopWindows")[id]
+	return istable(w) and isfunction(w.init)
+end
+
+-- The window and tab that already hold a widget, if it is pinned.
+function Openers.FindDesktop(id)
+	for _, rec in ipairs(Layout.Windows()) do
+		for i, tab in ipairs(rec.tabs) do
+			if tab.adopt and tab.adopt.recipe.kind == "desktop" and tab.adopt.recipe.id == id then return rec, i end
+		end
+	end
+end
+
+-- Pins a widget from the hub or the palette: its window again if it is pinned, else a new one embedded.
+-- Returns the window id.
+function Openers.PinDesktop(id)
+	local rec, i = Openers.FindDesktop(id)
+	if rec then
+		if not PP.Recipes.IsLive(rec, rec.tabs[i]) then PP.Recipes.Open(rec, rec.tabs[i]) end
+		PP.Desktop.RestoreAndFront(rec.id)
+		Layout.Activate(rec.id, i)
+		return rec.id
+	end
+	local frame = Openers.OpenDesktop(id)
+	if not frame then return nil end
+	return PP.Recipes.Take(frame, frame, "embed", { kind = "desktop", id = id })
 end

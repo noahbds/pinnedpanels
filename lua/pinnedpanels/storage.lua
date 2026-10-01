@@ -19,7 +19,8 @@ local MAX_DECOMPRESSED = 256 * 1024
 local MAX_WINDOWS, MAX_TABS = 64, 16
 local MAX_TITLE, MAX_SRC = 64, 128
 local MAX_COORD = 32768
-local KINDS = { tool = true, creation = true, desktop = true, postprocess = true, adopt = true, active = true, quick = true }
+local KINDS = { tool = true, creation = true, postprocess = true, adopt = true, active = true, quick = true }
+local DFRAME_STRIP = 29 -- DFrame's top dock padding, cropped away when its contents are embedded (§33.6)
 local STATES = { normal = true, minimized = true, maximized = true, rolled = true }
 local ADOPT_MODES = { embed = true, part = true }
 local MAX_PATH = 16
@@ -68,6 +69,9 @@ local function sanitizeRecipe(r)
 	if kind == "class" then
 		local class = text(r.class, MAX_TITLE)
 		if class then return { kind = "class", class = class } end
+	elseif kind == "desktop" then
+		local id = text(r.id, MAX_TITLE)
+		if id then return { kind = "desktop", id = id } end
 	elseif kind == "command" then
 		local command = text(r.command, MAX_TITLE)
 		if command and command:match("^[%w_%.%-+]+$") then
@@ -88,6 +92,7 @@ local function sanitizeAdopt(a)
 		src = text(s.src, MAX_SRC), addon = text(s.addon, MAX_TITLE), class = text(s.class, MAX_TITLE),
 		base = text(s.base, MAX_TITLE), title = text(s.title, MAX_TITLE),
 		w = int(s.w, 0, MAX_COORD), h = int(s.h, 0, MAX_COORD), hud = s.hud == true, popup = s.popup == true,
+		desktop = text(s.desktop, MAX_TITLE),
 	}
 	if mode == "part" then
 		if not istable(s.path) or #s.path == 0 or #s.path > MAX_PATH then return nil end
@@ -136,8 +141,20 @@ local function sanitizeControls(list)
 	return #out > 0 and out or nil
 end
 
+-- C-menu widgets used to be built in our own tab ("desktop:<id>"); now they are opened as the C menu does
+-- and embedded, so an old tab becomes an embedded one that opens its widget again.
+local function fromDesktop(t, id)
+	return {
+		src = "adopt:desktop." .. id, title = t.title, size = t.size,
+		crop = istable(t.crop) and t.crop or { l = 0, t = DFRAME_STRIP, r = 0, b = 0 },
+		adopt = { mode = "embed", signature = { desktop = id }, recipe = { kind = "desktop", id = id } },
+	}
+end
+
 local function sanitizeTab(t, seen, summary)
 	if not istable(t) then return nil end
+	local widget = isstring(t.src) and t.src:match("^desktop:(.+)$")
+	if widget then t = fromDesktop(t, widget) end
 	local src = text(t.src, MAX_SRC)
 	local kind = src and src:match("^(%a+):.")
 	local adopt = kind == "adopt" and sanitizeAdopt(t.adopt)

@@ -111,12 +111,18 @@ function Recipes.Signature(panel)
 	return {
 		src = src, addon = Recipes.Addon(src), class = class, base = isstring(base) and base or nil,
 		title = titleOf(panel), w = w, h = h, hud = panel:GetParent() ~= vgui.GetWorldPanel(), popup = panel:IsPopup(),
+		desktop = PP.Openers.DesktopId(panel),
 	}
 end
 
 -- How well a live panel's signature (cand) matches a saved one: nil when it can't be that panel.
 -- Strong when the file or class agrees; a weak match needs the same title and asks the player once.
 function Recipes.Match(sig, cand)
+	-- A desktop widget's window is known by the widget it is (G47).
+	if sig.desktop then
+		if cand.desktop ~= sig.desktop then return nil end
+		return 10, true
+	end
 	if sig.src and cand.src ~= sig.src then return nil end
 	if sig.class and cand.class ~= sig.class then return nil end
 	local strong = sig.src ~= nil or sig.class ~= nil
@@ -138,6 +144,7 @@ end
 function Recipes.Title(adopt)
 	local s = adopt.signature
 	if s.title then return phrase(s.title) end
+	if s.desktop then return PP.Sources.Title("desktop:" .. s.desktop) end
 	return s.class or s.addon or PP.L("adopt.window")
 end
 
@@ -225,48 +232,34 @@ end
 
 -- ── Suggestions ─────────────────────────────────────────────
 
--- A desktop widget's window (G47): a panel at or above this one titled like a widget we can build.
-function Recipes.Native(panel)
-	local byTitle = {}
-	for _, e in ipairs(PP.Sources.natives) do
-		if e.kind == "desktop" then byTitle[e.text] = e.key end
-	end
+-- The window a picked panel belongs to: its top-level panel, or a desktop widget's window, which is a child
+-- of the C menu rather than top-level (G47).
+function Recipes.RootFor(panel, root)
 	local p = panel
-	while IsValid(p) do
-		local title = titleOf(p)
-		if title and byTitle[title] then return byTitle[title] end
+	while IsValid(p) and p ~= root do
+		if PP.Openers.DesktopId(p) then return p end
 		p = p:GetParent()
 	end
+	return root
 end
 
--- What pinning panel (root, or a part of root) would do (§33.9): build it natively if it is a desktop
--- widget, else embed it; it comes back through the command that stands out among those related to it
--- (Openers.Best), else by recreating its registered class, else when its addon opens it.
+-- What pinning panel (root, or a part of root) would do (§33.9): embed it. A desktop widget comes back by
+-- being opened as the C menu does; anything else through the command that stands out among those related to
+-- it (Openers.Best), else by recreating its registered class, else when its addon opens it.
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
-	local info = {
-		mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, native = Recipes.Native(panel),
-		commands = PP.Openers.Commands(sig),
-	}
+	local info = { mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, commands = PP.Openers.Commands(sig) }
 	local best = PP.Openers.Best(info.commands)
-	if best then
+	if sig.desktop then
+		info.recipe = { kind = "desktop", id = sig.desktop }
+	elseif best then
 		info.recipe = { kind = "command", command = best, confirmed = true }
 	elseif sig.class and vgui.GetControlTable(sig.class) then
 		info.recipe = { kind = "class", class = sig.class }
 	else
 		info.recipe = { kind = "watch" }
 	end
-	if info.native then info.mode = "native" end
 	return info
-end
-
--- The modes the picker offers for a suggestion: a desktop widget can be built natively; anything is
--- embedded, a whole window or a part.
-function Recipes.Modes(info)
-	local modes = {}
-	if info.native then modes[1] = "native" end
-	modes[#modes + 1] = info.part and "part" or "embed"
-	return modes
 end
 
 -- The recipes the player can choose instead, the suggested one first. Commands chosen here are the
@@ -277,6 +270,7 @@ function Recipes.Choices(info)
 		if r.kind ~= info.recipe.kind or r.command ~= info.recipe.command then list[#list + 1] = r end
 	end
 	local class = info.signature.class
+	if info.signature.desktop then add({ kind = "desktop", id = info.signature.desktop }) end
 	if class and vgui.GetControlTable(class) then add({ kind = "class", class = class }) end
 	for _, c in ipairs(info.commands) do add({ kind = "command", command = c.name, confirmed = true }) end
 	add({ kind = "watch" })
@@ -295,6 +289,7 @@ end
 function Recipes.Describe(adopt)
 	local r = adopt.recipe
 	if r.kind == "class" then return PP.L("recipe.class", r.class) end
+	if r.kind == "desktop" then return PP.L("recipe.desktop", PP.Sources.Title("desktop:" .. r.id)) end
 	if r.kind == "command" then
 		local command = r.args and r.command .. " " .. r.args or r.command
 		return PP.L(r.confirmed and "recipe.command" or "recipe.command_ask", command)
@@ -367,11 +362,16 @@ function Recipes.Catch()
 		return
 	end
 	ticks = ticks + 1
-	local hud = false
+	local hud, desktop = false, false
 	for _, w in ipairs(waiting) do
 		if w.tab.adopt.signature.hud then hud = true end
+		if w.tab.adopt.signature.desktop then desktop = true end
 	end
 	local list = hud and ticks % HUD_EVERY == 0 and Recipes.TopLevels() or vgui.GetWorldPanel():GetChildren()
+	-- Desktop widgets' windows are children of the C menu (G47).
+	if desktop and IsValid(g_ContextMenu) then
+		for _, p in ipairs(g_ContextMenu:GetChildren()) do list[#list + 1] = p end
+	end
 	-- Newest first: of two windows that match, the one just opened is the one the player wants.
 	for n = #list, 1, -1 do
 		local p = list[n]
@@ -415,22 +415,26 @@ end
 
 -- ── Opening ─────────────────────────────────────────────────
 
--- Whether a waiting panel can be opened by us: a registered class, or a command the player allowed and
--- that exists now. Commands from an imported layout wait for the player (R16).
+-- Whether a waiting panel can be opened by us: a registered class, a desktop widget, or a command the player
+-- allowed and that exists now. Commands from an imported layout wait for the player (R16).
 function Recipes.CanOpen(adopt)
 	local r = adopt.recipe
 	if r.kind == "class" then return vgui.GetControlTable(r.class) ~= nil end
+	if r.kind == "desktop" then return PP.Openers.CanOpenDesktop(r.id) end
 	return r.kind == "command" and r.confirmed == true and concommand.GetTable()[r.command] ~= nil
 end
 
--- Runs a waiting tab's opener, the only foreign code we call besides builders (R13). A class panel is
--- taken at once; a command's window is caught when it appears.
+-- Runs a waiting tab's opener, the only foreign code we call besides builders (R13). A class panel or a
+-- desktop widget is taken at once; a command's window is caught when it appears.
 function Recipes.Open(rec, tab)
 	if Recipes.IsLive(rec, tab) or not Recipes.CanOpen(tab.adopt) then return end
 	local r = tab.adopt.recipe
 	Recipes.Wake()
 	expecting[rec.id] = RealTime() + OPEN_GRACE
-	if r.kind == "class" then
+	if r.kind == "desktop" then
+		local panel = PP.Openers.OpenDesktop(r.id)
+		if panel then Recipes.Attach({ rec = rec, tab = tab }, panel) end
+	elseif r.kind == "class" then
 		local panel
 		ProtectedCall(function() panel = vgui.Create(r.class) end)
 		if not IsValid(panel) then return end

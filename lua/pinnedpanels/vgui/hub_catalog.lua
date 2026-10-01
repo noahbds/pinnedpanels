@@ -46,8 +46,15 @@ function ROW:Setup(entry)
 	end
 end
 
+-- The window holding a row's source: a desktop widget is pinned as an embedded tab (Openers.FindDesktop).
+local function pinnedAt(src)
+	local widget = src:match("^desktop:(.+)$")
+	if widget then return PP.Openers.FindDesktop(widget) end
+	return Layout.Find(src)
+end
+
 function ROW:Toggle()
-	local win, i = Layout.Find(self.src)
+	local win, i = pinnedAt(self.src)
 	if not win then
 		Desktop.PinSource(self.src)
 	elseif #win.tabs > 1 then
@@ -58,7 +65,7 @@ function ROW:Toggle()
 end
 
 function ROW:Paint(w, h)
-	local pinned = Layout.Find(self.src) ~= nil
+	local pinned = pinnedAt(self.src) ~= nil
 	if pinned ~= self.pinned then
 		self.pinned = pinned
 		self.button:SetOn(pinned)

@@ -1,6 +1,6 @@
 -- The catalogue of pinnable things (§14): tools and Utilities option pages ("tool:<name>"), spawn-menu
--- content tabs ("creation:<name>"), C-menu desktop widgets ("desktop:<id>", G47) and post-process panels
--- ("postprocess:<name>", G64) and the active tool ("active:tool", FF1), rebuilt on every PostReloadToolsMenu
+-- content tabs ("creation:<name>"), post-process panels ("postprocess:<name>", G64) and the active tool
+-- ("active:tool", FF1), rebuilt on every PostReloadToolsMenu
 -- (G11). Builds their content. Quick controls ("quick:<n>", FF2) are built by Quick from their tab. Embedded
 -- panels ("adopt:<n>", §33.6) aren't in the catalogue: Embed answers for them while it holds them.
 
@@ -14,10 +14,12 @@ Sources.catalogue = Sources.catalogue or {}
 Sources.tools = Sources.tools or {}
 Sources.creations = Sources.creations or {}
 Sources.natives = Sources.natives or {}
+-- C-menu desktop widgets ("desktop:<id>", G47) are listed with the natives but aren't sources: pinning one
+-- opens it as the C menu does and embeds it (Openers.PinDesktop).
+Sources.desktops = Sources.desktops or {}
 Sources.inFallback = false
 
-local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 }, postprocess = { 280, 400 }, desktop = { 400, 400 }, active = { 280, 400 } }
-local MAX_DESKTOP_W, MAX_DESKTOP_H = 0.6, 0.8
+local DEFAULT_SIZE = { tool = { 280, 400 }, creation = { 350, 560 }, postprocess = { 280, 400 }, active = { 280, 400 } }
 
 -- "#tool.weld.name" → the current language's text; unknown phrases fall back to the key without "#".
 local function phrase(text)
@@ -60,19 +62,16 @@ function Sources.Rebuild()
 		end
 	end
 
-	-- Built natively like tools: our tab gives the widget its window, or the effect its control panel. The
-	-- active tool window shows whichever tool the tool gun has (FF1).
-	local natives = {}
+	-- Built natively like tools: our tab gives the effect its control panel, and the active tool window shows
+	-- whichever tool the tool gun has (FF1). Desktop widgets are listed here too.
+	local natives, desktops = {}, {}
 	local active = { kind = "active", key = Sources.ACTIVE, name = "tool", text = "#pinnedpanels.active.name", category = PP.L("native.toolgun") }
 	catalogue[active.key] = active
 	natives[1] = active
 	for id, w in pairs(list.Get("DesktopWindows")) do
 		if isstring(id) and istable(w) and isfunction(w.init) then
-			local e = {
-				kind = "desktop", key = "desktop:" .. id, name = id, text = isstring(w.title) and w.title or id,
-				category = PP.L("native.desktop"), init = w.init, width = tonumber(w.width), height = tonumber(w.height),
-			}
-			catalogue[e.key] = e
+			local e = { kind = "desktop", key = "desktop:" .. id, name = id, text = isstring(w.title) and w.title or id, category = PP.L("native.desktop") }
+			desktops[e.key] = e
 			natives[#natives + 1] = e
 		end
 	end
@@ -96,7 +95,7 @@ function Sources.Rebuild()
 		return a.name < b.name
 	end)
 
-	Sources.catalogue, Sources.tools, Sources.creations, Sources.natives = catalogue, tools, creations, natives
+	Sources.catalogue, Sources.tools, Sources.creations, Sources.natives, Sources.desktops = catalogue, tools, creations, natives, desktops
 	hook.Run("PinnedPanelsCatalogChanged")
 end
 
@@ -123,7 +122,7 @@ end
 -- Resolved at call time so a language change shows up without a rebuild (L19).
 function Sources.Title(src)
 	if quick(src) then return PP.L("quick.title") end
-	local e = Sources.catalogue[src]
+	local e = Sources.catalogue[src] or Sources.desktops[src]
 	if e and e.kind == "active" then
 		local tool = Sources.ActiveTool()
 		return PP.L("active.title", tool and phrase(tool.text) or PP.L("active.no_tool"))
@@ -139,10 +138,6 @@ function Sources.ActiveTool()
 end
 
 function Sources.DefaultSize(src)
-	local e = Sources.catalogue[src]
-	if e and e.kind == "desktop" and e.width and e.height then
-		return math.min(e.width + 10, math.floor(ScrW() * MAX_DESKTOP_W)), math.min(e.height, math.floor(ScrH() * MAX_DESKTOP_H))
-	end
 	local size = DEFAULT_SIZE[src:match("^(%a+):")] or DEFAULT_SIZE.tool
 	return size[1], size[2]
 end
@@ -227,31 +222,6 @@ local function buildPostProcess(e, parent)
 	return scroll
 end
 
-local function noPaint() end
-
--- A desktop widget builds into the DFrame it is given (the context menu makes one per click, G47). Ours
--- is docked inside the tab with its own chrome hidden: the pinned window is the chrome.
-local function buildDesktop(e, parent)
-	local frame = vgui.Create("DFrame", parent)
-	frame:SetTitle(phrase(e.text))
-	frame:SetSize(e.width or 400, e.height or 400)
-	frame:SetDeleteOnClose(true)
-	if not run(e.key, e.init, { Window = frame }, frame) then
-		frame:Remove()
-		return nil
-	end
-	frame:SetDraggable(false)
-	frame:SetSizable(false)
-	frame:SetScreenLock(false)
-	frame:ShowCloseButton(false)
-	for _, part in ipairs({ frame.btnMaxim, frame.btnMinim, frame.lblTitle, frame.imgIcon }) do
-		if IsValid(part) then part:SetVisible(false) end
-	end
-	frame:DockPadding(0, 0, 0, 0)
-	frame.Paint = noPaint
-	return frame
-end
-
 -- The active tool window builds the current tool's panel; the desktop rebuilds it when the tool changes.
 local function buildActive(_, parent)
 	local tool = Sources.ActiveTool()
@@ -259,7 +229,7 @@ local function buildActive(_, parent)
 	return buildTool(tool, parent)
 end
 
-local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, desktop = buildDesktop, active = buildActive }
+local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, active = buildActive }
 
 -- Each call returns a new, independent container (G13).
 local function buildCreation(e, parent)

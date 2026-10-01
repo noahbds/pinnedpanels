@@ -226,8 +226,11 @@ function Desktop.Front(id)
 	Desktop.focused = id
 end
 
--- Pins src (or brings back its window) and puts the window in front (E22).
+-- Pins src (or brings back its window) and puts the window in front (E22). A desktop widget is opened and
+-- embedded instead (Openers.PinDesktop).
 function Desktop.PinSource(src)
+	local widget = src:match("^desktop:(.+)$")
+	if widget then return PP.Openers.PinDesktop(widget) end
 	local id = Layout.Pin(src, Sources.DefaultSize(src))
 	Desktop.Show(id)
 	Desktop.Front(id)

@@ -191,6 +191,9 @@ function PAGE:AddTabRow(rec, i, tab)
 	local up = button(row, "", "icon16/arrow_up.png", 26, "tip.move_up", function() Layout.MoveTab(id, i, id, i - 1) end)
 	down:SetEnabled(i < #rec.tabs)
 	up:SetEnabled(i > 1)
+	if tab.adopt and not PP.Recipes.IsLive(rec, tab) and PP.Recipes.CanOpen(tab.adopt) then
+		button(row, PP.L("btn.open"), "icon16/application_go.png", 64, "tip.open_adopted", function() PP.Recipes.Open(rec, tab) end)
+	end
 
 	local available = Sources.Get(tab.src) ~= nil
 	local label = row:Add("DLabel")

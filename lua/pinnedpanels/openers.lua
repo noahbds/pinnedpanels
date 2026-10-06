@@ -11,6 +11,7 @@ local MAX_COMMANDS = 10
 local MAX_UPVALUES, MAX_FIELDS = 30, 64
 local AUTO_SCORE, AUTO_MARGIN = 7, 2
 local BIND_WINDOW = 2 -- seconds between pressing a bind and its window appearing
+local MEMO_TIME = 5
 local CHROME = { "btnClose", "btnMaxim", "btnMinim", "lblTitle", "imgIcon" } -- DFrame's own (G57)
 
 -- Words that make a command look like an opener, and words that mean it does something else. A risky
@@ -26,10 +27,7 @@ local STOP_WORDS = { the = true, ["and"] = true, ["for"] = true, with = true, yo
 local SHARED_ROOTS = { ["lua/autorun/"] = true, ["lua/vgui/"] = true, ["lua/includes/"] = true, ["lua/entities/"] = true,
 	["lua/weapons/"] = true, ["lua/effects/"] = true, ["lua/matproxy/"] = true, ["lua/postprocess/"] = true }
 
-local function fileOf(fn)
-	local info = debug.getinfo(fn, "S")
-	return info and info.short_src
-end
+local fileOf = PP.Recipes.FileOf
 
 local function rootOf(src)
 	local root = src:match("^(addons/[^/]+/)") or src:match("^(gamemodes/[^/]+/)") or src:match("^(lua/[^/]+/)")
@@ -99,10 +97,15 @@ end
 -- file, in its addon, or holding its functions. Their names then score for opener words and for the
 -- window's title and class words. tied: something ties the command to this window and not just to its
 -- addon, which is what a suggestion needs (D26).
+local memo = {}
 function Openers.Commands(sig)
 	local out = {}
 	local src = sig.src
 	if not src then return out end
+	-- The picker asks again for every panel under the cursor, and this walks every console command.
+	local key = table.concat({ src, sig.title or "", sig.class or "", sig.addon or "" }, "\n")
+	if memo.key == key and RealTime() - memo.at < MEMO_TIME then return memo.list end
+	memo.key, memo.at, memo.list = key, RealTime(), out
 	local root = rootOf(src)
 	local titleWords, classWords = set(words(sig.title)), set(words(sig.class))
 	for name, fn in pairs(concommand.GetTable()) do

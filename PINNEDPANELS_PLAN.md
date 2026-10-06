@@ -300,7 +300,7 @@ Small, independent, each closes a finding outright.
   - verify: libNyx showcase → `libnyx_maindemo.lua`; `xlib_Panel`, `F4MenuFrame` keep their class; a 2.0 save without `src2` still matches.
 - [x] B7 Settle rule; no synchronous `Catch` [`recipes.lua`; SR.N3, SR.C7, R20]
 - [x] B8 Different title is weak; a refused weak match is remembered [`recipes.lua`; SR.N6, SR.C6]
-- [ ] B9 `checked` survives `Wake`; cache `fileOf` and `Openers.Commands`; no HUD scan for desktop signatures [`recipes.lua`, `openers.lua`; review §11]
+- [x] B9 `checked` survives `Wake`; cache `fileOf` and `Openers.Commands`; no HUD scan for desktop signatures [`recipes.lua`, `openers.lua`; review §11]
 - [ ] B10 Strings for everything above in `en/pinnedpanels.properties`
 
 ### Phase C — Embed made robust (≈ 3 days)

@@ -41,6 +41,7 @@ local function fileOf(fn)
 	end
 	return src or nil
 end
+Recipes.FileOf = fileOf
 
 -- The file of a panel's own functions (G62), other than skip: the preferred ones first, else the first
 -- file by name so the answer is the same every time.
@@ -429,8 +430,8 @@ function Recipes.Catch()
 	ticks = ticks + 1
 	local hud, desktop = false, false
 	for _, w in ipairs(waiting) do
-		if w.tab.adopt.signature.hud then hud = true end
-		if w.tab.adopt.signature.desktop then desktop = true end
+		-- A widget's window is in the C menu, looked at below: it doesn't need the scan of every panel.
+		if w.tab.adopt.signature.desktop then desktop = true elseif w.tab.adopt.signature.hud then hud = true end
 	end
 	local list = hud and ticks % HUD_EVERY == 0 and Recipes.TopLevels() or vgui.GetWorldPanel():GetChildren()
 	-- Desktop widgets' windows are children of the C menu (G47).
@@ -472,9 +473,18 @@ function Recipes.Catch()
 	end
 end
 
--- Starts catching when something waits; everything open is looked at again (G55: polling, not OnChildAdded).
+-- Starts catching when something waits (G55: polling, not OnChildAdded). Everything open is looked at
+-- again only when a tab waits that didn't before: signing every window on every layout change is the
+-- costliest thing we do.
+local known = {}
 function Recipes.Wake()
-	checked = setmetatable({}, { __mode = "k" })
+	local now, fresh = {}, false
+	for _, w in ipairs(Recipes.Waiting()) do
+		now[w.tab.src] = true
+		fresh = fresh or not known[w.tab.src]
+	end
+	known = now
+	if fresh then checked = setmetatable({}, { __mode = "k" }) end
 	if not timer.Exists(CATCH_TIMER) then timer.Create(CATCH_TIMER, CATCH_INTERVAL, 0, Recipes.Catch) end
 end
 

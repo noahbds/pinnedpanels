@@ -310,7 +310,7 @@ Small, independent, each closes a finding outright.
 - [x] C2 Per-frame ghost and `ChildCount` checks [`embed.lua`; SR.B4, SR.N12]
 - [x] C3 Reclaimed, orphaned and dead panels; prune `moved` [`embed.lua`; SR.B3, SR.C1, R19]
   - verify by trace: ULX `processModules`, PAC tree `Populate`, Cloudbox `DContentMain:Think`, LVS `CreatePanel`.
-- [ ] C4 Shell follows the tab's position [`embed.lua`; SR.C8]
+- [x] C4 Shell follows the tab's position [`embed.lua`; SR.C8]
 - [ ] C5 Owner's size wins [`embed.lua`, `vgui/window.lua`; SR.N7, SR.N15, D29]
   - verify by trace: PAC (`SetTall(ScrH())` each frame) → window settles at full height, no oscillation; a window that never resizes itself → user resize sticks.
 - [ ] C6 Enter cursor mode when an owner re-shows its window [`embed.lua`; SR.B5 second half]

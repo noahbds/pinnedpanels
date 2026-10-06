@@ -120,6 +120,7 @@ function Embed.Attach(src, target, mode)
 		e.shell = s
 		e.original = { alpha = s:GetAlpha(), mouse = s:IsMouseInputEnabled(), keyboard = s:IsKeyboardInputEnabled() }
 		e.original.w, e.original.h = s:GetSize()
+		e.original.x, e.original.y = s:GetPos()
 		for _, k in ipairs(CHROME) do
 			if IsValid(s[k]) then e.skip[s[k]] = true end
 		end
@@ -181,6 +182,7 @@ function Embed.Release(src)
 	local s, o = e.shell, e.original
 	if o then Embed.shells[s] = nil end
 	if o and IsValid(s) and not s:IsMarkedForDeletion() then
+		s:SetPos(o.x, o.y)
 		s:SetSize(o.w, o.h)
 		s:SetAlpha(o.alpha)
 		s:SetMouseInputEnabled(o.mouse)
@@ -219,12 +221,25 @@ end
 
 -- ── Watching ────────────────────────────────────────────────
 
+-- The shell sits where its contents show, so what its owner places beside "its window" (menus, pickers,
+-- side panels) lands beside the tab. A popup's position is in screen space whatever its parent (G52).
+local function follow(s, box)
+	local x, y = box:LocalToScreen(0, 0)
+	local parent = s:GetParent()
+	if IsValid(parent) and not s:IsPopup() then x, y = parent:ScreenToLocal(x, y) end
+	local sx, sy = s:GetPos()
+	if sx ~= x or sy ~= y then s:SetPos(x, y) end
+end
+
 -- Every frame, for a window's contents, with getters only. The owner re-popped its window: it is ghosted
 -- again before it shows or takes a click. The owner gave it new children: they are adopted, so a window
 -- that swaps its page on every click doesn't go blank.
 local function frame(e, s)
 	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
 	if s:ChildCount() ~= e.count then adoptChildren(e) end
+	local box = e.box
+	if e.closed or not box:IsVisible() or not IsValid(box:GetParent()) then return end
+	follow(s, box)
 end
 
 function Embed.Frame()

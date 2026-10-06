@@ -156,7 +156,8 @@ Only what changes. Everything else is as the archived plan describes.
   - it is defined in the window's file or addon **and** its name contains a word from the window's title or class.
 - Being in the same addon folder is never enough on its own.
 - Opener words match as substrings (`openmenu` contains `open` and `menu`).
-- `class` and `desktop` are never suggested. They stay in `Recipes.Choices`.
+- `class` is never suggested. It stays in `Recipes.Choices`.
+- `desktop` is suggested only for a widget window the C menu made and filled (a child of the C menu carrying the widget's title, or a frame we made ourselves).
 
 **Running** (`Recipes.Open`): the only callers are
 1. the "Open" button on the Pinned page,
@@ -291,7 +292,8 @@ Small, independent, each closes a finding outright.
 - [x] B2 "Open" button for every waiting tab that has an opener [`vgui/hub_pinned.lua`; D27]
 - [x] B3 Command evidence rules; substring opener words; unique same-file command [`openers.lua`; SR.N8, SR.N13, D26]
   - verify by trace: Wire E2 editor → nil; LVS → `lvs_openmenu`; PlayerModel Selector → `playermodel_selector`; PAC → nil.
-- [ ] B4 `class` and `desktop` never suggested [`recipes.lua`; SR.B1, D26]
+- [x] B4 `class` never suggested [`recipes.lua`; SR.B1, D26]
+  - `desktop` is still suggested for a window the C menu itself made and filled (B5 narrows what counts as one): that recipe is right for it, and it only runs on a click.
 - [ ] B5 Launcher widgets return the window they opened; `desktop` signature only on our own frames [`openers.lua`, `recipes.lua`; SR.N5, SR.N9, G71]
   - verify by trace: LVS, LFS, Glide, MQS, PlayerModel Selector, StormFox2 controller, Starfall user list each yield their real frame; Wire's and ACF's yield ours.
 - [ ] B6 `src2`; stock-class test by file; `Match` updates [`recipes.lua`, `storage.lua`; SR.N2, SR.C9, D28]

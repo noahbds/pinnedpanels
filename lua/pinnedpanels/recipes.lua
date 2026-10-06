@@ -258,9 +258,10 @@ function Recipes.RootFor(panel, root)
 	return root
 end
 
--- What pinning panel (root, or a part of root) would do (§33.9): embed it. A desktop widget comes back by
--- being opened as the C menu does; anything else through the command that stands out among those related to
--- it (Openers.Best), else by recreating its registered class, else when its addon opens it.
+-- What pinning panel (root, or a part of root) would do (§33.9): embed it. A desktop widget's own window
+-- comes back by being opened as the C menu does; anything else through the command that is tied to it
+-- (Openers.Best), else when its addon opens it. Recreating its class is never suggested, only offered
+-- (Recipes.Choices): most windows need what their opener does around the panel (D26).
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
 	local info = { mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, commands = PP.Openers.Commands(sig) }
@@ -269,8 +270,6 @@ function Recipes.Suggest(panel, root)
 		info.recipe = { kind = "desktop", id = sig.desktop }
 	elseif best then
 		info.recipe = { kind = "command", command = best, confirmed = true }
-	elseif sig.class and vgui.GetControlTable(sig.class) then
-		info.recipe = { kind = "class", class = sig.class }
 	else
 		info.recipe = { kind = "watch" }
 	end

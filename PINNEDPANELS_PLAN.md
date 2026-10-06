@@ -289,7 +289,7 @@ Small, independent, each closes a finding outright.
 - [x] B1 No opener at join; `autoRestore` only catches [`recipes.lua`; SR.B2, D25, D27, R17]
   - verify: `grep -n "Recipes.Open" lua` → only the Pinned page and `PinDesktop`.
 - [x] B2 "Open" button for every waiting tab that has an opener [`vgui/hub_pinned.lua`; D27]
-- [ ] B3 Command evidence rules; substring opener words; unique same-file command [`openers.lua`; SR.N8, SR.N13, D26]
+- [x] B3 Command evidence rules; substring opener words; unique same-file command [`openers.lua`; SR.N8, SR.N13, D26]
   - verify by trace: Wire E2 editor → nil; LVS → `lvs_openmenu`; PlayerModel Selector → `playermodel_selector`; PAC → nil.
 - [ ] B4 `class` and `desktop` never suggested [`recipes.lua`; SR.B1, D26]
 - [ ] B5 Launcher widgets return the window they opened; `desktop` signature only on our own frames [`openers.lua`, `recipes.lua`; SR.N5, SR.N9, G71]

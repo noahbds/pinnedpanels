@@ -39,7 +39,7 @@ end
 local function words(text)
 	local out = {}
 	if not isstring(text) then return out end
-	text = text:gsub("^#", ""):gsub("(%l)(%u)", "%1_%2"):lower()
+	text = text:gsub("^#", ""):gsub("([%l%d])(%u)", "%1_%2"):lower()
 	for w in text:gmatch("%w+") do
 		if #w >= 3 and not STOP_WORDS[w] then out[#out + 1] = w end
 	end
@@ -54,6 +54,16 @@ end
 
 local function ours(name)
 	return name:sub(1, 13) == "pinnedpanels_"
+end
+
+-- How much a word of a command's name says "this opens something". Opener words count inside longer
+-- ones too: "openmenu", "showcase".
+local function openScore(word)
+	local score = 0
+	for open, points in pairs(OPEN_WORDS) do
+		if word:find(open, 1, true) then score = score + points end
+	end
+	return score
 end
 
 function Openers.Risky(name)
@@ -83,9 +93,11 @@ local function upvalueEvidence(fn, src)
 	return 0
 end
 
--- The Lua commands that could open a window with this signature, best first: { { name, score, risky } }.
--- Only commands related to the window count: defined in its file, in its addon, or holding its functions.
--- Their names then score for opener words and for the window's title and class words.
+-- The Lua commands that could open a window with this signature, best first:
+-- { { name, score, risky, sameFile, tied } }. Only commands related to the window count: defined in its
+-- file, in its addon, or holding its functions. Their names then score for opener words and for the
+-- window's title and class words. tied: something ties the command to this window and not just to its
+-- addon, which is what a suggestion needs (D26).
 function Openers.Commands(sig)
 	local out = {}
 	local src = sig.src
@@ -103,12 +115,15 @@ function Openers.Commands(sig)
 			elseif sig.addon and file.Exists(from, sig.addon) then
 				score = 3
 			end
-			score = score + upvalueEvidence(fn, src)
+			local evidence = upvalueEvidence(fn, src)
+			score = score + evidence
 			if score > 0 then
+				local named = false
 				for _, w in ipairs(words(name)) do
-					score = score + (OPEN_WORDS[w] or 0) + (titleWords[w] and 2 or 0) + (classWords[w] and 1 or 0)
+					score = score + openScore(w) + (titleWords[w] and 2 or 0) + (classWords[w] and 1 or 0)
+					named = named or titleWords[w] or classWords[w] or false
 				end
-				out[#out + 1] = { name = name, score = score, risky = Openers.Risky(name), sameFile = from == src }
+				out[#out + 1] = { name = name, score = score, risky = Openers.Risky(name), sameFile = from == src, tied = evidence > 0 or named }
 			end
 		end
 	end
@@ -120,15 +135,24 @@ function Openers.Commands(sig)
 	return out
 end
 
--- The command to suggest, if one stands out: the only command in the window's file, or the best one
--- scoring at least AUTO_SCORE when it is clearly ahead or defined in the window's own file. Risky
--- commands never qualify.
+-- The command to suggest, if one stands out: the only safe command in the window's own file, or the best
+-- one tied to the window, scoring at least AUTO_SCORE and clearly ahead of the next. Being in the same
+-- addon is never enough (an addon's "open the sound browser" isn't how its editor opens), and risky
+-- commands never qualify (D26).
 function Openers.Best(commands)
-	local first, second = commands[1], commands[2]
-	if not first or first.risky then return nil end
-	if #commands == 1 and first.sameFile then return first.name end
-	if first.score < AUTO_SCORE then return nil end
-	if first.sameFile or not second or first.score - second.score >= AUTO_MARGIN then return first.name end
+	local inFile, only = 0, nil
+	local first, second
+	for _, c in ipairs(commands) do
+		if not c.risky then
+			if c.sameFile then inFile, only = inFile + 1, c end
+			if c.tied then
+				if not first then first = c elseif not second then second = c end
+			end
+		end
+	end
+	if inFile == 1 then return only.name end
+	if not first or first.score < AUTO_SCORE then return nil end
+	if not second or first.score - second.score >= AUTO_MARGIN then return first.name end
 end
 
 -- The command behind the bind the player pressed just now, if it is a Lua command that isn't ours or risky.

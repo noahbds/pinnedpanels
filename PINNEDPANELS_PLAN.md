@@ -270,7 +270,7 @@ Phases are ordered so that everything statically verifiable comes first. Phases 
 
 Small, independent, each closes a finding outright.
 
-- [ ] A1 Ready without the spawn menu [`desktop.lua` or `sources.lua`; SR.N16, D30, G72]
+- [x] A1 Ready without the spawn menu [`desktop.lua` or `sources.lua`; SR.N16, D30, G72]
   - verify: trace TTT2 — `InitPostEntity` → `Sources.Rebuild` → `Desktop.ready`; `wanted()` true for a picked window.
 - [ ] A2 `pcall` around `GetTitle` in `titleOf` and `DesktopId` [`recipes.lua`, `openers.lua`; SR.N10, R18, G70]
 - [ ] A3 `sanitizeAdopt` drops `w`/`h` unless both present [`storage.lua`; SR.C3]

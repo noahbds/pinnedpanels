@@ -292,3 +292,9 @@ hook.Add("PinnedPanelsLoaded", "PinnedPanels.Desktop", function()
 	Layout.Load(Storage.Load())
 	if IsValid(g_SpawnMenu) then Sources.Rebuild() end
 end)
+
+-- A gamemode without a spawn menu never reloads the tools menu (G72): read the catalogue anyway, so
+-- windows, the taskbar and catching work there too (D30).
+hook.Add("InitPostEntity", "PinnedPanels.Desktop", function()
+	if not next(Sources.catalogue) then Sources.Rebuild() end
+end)

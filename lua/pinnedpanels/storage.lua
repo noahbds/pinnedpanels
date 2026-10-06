@@ -394,9 +394,15 @@ function Storage.Import(s)
 	local doc, summary = Storage.Sanitize(raw)
 	if #doc.windows == 0 then return nil, "import.invalid" end
 	-- A shared layout never runs a command by itself: each one waits for the player to allow it (R16).
+	-- Nor does it choose a panel class to create: those wait for their addon to open them.
 	for _, w in ipairs(doc.windows) do
 		for _, t in ipairs(w.tabs) do
-			if t.adopt and t.adopt.recipe.kind == "command" then t.adopt.recipe.confirmed = false end
+			local kind = t.adopt and t.adopt.recipe.kind
+			if kind == "command" then
+				t.adopt.recipe.confirmed = false
+			elseif kind == "class" then
+				t.adopt.recipe = { kind = "watch" }
+			end
 		end
 	end
 	return doc, summary

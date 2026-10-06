@@ -261,6 +261,7 @@ end
 -- the backup (R3, E34).
 function Layout.Replace(newDoc)
 	PP.Storage.Flush() -- pending changes reach the file first, so the backup is the layout as it was
+	PP.Embed.ReleaseAll() -- the new document's "adopt:<n>" tabs are other panels, even with the same number
 	Layout.Load(newDoc)
 	PP.Storage.MarkDirty()
 end

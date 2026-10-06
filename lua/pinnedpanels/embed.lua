@@ -20,6 +20,10 @@ Embed.live = Embed.live or {}
 Embed.byPanel = Embed.byPanel or {} -- adopted panel -> entry
 Embed.shells = Embed.shells or {}   -- emptied window -> entry
 
+-- A part its owner keeps taking back is let go for good: this many times within this many seconds.
+local FIGHT_MAX, FIGHT_TIME = 3, 10
+local fights = {} -- src -> { since, n }
+
 -- ── PinnedPanelsEmbedBox ────────────────────────────────────
 -- The tab content: holds the adopted panels while the tab exists, hidden and unparented while it doesn't.
 -- An embedded window's shell follows its size, so its owner lays the contents out for the size they have.
@@ -145,8 +149,9 @@ function Embed.Take(target, adoptRec, waiting)
 end
 
 -- Gives everything back: children to their parents with their layout, in their order; the part to its
--- placeholder's place; the shell its size, alpha and input. If the owner removed its window, the adopted
--- panels go too (R15).
+-- placeholder's place; the shell its size, alpha and input. If the owner removed its window, or the place
+-- the part was in, the adopted panels go too (R15). A panel its owner already took back is left where the
+-- owner put it (R19).
 function Embed.Release(src)
 	local e = Embed.live[src]
 	if not e then return end
@@ -158,8 +163,8 @@ function Embed.Release(src)
 	for _, m in ipairs(e.moved) do
 		local p, parent = m.panel, m.parent
 		Embed.byPanel[p] = nil
-		if IsValid(p) and not p:IsMarkedForDeletion() then
-			if IsValid(parent) and not parent:IsMarkedForDeletion() and IsValid(e.shell) and not e.shell:IsMarkedForDeletion() then
+		if IsValid(p) and not p:IsMarkedForDeletion() and p:GetParent() == e.box.inner then
+			if not e.orphaned and IsValid(parent) and not parent:IsMarkedForDeletion() and IsValid(e.shell) and not e.shell:IsMarkedForDeletion() then
 				p:SetParent(parent)
 				if IsValid(e.placeholder) then p:MoveToBefore(e.placeholder) end
 				p:Dock(m.dock)
@@ -229,20 +234,57 @@ function Embed.Frame()
 	end
 end
 
+-- Panels that are gone, or that their owner took back out of the box, are no longer ours to return (R19).
+local function prune(e)
+	for n = #e.moved, 1, -1 do
+		local p = e.moved[n].panel
+		if not IsValid(p) or p:IsMarkedForDeletion() or p:GetParent() ~= e.box.inner then
+			Embed.byPanel[p] = nil
+			table.remove(e.moved, n)
+		end
+	end
+end
+
+-- Whether src's part was taken back too often to try again.
+local function fighting(src)
+	local f, now = fights[src], RealTime()
+	if not f or now - f.since > FIGHT_TIME then
+		f = { since = now, n = 0 }
+		fights[src] = f
+	end
+	f.n = f.n + 1
+	return f.n >= FIGHT_MAX
+end
+
 -- Four times a second. The owner removed its window or the part: release, which removes what it left
--- behind (R15), and the tab waits (or goes, if it was for this session). The owner hid its window: the
--- tab says so.
+-- behind (R15), and the tab waits (or goes, if it was for this session). A part can also lose its place
+-- (its owner removed what held it: the part goes too) or be taken back by its owner (it is the owner's
+-- again, and the tab waits for it to settle somewhere). The owner hid its window: the tab says so.
 local function check(src, e)
 	local win, i = Layout.Find(src)
 	if not win then return Embed.Release(src) end
 	local s = e.shell
 	local gone = not IsValid(s) or s:IsMarkedForDeletion() or not IsValid(e.target) or e.target:IsMarkedForDeletion()
+	local tookBack = false
+	if e.mode == "part" and not gone then
+		e.orphaned = not IsValid(e.placeholder)
+		tookBack = not e.orphaned and e.target:GetParent() ~= e.box.inner
+		gone = e.orphaned or tookBack
+	end
 	if gone then
 		Embed.Release(src)
-		if win.tabs[i].adopt.recipe.kind == "session" then Layout.UnpinTab(win.id, i) else PP.Recipes.Wake() end
+		if win.tabs[i].adopt.recipe.kind == "session" then
+			Layout.UnpinTab(win.id, i)
+		elseif tookBack and fighting(src) then
+			notification.AddLegacy(PP.L("embed.fighting", Layout.TabTitle(win.tabs[i])), NOTIFY_HINT, 8)
+			Layout.UnpinTab(win.id, i)
+		else
+			PP.Recipes.Wake()
+		end
 		return
 	end
 	if e.mode ~= "embed" then return end
+	prune(e)
 	local closed = not s:IsVisible()
 	if closed ~= (e.closed == true) then
 		e.closed = closed

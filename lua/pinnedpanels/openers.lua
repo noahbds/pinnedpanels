@@ -11,6 +11,7 @@ local MAX_COMMANDS = 10
 local MAX_UPVALUES, MAX_FIELDS = 30, 64
 local AUTO_SCORE, AUTO_MARGIN = 7, 2
 local BIND_WINDOW = 2 -- seconds between pressing a bind and its window appearing
+local CHROME = { "btnClose", "btnMaxim", "btnMinim", "lblTitle", "imgIcon" } -- DFrame's own (G57)
 
 -- Words that make a command look like an opener, and words that mean it does something else. A risky
 -- command is listed for the player to choose but never suggested or learned on its own.
@@ -170,8 +171,11 @@ end
 
 -- ── C-menu desktop widgets (G47) ────────────────────────────
 
--- The widget a window is, by its title (the C menu titles each window after its list entry).
+-- The widget a window is: one we opened, or a child of the C menu with its list entry's title (the C
+-- menu titles each window so). An addon's own window can carry the same title, so the parent counts.
 function Openers.DesktopId(panel)
+	if panel.ppDesktop then return panel.ppDesktop end
+	if not IsValid(g_ContextMenu) or panel:GetParent() ~= g_ContextMenu then return nil end
 	if not isfunction(panel.GetTitle) then return nil end
 	local ok, title = pcall(panel.GetTitle, panel) -- G70
 	if not ok or not isstring(title) or title == "" then return nil end
@@ -180,18 +184,54 @@ function Openers.DesktopId(panel)
 	end
 end
 
+-- Where a widget's window can appear: beside other windows, or in the C menu.
+local function tops()
+	local out = vgui.GetWorldPanel():GetChildren()
+	if IsValid(g_ContextMenu) then
+		for _, p in ipairs(g_ContextMenu:GetChildren()) do out[#out + 1] = p end
+	end
+	return out
+end
+
+-- Whether a widget's init put something in the frame it was given. Most don't (G71).
+local function filled(frame)
+	if not IsValid(frame) or frame:IsMarkedForDeletion() or not frame:IsVisible() then return false end
+	local chrome = {}
+	for _, k in ipairs(CHROME) do
+		if IsValid(frame[k]) then chrome[frame[k]] = true end
+	end
+	for _, c in ipairs(frame:GetChildren()) do
+		if not chrome[c] then return true end
+	end
+	return false
+end
+
 -- Opens a widget as the C menu's icon does: a DFrame in the C menu, sized and titled from its entry and
--- filled by its init, under ProtectedCall (R13). The icon argument is a stand-in holding the window.
+-- handed to its init, under ProtectedCall (R13). The icon argument is a stand-in holding the window.
+-- Returns the widget's window. Most widgets only launch their addon's own window and leave the frame
+-- empty or remove it (G71): then that window is returned, with true, if exactly one appeared. One that
+-- opens a frame later (through a console command, say) returns nothing.
 function Openers.OpenDesktop(id)
 	local w = list.Get("DesktopWindows")[id]
 	if not (istable(w) and isfunction(w.init)) then return nil end
+	local before = {}
+	for _, p in ipairs(tops()) do before[p] = true end
 	local frame = vgui.Create("DFrame", IsValid(g_ContextMenu) and g_ContextMenu or nil)
+	frame.ppDesktop = id
 	frame:SetSize(tonumber(w.width) or 400, tonumber(w.height) or 400)
 	frame:SetTitle(isstring(w.title) and w.title or id)
 	frame:Center()
-	local ok = ProtectedCall(function() w.init({ Window = frame }, frame) end)
-	if not ok and IsValid(frame) then frame:Remove() end
-	return IsValid(frame) and frame or nil
+	ProtectedCall(function() w.init({ Window = frame }, frame) end)
+	if filled(frame) then return frame end
+	if IsValid(frame) then frame:Remove() end
+	local launched
+	for _, p in ipairs(tops()) do
+		if not before[p] and p ~= frame and not PP.Recipes.Refusal(p, p) then
+			if launched then return nil end
+			launched = p
+		end
+	end
+	return launched, launched ~= nil
 end
 
 function Openers.CanOpenDesktop(id)
@@ -209,7 +249,8 @@ function Openers.FindDesktop(id)
 end
 
 -- Pins a widget from the hub or the palette: its window again if it is pinned, else a new one embedded.
--- Returns the window id.
+-- A window the widget launched is pinned waiting and caught once it has settled (R20). Returns the
+-- window id.
 function Openers.PinDesktop(id)
 	local rec, i = Openers.FindDesktop(id)
 	if rec then
@@ -218,7 +259,10 @@ function Openers.PinDesktop(id)
 		Layout.Activate(rec.id, i)
 		return rec.id
 	end
-	local frame = Openers.OpenDesktop(id)
-	if not frame then return nil end
-	return PP.Recipes.Take(frame, frame, "embed", { kind = "desktop", id = id })
+	local frame, launched = Openers.OpenDesktop(id)
+	if not frame then
+		notification.AddLegacy(PP.L("desktop.launcher", PP.Sources.Title("desktop:" .. id)), NOTIFY_HINT, 8)
+		return nil
+	end
+	return PP.Recipes.Take(frame, frame, "embed", { kind = "desktop", id = id }, launched)
 end

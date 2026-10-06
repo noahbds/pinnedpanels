@@ -128,15 +128,16 @@ function Embed.Attach(src, target, mode)
 end
 
 -- A new pinned window for target, where it is on screen. A window's title strip is cropped away, so its
--- contents keep the positions their owner gave them (§33.6). Returns the window id.
-function Embed.Take(target, adoptRec)
+-- contents keep the positions their owner gave them (§33.6). Returns the window id. waiting: the window
+-- is only made; the panel is taken when it is caught.
+function Embed.Take(target, adoptRec, waiting)
 	local x, y = target:LocalToScreen(0, 0)
 	local w, h = target:GetSize()
 	local _, top = target:GetDockPadding()
 	local strip = adoptRec.mode == "embed" and IsValid(target.lblTitle) and top or 0
 	local id, src = Layout.PinAdopted(adoptRec, x - CHROME_W / 2, y - CHROME_H, w + CHROME_W, h - strip + CHROME_HEADER + CHROME_H)
 	if strip > 0 then Layout.SetCrop(id, 1, { l = 0, t = strip, r = 0, b = 0 }) end
-	Embed.Attach(src, target, adoptRec.mode)
+	if not waiting then Embed.Attach(src, target, adoptRec.mode) end
 	Desktop.Front(id)
 	return id
 end

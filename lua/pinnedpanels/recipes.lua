@@ -293,10 +293,11 @@ function Recipes.Choices(info)
 end
 
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
-function Recipes.Take(panel, root, mode, recipe)
+-- waiting: the pinned window is made now and takes the panel when it is caught.
+function Recipes.Take(panel, root, mode, recipe, waiting)
 	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root), needsKeyboard = root:IsKeyboardInputEnabled() }
 	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
-	return PP.Embed.Take(mode == "part" and panel or root, adopt)
+	return PP.Embed.Take(mode == "part" and panel or root, adopt, waiting)
 end
 
 -- A line saying how a pinned panel comes back.
@@ -447,8 +448,9 @@ function Recipes.Open(rec, tab)
 	Recipes.Wake()
 	expecting[rec.id] = RealTime() + OPEN_GRACE
 	if r.kind == "desktop" then
-		local panel = PP.Openers.OpenDesktop(r.id)
-		if panel then Recipes.Attach({ rec = rec, tab = tab }, panel) end
+		-- A window the widget launched is caught like any other, once it has settled.
+		local panel, launched = PP.Openers.OpenDesktop(r.id)
+		if panel and not launched then Recipes.Attach({ rec = rec, tab = tab }, panel) end
 	elseif r.kind == "class" then
 		local panel
 		ProtectedCall(function() panel = vgui.Create(r.class) end)

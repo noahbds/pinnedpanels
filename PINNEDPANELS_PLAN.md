@@ -294,7 +294,7 @@ Small, independent, each closes a finding outright.
   - verify by trace: Wire E2 editor → nil; LVS → `lvs_openmenu`; PlayerModel Selector → `playermodel_selector`; PAC → nil.
 - [x] B4 `class` never suggested [`recipes.lua`; SR.B1, D26]
   - `desktop` is still suggested for a window the C menu itself made and filled (B5 narrows what counts as one): that recipe is right for it, and it only runs on a click.
-- [ ] B5 Launcher widgets return the window they opened; `desktop` signature only on our own frames [`openers.lua`, `recipes.lua`; SR.N5, SR.N9, G71]
+- [x] B5 Launcher widgets return the window they opened; `desktop` signature only on our own frames [`openers.lua`, `recipes.lua`; SR.N5, SR.N9, G71]
   - verify by trace: LVS, LFS, Glide, MQS, PlayerModel Selector, StormFox2 controller, Starfall user list each yield their real frame; Wire's and ACF's yield ours.
 - [ ] B6 `src2`; stock-class test by file; `Match` updates [`recipes.lua`, `storage.lua`; SR.N2, SR.C9, D28]
   - verify: libNyx showcase → `libnyx_maindemo.lua`; `xlib_Panel`, `F4MenuFrame` keep their class; a 2.0 save without `src2` still matches.

@@ -255,7 +255,7 @@ Added to the existing list:
 
 ### 5.6 Generic features on foreign content
 
-One helper, `Layout.IsForeign(tab)` (true for any adopted tab), gates:
+`tab.adopt` (set on every adopted tab) gates:
 - auto-size (returns early),
 - collapse cookies (already gated),
 - the filter bar (stays available, but remembers each row's prior visibility and restores only that).
@@ -276,7 +276,7 @@ Small, independent, each closes a finding outright.
 - [x] A3 `sanitizeAdopt` drops `w`/`h` unless both present [`storage.lua`; SR.C3]
 - [x] A4 `Teardown` releases embeds before removing windows [`desktop.lua`; SR.C2]
 - [x] A5 `Layout.Replace` releases embeds before loading; imported `class` recipes become `watch` [`layout.lua`, `storage.lua`; SR.C4, SR.C5]
-- [ ] A6 `Layout.IsForeign`; auto-size skips foreign tabs [`layout.lua`, `vgui/window.lua`; SR.B6, §5.6]
+- [x] A6 Auto-size skips adopted tabs [`vgui/window.lua`; SR.B6, §5.6]
 - [ ] A7 Cursor mode only for popups the player opened [`recipes.lua`; SR.N4]
 - [ ] A8 Refuse scenes and menu components [`recipes.lua`, `nav.lua`; SR.N18, SR.N14, D32]
   - verify: Helix menu and `ArcCW.InvHUD` refused; PAC editor (240 wide) not; `MSD.DMenu`, `PIXEL.Menu` refused.

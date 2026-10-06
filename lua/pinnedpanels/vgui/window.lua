@@ -328,11 +328,12 @@ end
 -- ── Auto-size (F17) ─────────────────────────────────────────
 
 -- Fits the window to its shown tab's content, animated, then measures once more when the animation ends
--- (as v1: panels often settle after the first resize). Cropped tabs keep their size.
+-- (as v1: panels often settle after the first resize). Cropped tabs keep their size, and so do embedded
+-- panels: their size is their addon's, and measuring them would lay out controls that aren't ours (R12).
 function PANEL:AutoSize(settle)
 	local tab = self:ShownTab()
 	local host = tab and self.hosts[tab.src]
-	if not host or tab.crop or self.rec.state == "rolled" then return end
+	if not host or tab.crop or tab.adopt or self.rec.state == "rolled" then return end
 	if self.rec.state == "maximized" then
 		Layout.ToggleMaximize(self.id)
 		self:Refresh()

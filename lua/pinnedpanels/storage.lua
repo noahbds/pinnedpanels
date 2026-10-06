@@ -94,6 +94,7 @@ local function sanitizeAdopt(a)
 		w = int(s.w, 0, MAX_COORD), h = int(s.h, 0, MAX_COORD), hud = s.hud == true, popup = s.popup == true,
 		desktop = text(s.desktop, MAX_TITLE),
 	}
+	if not (sig.w and sig.h) then sig.w, sig.h = nil, nil end
 	if mode == "part" then
 		if not istable(s.path) or #s.path == 0 or #s.path > MAX_PATH then return nil end
 		sig.path = {}

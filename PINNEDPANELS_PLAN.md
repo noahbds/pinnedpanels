@@ -101,7 +101,7 @@
 | **D29** | Who owns the shell's size? | **The owner.** The tab follows the shell's size; a user resize is a request the owner may override | SR.N7, SR.N15, PAC's properties collapse |
 | **D30** | When is the desktop ready? | When the catalogue is first built, and that no longer needs the spawn menu: it is built on `InitPostEntity` if nothing built it earlier | SR.N16 |
 | **D31** | Who owns the cursor? | **Shared.** `input.lua` is still the only caller of `gui.EnableScreenClicker`, but it re-asserts instead of assuming | SR.B5. Eleven of 28 addons call it too |
-| **D32** | What gets refused outright? | Full-screen roots with their own `Paint`; menus (by `m_bIsMenuComponent`, not class name); everything R11 already refuses | SR.N18, SR.N14 |
+| **D32** | What gets refused outright? | Full-screen panels with their own `Paint`; menus of any class (by `m_bIsMenuComponent` plus `AddOption`); everything R11 already refuses | SR.N18, SR.N14 |
 | **D33** | Is Wrap built? | **Only if the stacking-order spike passes** (§7, item S1). If it fails, the ladder is Embed → Manage and Wrap is dropped with a note here | The one question that cannot be settled statically |
 | **D34** | What falls back, and how? | A **health watch** after embedding steps a window down one tier, releases it untouched first, tells the player once, and remembers the working tier per signature. The player can force a tier from the tab's menu | Goal 1 |
 | **D35** | Does part mode have a fallback? | **No.** Wrap and Manage act on whole windows. A part that fails is released and its tab removed | Non-goal 2 |
@@ -244,7 +244,7 @@ On a trip: release (R21), re-host one tier down, `notification.AddLegacy` once, 
 
 Added to the existing list:
 - **Scene**: covers the whole screen and has a non-stock `Paint` (D32).
-- **Menu**: `p.m_bIsMenuComponent` anywhere up the parent chain. Replaces the `TRANSIENT` class table.
+- **Menu**: `p.m_bIsMenuComponent` and an `AddOption` method, on the panel itself. Added beside the `TRANSIENT` class table, which still covers tooltips. The mark alone is not enough: `DComboBox` carries it too.
 
 ### 5.5 Readiness, cursor, keys (`desktop.lua`, `sources.lua`, `input.lua`, `actions.lua`)
 
@@ -278,7 +278,8 @@ Small, independent, each closes a finding outright.
 - [x] A5 `Layout.Replace` releases embeds before loading; imported `class` recipes become `watch` [`layout.lua`, `storage.lua`; SR.C4, SR.C5]
 - [x] A6 Auto-size skips adopted tabs [`vgui/window.lua`; SR.B6, §5.6]
 - [x] A7 Cursor mode only for popups the player opened [`recipes.lua`; SR.N4]
-- [ ] A8 Refuse scenes and menu components [`recipes.lua`, `nav.lua`; SR.N18, SR.N14, D32]
+- [x] A8 Refuse scenes and menus of any class [`recipes.lua`; SR.N18, SR.N14, D32]
+  - Keyboard driving of other addons' menu classes (`nav.lua`) is left as it is: their option API can't be checked without the game. Revisit in phase G.
   - verify: Helix menu and `ArcCW.InvHUD` refused; PAC editor (240 wide) not; `MSD.DMenu`, `PIXEL.Menu` refused.
 - [ ] A9 Cursor key default avoids `gm_showspare2` outside sandbox [`actions.lua`; SR.N11, D37]
 - [ ] A10 Re-assert the screen clicker [`input.lua`; SR.B5 first half, D31]

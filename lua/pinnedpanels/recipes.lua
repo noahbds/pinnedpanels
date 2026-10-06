@@ -191,11 +191,24 @@ function Recipes.Owner(p)
 	return PP.Embed.shells[p] or PP.Embed.byPanel[p]
 end
 
+-- A menu of any class: addons with their own menu controls still mark them as Derma's do. The option
+-- list tells a menu from a combo box, which carries the same mark.
+local function isMenu(p)
+	return p.m_bIsMenuComponent == true and isfunction(p.AddOption)
+end
+
+-- A full-screen panel that paints itself is a scene over the world (a character screen, a weapon
+-- bench), not a window (D32).
+local function isScene(p)
+	if p:GetWide() < ScrW() or p:GetTall() < ScrH() then return false end
+	return isfunction(p.Paint) and not isStock(fileOf(p.Paint))
+end
+
 -- Why panel (root's window, or root itself) can't be pinned: a localization key, or nil.
 function Recipes.Refusal(panel, root)
 	if not IsValid(panel) or panel:IsMarkedForDeletion() then return "refuse.gone" end
 	if ours(panel) then return "refuse.ours" end
-	if TRANSIENT[panel.ClassName] then return "refuse.transient" end
+	if TRANSIENT[panel.ClassName] or isMenu(panel) then return "refuse.transient" end
 	local p = panel
 	while IsValid(p) do
 		if p:IsModal() then return "refuse.modal" end
@@ -203,6 +216,7 @@ function Recipes.Refusal(panel, root)
 	end
 	if Recipes.Owner(panel) then return "refuse.pinned" end
 	if panel == root and (panel == g_SpawnMenu or panel == g_ContextMenu or panel == GetHUDPanel()) then return "refuse.root" end
+	if isScene(panel) then return "refuse.scene" end
 end
 
 -- A part's place in its window: child indices and classes from the root down (§33.8).

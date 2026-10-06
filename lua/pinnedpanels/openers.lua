@@ -149,8 +149,8 @@ end
 -- The widget a window is, by its title (the C menu titles each window after its list entry).
 function Openers.DesktopId(panel)
 	if not isfunction(panel.GetTitle) then return nil end
-	local title = panel:GetTitle()
-	if not isstring(title) or title == "" then return nil end
+	local ok, title = pcall(panel.GetTitle, panel) -- G70
+	if not ok or not isstring(title) or title == "" then return nil end
 	for _, e in ipairs(PP.Sources.natives) do
 		if e.kind == "desktop" and e.text == title then return e.name end
 	end

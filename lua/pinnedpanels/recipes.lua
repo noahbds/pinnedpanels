@@ -96,8 +96,9 @@ end
 
 local function titleOf(p)
 	if not isfunction(p.GetTitle) then return nil end
-	local title = p:GetTitle()
-	if not isstring(title) or title == "" then return nil end
+	-- A frame that removed its title label still has DFrame's GetTitle, which reads it (G70, R18).
+	local ok, title = pcall(p.GetTitle, p)
+	if not ok or not isstring(title) or title == "" then return nil end
 	return title:sub(1, MAX_TITLE)
 end
 

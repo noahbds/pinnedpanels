@@ -1,4 +1,5 @@
--- The one input dispatcher (§17): the addon's only Think hook and key polling with repeat, cursor
+-- The one input dispatcher (§17): the addon's only Think hook (others join it through Input.EachFrame)
+-- and key polling with repeat, cursor
 -- ownership, bind and movement suppression, and keyboard input for windows while one of their text
 -- entries has focus (G20).
 
@@ -16,6 +17,7 @@ local watched = {} -- key -> true
 local held = {}    -- key -> true when its press fired, false when it was already down during a gate
 local nextRepeat = {} -- key -> RealTime of its next repeat, while held with a repeating binding
 local chatOpen, spawnOpen, contextOpen, altHeld = false, false, false, false
+local frames = {}  -- id -> function called every frame (Input.EachFrame)
 
 -- Held keys repeat after a delay, on real time so pause and host_timescale don't matter (G5, B28).
 local REPEAT_DELAY, REPEAT_INTERVAL = 0.35, 0.055
@@ -87,9 +89,16 @@ local function think()
 	for key in pairs(held) do
 		if not watched[key] and not input.IsKeyDown(key) then held[key] = nil end
 	end
+	for _, fn in pairs(frames) do fn() end
 end
 
 hook.Add("Think", "PinnedPanels.Input", think)
+
+-- Runs fn every frame from the addon's one Think hook, until called again with nil. For work that has to
+-- hold from one frame to the next; it must stay as cheap as a few getters.
+function Input.EachFrame(id, fn)
+	frames[id] = fn
+end
 
 -- ── Key bindings ────────────────────────────────────────────
 

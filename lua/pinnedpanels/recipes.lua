@@ -371,6 +371,16 @@ end
 
 -- Top-level panels already looked at, so each is signed once while the waiting set stays the same.
 local checked = setmetatable({}, { __mode = "k" })
+-- A window is taken once it has stopped opening: the same size and alpha on two ticks running (R20).
+-- Taken while it animates, it would keep the size and alpha of that moment.
+local settling = setmetatable({}, { __mode = "k" })
+local function settled(p)
+	local w, h, a = p:GetWide(), p:GetTall(), p:GetAlpha()
+	local s = settling[p]
+	if s and s[1] == w and s[2] == h and s[3] == a then return true end
+	settling[p] = { w, h, a }
+	return false
+end
 local ticks = 0
 -- Window id -> RealTime until which a window appearing for it is the one we opened (not the player).
 local expecting = {}
@@ -414,7 +424,7 @@ function Recipes.Catch()
 	-- Newest first: of two windows that match, the one just opened is the one the player wants.
 	for n = #list, 1, -1 do
 		local p = list[n]
-		if not checked[p] and IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 then
+		if not checked[p] and IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 and settled(p) then
 			checked[p] = true
 			-- The spawn and context menus can't be taken whole, but a part of them can.
 			local refusal = Recipes.Refusal(p, p)
@@ -483,7 +493,6 @@ function Recipes.Open(rec, tab)
 		Recipes.Attach({ rec = rec, tab = tab }, panel)
 	else
 		ProtectedCall(function() concommand.Run(LocalPlayer(), r.command, r.args and string.Explode(" ", r.args) or {}, r.args or "") end)
-		Recipes.Catch()
 	end
 end
 

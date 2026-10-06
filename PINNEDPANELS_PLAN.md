@@ -314,7 +314,7 @@ Small, independent, each closes a finding outright.
 - [x] C5 Owner's size wins [`embed.lua`; SR.N7, SR.N15, D29]
   - verify by trace: PAC (`SetTall(ScrH())` each frame) → window settles at full height, no oscillation; a window that never resizes itself → user resize sticks.
 - [x] C6 Enter cursor mode when an owner re-shows its window [`embed.lua`; SR.B5 second half]
-- [ ] C7 Host rebuilds when its built content dies (capped at 3); warn when a builder replaces commands [`vgui/tabs.lua`, `sources.lua`; SR.N1, D38]
+- [x] C7 Host rebuilds when its built content dies (capped at 3); warn when a builder replaces commands [`vgui/tabs.lua`, `sources.lua`; SR.N1, D38]
 - [ ] C8 Filter restores only what it hid [`vgui/tabs.lua`; SR.C13]
 - [ ] C9 Shell paint passthrough behind a debug convar, off by default [`embed.lua`; R18, G69] ⚑ game to enable
 

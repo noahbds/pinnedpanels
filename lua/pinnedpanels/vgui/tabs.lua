@@ -13,6 +13,7 @@ local Layout, Sources, Theme = PP.Layout, PP.Sources, PP.Theme
 
 local THROTTLE = 0.1
 local RESTRICT_EVERY = 1.5
+local MAX_REVIVALS = 3
 
 local SCROLL = {}
 
@@ -358,6 +359,13 @@ end
 
 -- Think only runs while the host is visible (G4), so hidden tabs and minimized windows wait.
 function HOST:Think()
+	-- Content removed under us (a tab that reloads itself by removing its panel, D38) is built again, on
+	-- the second frame so whatever its addon puts in its place is cleared with it. Not for ever, and not
+	-- for an embedded panel: its box going means its tab is going.
+	if self.built and self.content and not IsValid(self.content) and not self.src:match("^adopt:") then
+		self.dead = (self.dead or 0) + 1
+		if self.dead % 2 == 0 and self.dead <= MAX_REVIVALS * 2 then self:Rebuild() end
+	end
 	if not self.built and PP.Desktop.ClaimBuild() then self:Build() end
 	if RealTime() >= (self.nextRestrict or 0) then
 		self.nextRestrict = RealTime() + RESTRICT_EVERY

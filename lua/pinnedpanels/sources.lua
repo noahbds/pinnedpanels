@@ -231,9 +231,23 @@ end
 
 local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, active = buildActive }
 
--- Each call returns a new, independent container (G13).
+-- Each call returns a new, independent container (G13). Nearly always: a tab that registers console
+-- commands while it builds has just pointed them at our copy, away from the spawn menu's, and the player
+-- is told once that this tab is better pinned from the spawn menu with the picker (D38).
+local warned = {}
 local function buildCreation(e, parent)
+	local commands = {}
+	for name, fn in pairs(concommand.GetTable()) do commands[name] = fn end
 	local ok, panel = run(e.key, e.fn)
+	if not warned[e.key] then
+		for name, fn in pairs(concommand.GetTable()) do
+			if commands[name] and commands[name] ~= fn then
+				warned[e.key] = true
+				notification.AddLegacy(PP.L("source.singleton", Sources.Title(e.key)), NOTIFY_HINT, 10)
+				break
+			end
+		end
+	end
 	if not ok then return nil end
 	if not IsValid(panel) then
 		ErrorNoHalt("[Pinned Panels] " .. e.key .. ": the content tab returned no panel\n")

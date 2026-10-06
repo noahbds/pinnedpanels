@@ -286,7 +286,7 @@ Small, independent, each closes a finding outright.
 
 ### Phase B — Coming back (≈ 3 days)
 
-- [ ] B1 No opener at join; `autoRestore` only catches [`recipes.lua`; SR.B2, D25, D27, R17]
+- [x] B1 No opener at join; `autoRestore` only catches [`recipes.lua`; SR.B2, D25, D27, R17]
   - verify: `grep -n "Recipes.Open" lua` → only the Pinned page and `PinDesktop`.
 - [ ] B2 "Open" button for every waiting tab that has an opener [`vgui/hub_pinned.lua`; D27]
 - [ ] B3 Command evidence rules; substring opener words; unique same-file command [`openers.lua`; SR.N8, SR.N13, D26]

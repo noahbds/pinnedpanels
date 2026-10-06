@@ -439,8 +439,9 @@ function Recipes.CanOpen(adopt)
 	return r.kind == "command" and r.confirmed == true and concommand.GetTable()[r.command] ~= nil
 end
 
--- Runs a waiting tab's opener, the only foreign code we call besides builders (R13). A class panel or a
--- desktop widget is taken at once; a command's window is caught when it appears.
+-- Runs a waiting tab's opener, the only foreign code we call besides builders (R13), and only from a
+-- click (R17). A class panel or a desktop widget is taken at once; a command's window is caught when it
+-- appears.
 function Recipes.Open(rec, tab)
 	if Recipes.IsLive(rec, tab) or not Recipes.CanOpen(tab.adopt) then return end
 	local r = tab.adopt.recipe
@@ -466,15 +467,6 @@ hook.Add("PinnedPanelsChanged", "PinnedPanels.Recipes", function(kind)
 end)
 hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Recipes", Recipes.Wake)
 
--- On join, with autoRestore, windows already open are taken and the others are opened once. A reload
--- doesn't open them again: they are still open and get caught. Next frame, so the desktop is ready.
-hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", function()
-	Recipes.Wake()
-	if Recipes.restored then return end
-	Recipes.restored = true
-	PP.Util.NextFrame(nil, function()
-		if not PP.Settings.Get("autoRestore") then return end
-		Recipes.Catch()
-		for _, w in ipairs(Recipes.Waiting()) do Recipes.Open(w.rec, w.tab) end
-	end)
-end)
+-- On join, windows already open are caught, and the rest wait for the player to open them: an opener is
+-- another addon's code, and only a click runs it (D25, R17).
+hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", Recipes.Wake)

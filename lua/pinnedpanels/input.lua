@@ -57,6 +57,9 @@ local function think()
 		inputChanged()
 	end
 
+	-- Other addons turn the screen clicker off as well (D31): ours comes back while a reason wants it.
+	if Input.clickerOn and not vgui.CursorVisible() then gui.EnableScreenClicker(true) end
+
 	local gate = gated()
 	local now = RealTime()
 	for key in pairs(watched) do

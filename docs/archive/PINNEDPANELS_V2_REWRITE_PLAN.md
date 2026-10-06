@@ -1,5 +1,8 @@
 # Pinned Panels v2 — Full Rewrite Plan
 
+> **ARCHIVED on 2026-10-06.** The rewrite described here is built. This file is kept unchanged below this notice because code comments and commit messages cite its section numbers and IDs (§, F, FF, E, R, L, G, B, D).
+> The active plan is [`PINNEDPANELS_PLAN.md`](../../PINNEDPANELS_PLAN.md). It continues these ID series, supersedes decision D23, and carries over every unchecked item from §26 and §27.
+
 > **Status:** proposal (rev. 2) · **Work branch:** `PinnedPanels_Rewrite_Branch` · **Baseline:** v1 (`origin/main` @ `5b6def9`)
 > **End state:** v1 archived on `legacy/v1` (tag `1.0.0`); v2 merged into `main` and becomes the only version.
 >

@@ -277,7 +277,7 @@ Small, independent, each closes a finding outright.
 - [x] A4 `Teardown` releases embeds before removing windows [`desktop.lua`; SR.C2]
 - [x] A5 `Layout.Replace` releases embeds before loading; imported `class` recipes become `watch` [`layout.lua`, `storage.lua`; SR.C4, SR.C5]
 - [x] A6 Auto-size skips adopted tabs [`vgui/window.lua`; SR.B6, §5.6]
-- [ ] A7 Cursor mode only for popups the player opened [`recipes.lua`; SR.N4]
+- [x] A7 Cursor mode only for popups the player opened [`recipes.lua`; SR.N4]
 - [ ] A8 Refuse scenes and menu components [`recipes.lua`, `nav.lua`; SR.N18, SR.N14, D32]
   - verify: Helix menu and `ArcCW.InvHUD` refused; PAC editor (240 wide) not; `MSD.DMenu`, `PIXEL.Menu` refused.
 - [ ] A9 Cursor key default avoids `gm_showspare2` outside sandbox [`actions.lua`; SR.N11, D37]

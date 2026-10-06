@@ -321,10 +321,10 @@ function Recipes.Waiting()
 end
 
 -- Gives a caught window to its waiting tab, which takes it whole or the part at its path; opened means
--- the player just opened it.
+-- the player just opened it. Only a popup brings the cursor: a frame that is always there doesn't.
 function Recipes.Attach(w, panel, opened)
 	local mode = w.tab.adopt.mode
-	if opened and panel:IsVisible() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode then PP.Input.SetCursorMode(true) end
+	if opened and panel:IsVisible() and panel:IsPopup() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode then PP.Input.SetCursorMode(true) end
 	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
 	if not IsValid(panel) then return false end
 	PP.Embed.Attach(w.tab.src, panel, mode)

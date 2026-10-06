@@ -259,7 +259,7 @@ Added to the existing list:
 `tab.adopt` (set on every adopted tab) gates:
 - auto-size (returns early),
 - collapse cookies (already gated),
-- the filter bar (stays available, but remembers each row's prior visibility and restores only that).
+- the filter bar stays available and unchanged: it only hides rows that were visible, and restores those.
 
 ---
 
@@ -315,7 +315,7 @@ Small, independent, each closes a finding outright.
   - verify by trace: PAC (`SetTall(ScrH())` each frame) → window settles at full height, no oscillation; a window that never resizes itself → user resize sticks.
 - [x] C6 Enter cursor mode when an owner re-shows its window [`embed.lua`; SR.B5 second half]
 - [x] C7 Host rebuilds when its built content dies (capped at 3); warn when a builder replaces commands [`vgui/tabs.lua`, `sources.lua`; SR.N1, D38]
-- [ ] C8 Filter restores only what it hid [`vgui/tabs.lua`; SR.C13]
+- [x] C8 Filter restores only what it hid [SR.C13] — **no change needed.** `hideRow` is only ever called on rows that are visible, so `unfilter` already restores exactly what the filter hid. What remains (an owner hiding a row itself while a filter is active) can't be told apart from our own hiding and is accepted.
 - [ ] C9 Shell paint passthrough behind a debug convar, off by default [`embed.lua`; R18, G69] ⚑ game to enable
 
 ### Phase D — Manage as the fallback (≈ 2 days)
@@ -474,7 +474,7 @@ Every finding of `STATIC_REVIEW.md`, and where it goes.
 | SR.C10 0.25 s of orphaned children | LOW | C3 | Shortened, not removed; S-check in phase G |
 | SR.C11 hide keeps the shell ghosted | LOW | — | Accepted: hiding a pinned window hides its content |
 | SR.C12 `needsKeyboard` may gate the cursor key | LOW | S8 | Decide after the spike |
-| SR.C13 `unfilter` re-shows owner-hidden rows | LOW | C8 | |
+| SR.C13 `unfilter` re-shows owner-hidden rows | LOW | — | Accepted: see C8 |
 | SR.N6 title change breaks matching | LOW | B8 | |
 | SR.N7 size sync is one-way | LOW | C5 | |
 | SR.N13 same-file opener missed | LOW | B3 | |

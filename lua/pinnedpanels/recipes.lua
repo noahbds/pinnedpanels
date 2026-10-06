@@ -364,10 +364,12 @@ end
 -- the player just opened it. Only a popup brings the cursor: a frame that is always there doesn't.
 function Recipes.Attach(w, panel, opened)
 	local mode = w.tab.adopt.mode
-	if opened and panel:IsVisible() and panel:IsPopup() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode then PP.Input.SetCursorMode(true) end
+	local cursor = opened and panel:IsVisible() and panel:IsPopup() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode
+	if cursor then PP.Input.SetCursorMode(true) end
 	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
 	if not IsValid(panel) then return false end
 	PP.Embed.Attach(w.tab.src, panel, mode)
+	PP.Embed.live[w.tab.src].cursor = cursor or nil -- the window brought the cursor: closing it takes it back
 	return true
 end
 

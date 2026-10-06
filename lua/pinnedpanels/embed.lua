@@ -258,6 +258,20 @@ end
 -- again before it shows or takes a click. The owner gave it new children: they are adopted, so a window
 -- that swaps its page on every click doesn't go blank.
 local function frame(src, e, s)
+	-- Hidden or shown by its owner: the tab says so. A window that takes the mouse brings the cursor
+	-- when it comes back, as it did when it first opened, and takes it away again if it brought it.
+	local closed = not s:IsVisible()
+	if closed ~= (e.closed == true) then
+		e.closed = closed
+		e.box:SetClosed(closed)
+		if closed and e.cursor then
+			e.cursor = nil
+			Input.SetCursorMode(false)
+		elseif not closed and e.original.mouse and s:IsPopup() and not Input.cursorMode then
+			e.cursor = true
+			Input.SetCursorMode(true)
+		end
+	end
 	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
 	if s:ChildCount() ~= e.count then adoptChildren(e) end
 	local box = e.box
@@ -298,7 +312,7 @@ end
 -- Four times a second. The owner removed its window or the part: release, which removes what it left
 -- behind (R15), and the tab waits (or goes, if it was for this session). A part can also lose its place
 -- (its owner removed what held it: the part goes too) or be taken back by its owner (it is the owner's
--- again, and the tab waits for it to settle somewhere). The owner hid its window: the tab says so.
+-- again, and the tab waits for it to settle somewhere).
 local function check(src, e)
 	local win, i = Layout.Find(src)
 	if not win then return Embed.Release(src) end
@@ -322,13 +336,7 @@ local function check(src, e)
 		end
 		return
 	end
-	if e.mode ~= "embed" then return end
-	prune(e)
-	local closed = not s:IsVisible()
-	if closed ~= (e.closed == true) then
-		e.closed = closed
-		e.box:SetClosed(closed)
-	end
+	if e.mode == "embed" then prune(e) end
 end
 
 function Embed.Check()

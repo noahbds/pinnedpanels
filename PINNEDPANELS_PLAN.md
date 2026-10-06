@@ -301,7 +301,7 @@ Small, independent, each closes a finding outright.
 - [x] B7 Settle rule; no synchronous `Catch` [`recipes.lua`; SR.N3, SR.C7, R20]
 - [x] B8 Different title is weak; a refused weak match is remembered [`recipes.lua`; SR.N6, SR.C6]
 - [x] B9 `checked` survives `Wake`; cache `fileOf` and `Openers.Commands`; no HUD scan for desktop signatures [`recipes.lua`, `openers.lua`; review §11]
-- [ ] B10 Strings for everything above in `en/pinnedpanels.properties`
+- [x] B10 Recipe descriptions no longer promise reopening; new strings went in with their items [`en/pinnedpanels.properties`]
 
 ### Phase C — Embed made robust (≈ 3 days)
 

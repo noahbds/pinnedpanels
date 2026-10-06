@@ -50,8 +50,30 @@ function BOX:PerformLayout(w, h)
 	if e and e.mode == "embed" and IsValid(e.shell) then e.shell:SetSize(w, h) end
 end
 
+-- What the emptied window would have drawn itself (a header, a background, a phone's body), drawn here
+-- by its own function (R18). Off until tried in game: whether it lands in the right place can't be told
+-- without it, and the shell's own Paint still runs unseen (G69), so anything it does besides drawing
+-- happens twice.
+local shellPaint = CreateClientConVar("pinnedpanels_debug_shellpaint", "0", false, false, "Draw an embedded window's own background and overlay inside its tab (experimental)", 0, 1)
+
+local function paintShell(self, name, w, h)
+	local e = shellPaint:GetBool() and Embed.live[self.src]
+	local s = e and e.mode == "embed" and not e.closed and e.shell
+	if not (IsValid(s) and isfunction(s[name])) then return end
+	local ok, err = pcall(s[name], s, w, h)
+	if not ok and not e.paintError then
+		e.paintError = true
+		ErrorNoHalt("[Pinned Panels] " .. self.src .. " " .. name .. ": " .. tostring(err) .. "\n")
+	end
+end
+
 function BOX:Paint(w, h)
+	paintShell(self, "Paint", w, h)
 	if self.notice then draw.SimpleText(self.notice, "DermaDefault", w / 2, h / 2, PP.Theme.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER) end
+end
+
+function BOX:PaintOver(w, h)
+	paintShell(self, "PaintOver", w, h)
 end
 
 vgui.Register("PinnedPanelsEmbedBox", BOX, "Panel")

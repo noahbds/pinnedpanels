@@ -316,7 +316,7 @@ Small, independent, each closes a finding outright.
 - [x] C6 Enter cursor mode when an owner re-shows its window [`embed.lua`; SR.B5 second half]
 - [x] C7 Host rebuilds when its built content dies (capped at 3); warn when a builder replaces commands [`vgui/tabs.lua`, `sources.lua`; SR.N1, D38]
 - [x] C8 Filter restores only what it hid [SR.C13] — **no change needed.** `hideRow` is only ever called on rows that are visible, so `unfilter` already restores exactly what the filter hid. What remains (an owner hiding a row itself while a filter is active) can't be told apart from our own hiding and is accepted.
-- [ ] C9 Shell paint passthrough behind a debug convar, off by default [`embed.lua`; R18, G69] ⚑ game to enable
+- [x] C9 Shell paint passthrough behind a debug convar, off by default [`embed.lua`; R18, G69] ⚑ game to enable
 
 ### Phase D — Manage as the fallback (≈ 2 days)
 

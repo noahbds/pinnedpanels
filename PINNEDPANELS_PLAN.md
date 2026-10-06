@@ -299,7 +299,7 @@ Small, independent, each closes a finding outright.
 - [x] B6 `src2`; stock-class test by file; `Match` updates [`recipes.lua`, `storage.lua`; SR.N2, SR.C9, D28]
   - verify: libNyx showcase → `libnyx_maindemo.lua`; `xlib_Panel`, `F4MenuFrame` keep their class; a 2.0 save without `src2` still matches.
 - [x] B7 Settle rule; no synchronous `Catch` [`recipes.lua`; SR.N3, SR.C7, R20]
-- [ ] B8 Different title is weak; a refused weak match is remembered [`recipes.lua`; SR.N6, SR.C6]
+- [x] B8 Different title is weak; a refused weak match is remembered [`recipes.lua`; SR.N6, SR.C6]
 - [ ] B9 `checked` survives `Wake`; cache `fileOf` and `Openers.Commands`; no HUD scan for desktop signatures [`recipes.lua`, `openers.lua`; review §11]
 - [ ] B10 Strings for everything above in `en/pinnedpanels.properties`
 

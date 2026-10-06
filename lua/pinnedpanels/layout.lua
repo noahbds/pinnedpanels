@@ -438,7 +438,7 @@ end
 -- A panel another addon made, embedded in a tab like any source (D23): a window's contents ("embed") or
 -- one part of a window ("part"). Its tab is "adopt:<n>" and carries the adopt record (§33.10).
 
-local ADOPT_FIELDS = { recipe = true, needsKeyboard = true }
+local ADOPT_FIELDS = { recipe = true, needsKeyboard = true, signature = true }
 
 -- A new window holding one adopted tab. Returns the window id and the tab's src.
 function Layout.PinAdopted(adopt, x, y, w, h)
@@ -450,7 +450,7 @@ function Layout.PinAdopted(adopt, x, y, w, h)
 	return newWindow({ { src = src, adopt = adopt } }, x, y, w, h).id, src
 end
 
--- Changes tab i's recipe or needsKeyboard.
+-- Changes tab i's recipe, needsKeyboard or signature.
 function Layout.SetAdopt(id, i, fields)
 	local win = byId[id]
 	local tab = win and win.tabs[i]

@@ -148,9 +148,10 @@ function Recipes.Match(sig, cand)
 	if sig.class and cand.class ~= sig.class then return nil end
 	local strong = sig.src ~= nil or sig.class ~= nil
 	local sameTitle = sig.title ~= nil and cand.title == sig.title
-	-- One file can make several windows; without a class, a titled window must keep its title.
-	if not sig.class and sig.title and cand.title and not sameTitle then return nil end
 	if not strong and not sameTitle then return nil end
+	-- One file can make several windows: without a class, another title makes it a question. An addon's
+	-- update can also rename its window.
+	if not sig.class and sig.title and cand.title and not sameTitle then strong = false end
 	-- Other files in its tree: likely another window of the same library. A question, not a refusal,
 	-- since a window filled differently this time shows the same way (D28).
 	local sameTree = sig.src2 ~= nil and cand.src2 == sig.src2
@@ -385,10 +386,25 @@ local ticks = 0
 -- Window id -> RealTime until which a window appearing for it is the one we opened (not the player).
 local expecting = {}
 
+-- Questions put this session: tab src -> { the candidate's identity -> true }. An open question isn't
+-- asked twice, and "no" stays no for every window that looks the same.
+local asked = {}
+
+-- "Yes" also teaches the pin what its window looks like now, so the question doesn't come back.
 local function ask(w, panel, sig)
+	local src = w.tab.src
+	local key = table.concat({ sig.src or "", sig.src2 or "", sig.class or "", sig.title or "" }, "\n")
+	asked[src] = asked[src] or {}
+	if asked[src][key] then return end
+	asked[src][key] = true
 	Derma_Query(PP.L("adopt.confirm", sig.title and phrase(sig.title) or Recipes.Title(w.tab.adopt)), PP.L("adopt.confirm_title"),
 		PP.L("btn.yes"), function()
-			if IsValid(panel) and not Recipes.Owner(panel) and not Recipes.IsLive(w.rec, w.tab) then Recipes.Attach(w, panel, true) end
+			asked[src][key] = nil
+			if IsValid(panel) and not Recipes.Owner(panel) and not Recipes.IsLive(w.rec, w.tab) then
+				sig.path = w.tab.adopt.signature.path
+				Layout.SetAdopt(w.rec.id, w.index, { signature = sig })
+				Recipes.Attach(w, panel, true)
+			end
 		end,
 		PP.L("btn.no"), function() end)
 end

@@ -76,16 +76,18 @@ function CANVAS:Describe(box)
 	box.coords = math.floor(box.x) .. "," .. math.floor(box.y) .. "  " .. math.floor(box.w) .. "×" .. math.floor(box.h)
 end
 
--- Windows on screen (a control, not minimized), in document order; later ones are on top.
+-- Windows on screen (a control or a managed panel, not minimized), in document order; later ones are on
+-- top. A managed window its addon keeps moving can't be positioned (§33.5), so it shows as locked.
 function CANVAS:Prepare()
 	local boxes = {}
 	for i, rec in ipairs(Layout.Windows()) do
-		if IsValid(Desktop.panels[rec.id]) and rec.state ~= "minimized" then
+		if IsValid(Desktop.PanelOf(rec.id)) and rec.state ~= "minimized" then
 			local tab = rec.tabs[rec.active]
+			local fixed = rec.kind == "managed" and tab.adopt.noGeometry
 			local box = {
 				id = rec.id, x = rec.x, y = rec.y, w = rec.w, h = rec.h,
 				title = Layout.Title(rec), color = rec.accent or COLORS[(i - 1) % #COLORS + 1],
-				locked = rec.locked, cropped = tab and tab.crop ~= nil and rec.state ~= "maximized",
+				locked = rec.locked or fixed, cropped = tab and tab.crop ~= nil and rec.state ~= "maximized",
 				badge = #rec.tabs > 1 and PP.L("layout.badge", #rec.tabs) or nil,
 			}
 			if #rec.tabs > 1 then
@@ -101,7 +103,7 @@ function CANVAS:Prepare()
 
 	local minimized = {}
 	for _, rec in ipairs(Layout.Windows()) do
-		if rec.state == "minimized" and IsValid(Desktop.panels[rec.id]) then minimized[#minimized + 1] = Layout.Title(rec) end
+		if rec.state == "minimized" and IsValid(Desktop.PanelOf(rec.id)) then minimized[#minimized + 1] = Layout.Title(rec) end
 	end
 	self:PrepareTaskbar(minimized)
 end
@@ -240,7 +242,7 @@ function CANVAS:OnCursorMoved(mx, my)
 	box.x, box.y, box.w, box.h = x, y, w, h
 	self:Describe(box)
 	self.guides = snap and self:Guides(box, d.others) or {}
-	local win = Desktop.panels[box.id]
+	local win = Desktop.PanelOf(box.id)
 	if IsValid(win) then
 		win:SetPos(x, y)
 		win:SetSize(w, h)

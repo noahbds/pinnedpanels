@@ -22,7 +22,7 @@ local MAX_COORD = 32768
 local KINDS = { tool = true, creation = true, postprocess = true, adopt = true, active = true, quick = true }
 local DFRAME_STRIP = 29 -- DFrame's top dock padding, cropped away when its contents are embedded (§33.6)
 local STATES = { normal = true, minimized = true, maximized = true, rolled = true }
-local ADOPT_MODES = { embed = true, part = true }
+local ADOPT_MODES = { manage = true, embed = true, part = true }
 local MAX_PATH = 16
 local CONTROL_KINDS = { slider = true, check = true, combo = true }
 local MAX_CONTROLS, MAX_CHOICES = 32, 32
@@ -83,10 +83,8 @@ local function sanitizeRecipe(r)
 	return { kind = "watch" }
 end
 
--- A window pinned in Manage mode before it was dropped (D23) comes back embedded.
 local function sanitizeAdopt(a)
-	local mode = istable(a) and (a.mode == "manage" and "embed" or a.mode)
-	if not ADOPT_MODES[mode] or not istable(a.signature) then return nil end
+	if not istable(a) or not ADOPT_MODES[a.mode] or not istable(a.signature) then return nil end
 	local s = a.signature
 	local sig = {
 		src = text(s.src, MAX_SRC), src2 = text(s.src2, MAX_SRC), addon = text(s.addon, MAX_TITLE), class = text(s.class, MAX_TITLE),
@@ -95,7 +93,7 @@ local function sanitizeAdopt(a)
 		desktop = text(s.desktop, MAX_TITLE),
 	}
 	if not (sig.w and sig.h) then sig.w, sig.h = nil, nil end
-	if mode == "part" then
+	if a.mode == "part" then
 		if not istable(s.path) or #s.path == 0 or #s.path > MAX_PATH then return nil end
 		sig.path = {}
 		for i, step in ipairs(s.path) do
@@ -104,7 +102,7 @@ local function sanitizeAdopt(a)
 			sig.path[i] = { i = index, class = text(step.class, MAX_TITLE) }
 		end
 	end
-	return { mode = mode, signature = sig, recipe = sanitizeRecipe(a.recipe), needsKeyboard = a.needsKeyboard == true }
+	return { mode = a.mode, signature = sig, recipe = sanitizeRecipe(a.recipe), needsKeyboard = a.needsKeyboard == true, noGeometry = a.noGeometry == true }
 end
 
 local function number(v)
@@ -190,13 +188,24 @@ local function sanitizeWindow(w, seen, summary)
 			end
 		end
 	end
-	local title = text(w.title, MAX_TITLE)
+	-- A managed window is exactly one managed tab (§33.10); a managed tab anywhere else is dropped.
+	local managed = #tabs == 1 and tabs[1].adopt and tabs[1].adopt.mode == "manage"
+	if not managed then
+		for i = #tabs, 1, -1 do
+			if tabs[i].adopt and tabs[i].adopt.mode == "manage" then
+				table.remove(tabs, i)
+				summary.dropped = summary.dropped + 1
+			end
+		end
+	end
+	local title = not managed and text(w.title, MAX_TITLE) or nil
 	-- A window without tabs is only kept as a named group (§13.1).
 	if #tabs == 0 and not title then return nil end
 
 	local x, y, width, height = rectFields(w, 20)
 	local win = {
 		id = isstring(w.id) and w.id:match("^w%d+$") and w.id or nil,
+		kind = managed and "managed" or nil,
 		tabs = tabs,
 		active = int(w.active, 1, math.max(#tabs, 1)) or 1,
 		x = x or 120, y = y or 120, w = width or 280, h = height or 400,
@@ -217,7 +226,7 @@ local function sanitizeWindow(w, seen, summary)
 		win.colors.header = Util.ArrayToColor(w.colors.header)
 		win.colors.text = Util.ArrayToColor(w.colors.text)
 	end
-	if win.state == "maximized" then
+	if win.state == "maximized" and not managed then
 		local rx, ry, rw, rh = rectFields(w.restore, 20)
 		if rx and ry then win.restore = { x = rx, y = ry, w = rw, h = rh } end
 	end
@@ -287,7 +296,7 @@ function Storage.Encode(doc)
 		end
 		if #tabs > 0 or w.title then
 			out.windows[#out.windows + 1] = {
-				id = w.id, tabs = tabs, active = math.min(w.active, math.max(#tabs, 1)),
+				id = w.id, kind = w.kind, tabs = tabs, active = math.min(w.active, math.max(#tabs, 1)),
 				x = w.x, y = w.y, w = w.w, h = w.h, state = w.state, restore = w.restore,
 				title = w.title, accent = colorOrNil(w.accent),
 				locked = w.locked, clickThrough = w.clickThrough, filterBar = w.filterBar,

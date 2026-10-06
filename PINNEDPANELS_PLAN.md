@@ -225,9 +225,10 @@ The per-frame work goes through the existing single `Think` hook: `Input.EachFra
 - Visibility, opacity and click-through are applied to the foreign window through `SetVisible`, `SetAlpha`, `SetMouseInputEnabled`.
 - Crop is unavailable; the crop actions are hidden for wrapped tabs.
 
-**Tier 3 — Manage** (restore `manage.lua` from `659d2ec^`, then trim):
-- Remembers and restores position and size; hides and shows; taskbar and Pinned-page entry; idle opacity.
-- No frame of ours, no tabs.
+**Tier 3 — Manage** (`manage.lua`, restored whole from `659d2ec^`):
+- The window stays where its addon put it and is controlled only through public panel methods (R12): position and size, minimize, hide, idle opacity, click-through, lock, and no input outside cursor mode.
+- An addon that keeps moving its window is left to place it (`noGeometry`) after three tries.
+- No frame of ours, no tabs, no crop, no roll-up.
 
 **Health watch** (`embed.lua`, `wrap.lua`):
 
@@ -320,11 +321,22 @@ Small, independent, each closes a finding outright.
 
 ### Phase D — Manage as the fallback (≈ 2 days)
 
-- [ ] D1 Restore `manage.lua` from `659d2ec^`; trim to §5.3 [D24, D36]
-- [ ] D2 `adopt.mode` accepts `manage` and `wrap`; `adopt.tier` saved; undo the D23 "manage loads as embed" migration [`storage.lua`, `layout.lua`]
-- [ ] D3 "Host as…" submenu on adopted tabs: Embed, Manage (Wrap added in phase F) [`actions.lua`]
-- [ ] D4 Managed windows in the taskbar, the Pinned page and the layout editor [`vgui/taskbar.lua`, `vgui/hub_pinned.lua`, `vgui/hub_layout.lua`]
-- [ ] D5 Manual fallback only for now: releasing a failing embed and re-hosting as Manage from the menu [`embed.lua`, `manage.lua`; R21]
+Done as one change: commit `659d2ec` (which removed Manage) was reverted and the result merged with phases A–C. The whole of the old mode came back, not a trimmed one: it had been tried in game, and a trimmed version would not have been.
+
+- [x] D1 Restore `manage.lua` and everything that wired it in [D24, D36]
+- [x] D2 `adopt.mode` accepts `manage` again; a managed window's record has `kind = "managed"`; the D23 "manage loads as embed" migration is gone [`storage.lua`, `layout.lua`]
+  - `wrap` and `adopt.tier` are not accepted yet: they come with phase F, so no saved layout can name a mode that has no code.
+- [x] D3 Switching host from the window's menu: "Embed for Full Features" on a managed window, "Return to Managed Mode" on an embedded tab [`actions.lua`, `Recipes.SwitchMode`]
+  - These are the two restored actions, not a new "Host as…" submenu. With only two tiers a submenu adds nothing; revisit when Wrap exists.
+- [x] D4 Managed windows in the taskbar, the Pinned page and the layout editor [`vgui/taskbar.lua`, `vgui/hub_pinned.lua`, `vgui/hub_layout.lua`]
+- [x] D5 Manual fallback: "Return to Managed Mode" releases the embed and manages the same window [`recipes.lua`; R21]
+
+What was merged by hand:
+- Teardown and `Layout.Replace` release managed windows as well as embedded ones (A4, A5).
+- `Recipes.Take` keeps its `waiting` argument (B5); `Recipes.Attach` keeps the cursor bookkeeping (C6).
+- Manage's own "bring the cursor" rule got the popup test of A7.
+- "Takes the Keyboard When Clicked" stays a tab action and now applies to managed windows too.
+- The picker still pins in Embed mode (D24: Embed first). Record mode offers both again.
 
 ### Phase E — In-game spike (≈ ½ day) ⚑ game
 

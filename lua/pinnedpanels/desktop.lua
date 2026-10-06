@@ -1,6 +1,6 @@
 -- Records → window controls (§16): creates, refreshes and removes PinnedPanelsWindows as the document
--- changes, rations tab builds to one per frame, applies interactivity, idle opacity and peek, and owns
--- the taskbar control.
+-- changes, rations tab builds to one per frame, applies interactivity, idle opacity and peek (Manage does
+-- the same for managed windows, §33.5), and owns the taskbar control.
 
 local PP = PinnedPanels
 PP.Desktop = PP.Desktop or {}
@@ -22,14 +22,23 @@ local function hasAvailableTab(rec)
 end
 
 -- A window gets a control once the catalogue is known, unless it is held, empty (a named group) or
--- only has unavailable tabs, which stay dormant in the document (E1, B1).
+-- only has unavailable tabs, which stay dormant in the document (E1, B1). A managed window is another
+-- addon's window and never gets one.
 local function wanted(rec)
-	return Desktop.ready and not Desktop.held[rec.id] and hasAvailableTab(rec)
+	return Desktop.ready and rec.kind ~= "managed" and not Desktop.held[rec.id] and hasAvailableTab(rec)
 end
 
 -- Dormant: nothing to show now. For adopted panels that means waiting for the panel (§33.9).
 function Desktop.IsDormant(rec)
+	if rec.kind == "managed" then return not PP.Manage.IsLive(rec.id) end
 	return #rec.tabs > 0 and not hasAvailableTab(rec)
+end
+
+-- Our window control, or the other addon's panel for a managed window.
+function Desktop.PanelOf(id)
+	local win = Desktop.panels[id]
+	if IsValid(win) then return win end
+	return PP.Manage.Panel(id)
 end
 
 local function create(rec)
@@ -64,6 +73,7 @@ function Desktop.UpdateStates()
 			win:SetAlpha(math.Round(alpha * 255))
 		end
 	end
+	PP.Manage.UpdateStates()
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Wake() end
 end
 
@@ -85,7 +95,7 @@ function Desktop.Reconcile()
 			Desktop.panels[id] = nil
 		end
 	end
-	if Desktop.focused and not Desktop.panels[Desktop.focused] then Desktop.focused = nil end
+	if Desktop.focused and not IsValid(Desktop.PanelOf(Desktop.focused)) then Desktop.focused = nil end
 	local front = Desktop.panels[Desktop.pendingFront or ""]
 	if IsValid(front) then
 		front:MoveToFront()
@@ -222,7 +232,13 @@ end
 -- A window that doesn't have its control yet comes to the front when the desktop creates it.
 function Desktop.Front(id)
 	local win = Desktop.panels[id]
-	if IsValid(win) then win:MoveToFront() else Desktop.pendingFront = id end
+	if IsValid(win) then
+		win:MoveToFront()
+	elseif PP.Manage.IsLive(id) then
+		PP.Manage.Front(id)
+	else
+		Desktop.pendingFront = id
+	end
 	Desktop.focused = id
 end
 
@@ -274,6 +290,7 @@ end
 
 function Desktop.Teardown()
 	-- First, while the windows still exist: each release reconciles, which would otherwise make new ones.
+	PP.Manage.ReleaseAll()
 	PP.Embed.ReleaseAll()
 	for _, win in pairs(Desktop.panels) do
 		if IsValid(win) then

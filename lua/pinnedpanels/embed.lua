@@ -365,11 +365,12 @@ function Embed.Check()
 	for src, e in pairs(Embed.live) do check(src, e) end
 end
 
--- Tabs that were unpinned let go of their panels at once.
+-- Tabs that were unpinned, or moved to managed mode, let go of their panels at once.
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Embed", function(kind)
 	if kind ~= "windows" and kind ~= "tabs" then return end
 	for src in pairs(Embed.live) do
-		if not Layout.Find(src) then Embed.Release(src) end
+		local win, i = Layout.Find(src)
+		if not win or win.tabs[i].adopt.mode == "manage" then Embed.Release(src) end
 	end
 end)
 

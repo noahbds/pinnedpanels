@@ -274,7 +274,7 @@ Small, independent, each closes a finding outright.
   - verify: trace TTT2 — `InitPostEntity` → `Sources.Rebuild` → `Desktop.ready`; `wanted()` true for a picked window.
 - [x] A2 `pcall` around `GetTitle` in `titleOf` and `DesktopId` [`recipes.lua`, `openers.lua`; SR.N10, R18, G70]
 - [x] A3 `sanitizeAdopt` drops `w`/`h` unless both present [`storage.lua`; SR.C3]
-- [ ] A4 `Teardown` releases embeds before removing windows [`desktop.lua`; SR.C2]
+- [x] A4 `Teardown` releases embeds before removing windows [`desktop.lua`; SR.C2]
 - [ ] A5 `Layout.Replace` releases embeds before loading; imported `class` recipes become `watch` [`layout.lua`, `storage.lua`; SR.C4, SR.C5]
 - [ ] A6 `Layout.IsForeign`; auto-size skips foreign tabs [`layout.lua`, `vgui/window.lua`; SR.B6, §5.6]
 - [ ] A7 Cursor mode only for popups the player opened [`recipes.lua`; SR.N4]

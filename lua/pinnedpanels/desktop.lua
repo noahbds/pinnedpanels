@@ -273,6 +273,8 @@ end
 -- ── Lifecycle ───────────────────────────────────────────────
 
 function Desktop.Teardown()
+	-- First, while the windows still exist: each release reconciles, which would otherwise make new ones.
+	PP.Embed.ReleaseAll()
 	for _, win in pairs(Desktop.panels) do
 		if IsValid(win) then
 			win:Unbuild()
@@ -282,7 +284,6 @@ function Desktop.Teardown()
 	Desktop.panels = {}
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Remove() end
 	Desktop.taskbar = nil
-	PP.Embed.ReleaseAll()
 	PP.Record.Stop()
 	if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() end
 end

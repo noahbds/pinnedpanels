@@ -89,7 +89,7 @@ local function sanitizeAdopt(a)
 	if not ADOPT_MODES[mode] or not istable(a.signature) then return nil end
 	local s = a.signature
 	local sig = {
-		src = text(s.src, MAX_SRC), addon = text(s.addon, MAX_TITLE), class = text(s.class, MAX_TITLE),
+		src = text(s.src, MAX_SRC), src2 = text(s.src2, MAX_SRC), addon = text(s.addon, MAX_TITLE), class = text(s.class, MAX_TITLE),
 		base = text(s.base, MAX_TITLE), title = text(s.title, MAX_TITLE),
 		w = int(s.w, 0, MAX_COORD), h = int(s.h, 0, MAX_COORD), hud = s.hud == true, popup = s.popup == true,
 		desktop = text(s.desktop, MAX_TITLE),

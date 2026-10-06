@@ -29,40 +29,53 @@ local function isStock(src)
 	return false
 end
 
+-- A function's file never changes, and the walk below asks about every function of up to SCAN_LIMIT
+-- panels: each is looked up once.
+local files = setmetatable({}, { __mode = "k" })
 local function fileOf(fn)
-	local info = debug.getinfo(fn, "S")
-	return info and info.short_src
+	local src = files[fn]
+	if src == nil then
+		local info = debug.getinfo(fn, "S")
+		src = info and info.short_src or false
+		files[fn] = src
+	end
+	return src or nil
 end
 
--- The file of a panel's own functions (G62): the preferred ones first, else the first file by name so the
--- answer is the same every time.
-local function ownFile(p)
+-- The file of a panel's own functions (G62), other than skip: the preferred ones first, else the first
+-- file by name so the answer is the same every time.
+local function ownFile(p, skip)
 	local t = p:GetTable()
 	for _, name in ipairs(PREFERRED) do
 		local fn = rawget(t, name)
-		if isfunction(fn) and not isStock(fileOf(fn)) then return fileOf(fn) end
+		local src = isfunction(fn) and fileOf(fn)
+		if src and src ~= skip and not isStock(src) then return src end
 	end
 	local best
 	for _, fn in pairs(t) do
 		if isfunction(fn) then
 			local src = fileOf(fn)
-			if not isStock(src) and (not best or src < best) then best = src end
+			if src ~= skip and not isStock(src) and (not best or src < best) then best = src end
 		end
 	end
 	return best
 end
 
 -- The file that built a panel: its own functions, else its children's (a plain DFrame whose buttons have
--- DoClick functions), breadth first.
+-- DoClick functions), breadth first. Then a second file from the same walk, if there is one: a window
+-- made by a UI library has the library's file first, and what tells it from that library's other
+-- windows is whose code filled it (D28).
 function Recipes.SourceFile(panel)
-	local queue, head = { panel }, 1
+	local queue, head, src = { panel }, 1, nil
 	while queue[head] and head <= SCAN_LIMIT do
 		local p = queue[head]
 		head = head + 1
-		local src = ownFile(p)
-		if src then return src end
+		src = src or ownFile(p)
+		local other = src and ownFile(p, src)
+		if other then return src, other end
 		for _, c in ipairs(p:GetChildren()) do queue[#queue + 1] = c end
 	end
+	return src
 end
 
 -- The Workshop addon or gamemode a file comes from (G63), nil for the base game. Cached per file.
@@ -83,15 +96,22 @@ function Recipes.Addon(src)
 	return name
 end
 
--- Stock controls (G54) and ours don't identify anything. Read when first needed: Derma's tables are
--- empty while autorun files load.
-local stock
+-- Stock controls (G54) and ours don't identify anything. A class is stock when none of its functions
+-- comes from an addon: being registered through Derma doesn't make it so, addons do that too (G68).
+local stock = {}
 local function isStockClass(class)
-	if not stock then
-		stock = {}
-		for name, c in pairs(derma.GetControlList()) do stock[istable(c) and c.ClassName or name] = true end
+	if class:sub(1, 12) == "PinnedPanels" then return true end
+	if stock[class] == nil then
+		local found = true
+		for _, fn in pairs(vgui.GetControlTable(class) or {}) do
+			if isfunction(fn) and not isStock(fileOf(fn)) then
+				found = false
+				break
+			end
+		end
+		stock[class] = found
 	end
-	return stock[class] or class:sub(1, 12) == "PinnedPanels"
+	return stock[class]
 end
 
 local function titleOf(p)
@@ -107,17 +127,17 @@ function Recipes.Signature(panel)
 	local class = panel.ClassName
 	if not isstring(class) or isStockClass(class) then class = nil end
 	local base = panel.Base or panel.ClassName or panel:GetClassName()
-	local src = Recipes.SourceFile(panel)
+	local src, src2 = Recipes.SourceFile(panel)
 	local w, h = panel:GetSize()
 	return {
-		src = src, addon = Recipes.Addon(src), class = class, base = isstring(base) and base or nil,
+		src = src, src2 = src2, addon = Recipes.Addon(src), class = class, base = isstring(base) and base or nil,
 		title = titleOf(panel), w = w, h = h, hud = panel:GetParent() ~= vgui.GetWorldPanel(), popup = panel:IsPopup(),
 		desktop = PP.Openers.DesktopId(panel),
 	}
 end
 
 -- How well a live panel's signature (cand) matches a saved one: nil when it can't be that panel.
--- Strong when the file or class agrees; a weak match needs the same title and asks the player once.
+-- Strong when the file or class agrees and nothing else disagrees; a weak match asks the player once.
 function Recipes.Match(sig, cand)
 	-- A desktop widget's window is known by the widget it is (G47).
 	if sig.desktop then
@@ -131,7 +151,11 @@ function Recipes.Match(sig, cand)
 	-- One file can make several windows; without a class, a titled window must keep its title.
 	if not sig.class and sig.title and cand.title and not sameTitle then return nil end
 	if not strong and not sameTitle then return nil end
-	local score = (sig.src and 4 or 0) + (sig.class and 3 or 0) + (sameTitle and 2 or 0)
+	-- Other files in its tree: likely another window of the same library. A question, not a refusal,
+	-- since a window filled differently this time shows the same way (D28).
+	local sameTree = sig.src2 ~= nil and cand.src2 == sig.src2
+	if sig.src2 and not sameTree then strong = false end
+	local score = (sig.src and 4 or 0) + (sig.class and 3 or 0) + (sameTitle and 2 or 0) + (sameTree and 2 or 0)
 	if sig.w and math.abs(cand.w - sig.w) < 8 and math.abs(cand.h - sig.h) < 8 then score = score + 1 end
 	return score, strong
 end

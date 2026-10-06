@@ -189,7 +189,7 @@ Only what changes. Everything else is as the archived plan describes.
 | `title` | Read under `pcall` |
 
 `Recipes.Match`:
-- `src2` must be equal when the saved signature has one. Old saves without it still match.
+- When the saved signature has a `src2` and the live one differs, the match is **weak**, not refused: a window filled differently this time shows the same way. Old saves without `src2` match as before.
 - Same `src`, different title: **weak** (was: no match).
 - A refused weak match is remembered for that tab and panel until the next session.
 
@@ -296,7 +296,7 @@ Small, independent, each closes a finding outright.
   - `desktop` is still suggested for a window the C menu itself made and filled (B5 narrows what counts as one): that recipe is right for it, and it only runs on a click.
 - [x] B5 Launcher widgets return the window they opened; `desktop` signature only on our own frames [`openers.lua`, `recipes.lua`; SR.N5, SR.N9, G71]
   - verify by trace: LVS, LFS, Glide, MQS, PlayerModel Selector, StormFox2 controller, Starfall user list each yield their real frame; Wire's and ACF's yield ours.
-- [ ] B6 `src2`; stock-class test by file; `Match` updates [`recipes.lua`, `storage.lua`; SR.N2, SR.C9, D28]
+- [x] B6 `src2`; stock-class test by file; `Match` updates [`recipes.lua`, `storage.lua`; SR.N2, SR.C9, D28]
   - verify: libNyx showcase → `libnyx_maindemo.lua`; `xlib_Panel`, `F4MenuFrame` keep their class; a 2.0 save without `src2` still matches.
 - [ ] B7 Settle rule; no synchronous `Catch` [`recipes.lua`; SR.N3, SR.C7, R20]
 - [ ] B8 Different title is weak; a refused weak match is remembered [`recipes.lua`; SR.N6, SR.C6]

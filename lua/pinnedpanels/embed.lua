@@ -69,6 +69,7 @@ local function adoptChildren(e)
 	for _, c in ipairs(e.shell:GetChildren()) do
 		if not e.skip[c] and not Embed.byPanel[c] and not c:IsPopup() then adopt(e, c) end
 	end
+	e.count = e.shell:ChildCount()
 end
 
 -- The shell: no input, invisible, still visible to the engine so it keeps thinking (§33.6).
@@ -81,6 +82,7 @@ end
 
 local function watch()
 	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, Embed.Check) end
+	Input.EachFrame("embed", Embed.Frame)
 end
 
 -- The window whose part this is: the panel just below a root (the world panel, or the HUD's).
@@ -149,7 +151,10 @@ function Embed.Release(src)
 	local e = Embed.live[src]
 	if not e then return end
 	Embed.live[src] = nil
-	if not next(Embed.live) then timer.Remove(TIMER) end
+	if not next(Embed.live) then
+		timer.Remove(TIMER)
+		Input.EachFrame("embed", nil)
+	end
 	for _, m in ipairs(e.moved) do
 		local p, parent = m.panel, m.parent
 		Embed.byPanel[p] = nil
@@ -209,9 +214,24 @@ end
 
 -- ── Watching ────────────────────────────────────────────────
 
--- The owner removed its window or the part: release, which removes what it left behind (R15), and the
--- tab waits (or goes, if it was for this session). The owner rebuilt its UI: new children are adopted.
--- The owner hid its window: the tab says so. The owner re-popped it: it is ghosted again.
+-- Every frame, for a window's contents, with getters only. The owner re-popped its window: it is ghosted
+-- again before it shows or takes a click. The owner gave it new children: they are adopted, so a window
+-- that swaps its page on every click doesn't go blank.
+local function frame(e, s)
+	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
+	if s:ChildCount() ~= e.count then adoptChildren(e) end
+end
+
+function Embed.Frame()
+	for _, e in pairs(Embed.live) do
+		local s = e.shell
+		if e.mode == "embed" and IsValid(s) and not s:IsMarkedForDeletion() then frame(e, s) end
+	end
+end
+
+-- Four times a second. The owner removed its window or the part: release, which removes what it left
+-- behind (R15), and the tab waits (or goes, if it was for this session). The owner hid its window: the
+-- tab says so.
 local function check(src, e)
 	local win, i = Layout.Find(src)
 	if not win then return Embed.Release(src) end
@@ -223,13 +243,11 @@ local function check(src, e)
 		return
 	end
 	if e.mode ~= "embed" then return end
-	adoptChildren(e)
 	local closed = not s:IsVisible()
 	if closed ~= (e.closed == true) then
 		e.closed = closed
 		e.box:SetClosed(closed)
 	end
-	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
 end
 
 function Embed.Check()

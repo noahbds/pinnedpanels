@@ -307,7 +307,7 @@ Small, independent, each closes a finding outright.
 
 - [x] C1 `Input.EachFrame` registry [`input.lua`]
   - verify: `grep -rn 'hook.Add( *"Think"' lua` → still 1 match.
-- [ ] C2 Per-frame ghost and `ChildCount` checks [`embed.lua`; SR.B4, SR.N12]
+- [x] C2 Per-frame ghost and `ChildCount` checks [`embed.lua`; SR.B4, SR.N12]
 - [ ] C3 Reclaimed, orphaned and dead panels; prune `moved` [`embed.lua`; SR.B3, SR.C1, R19]
   - verify by trace: ULX `processModules`, PAC tree `Populate`, Cloudbox `DContentMain:Think`, LVS `CreatePanel`.
 - [ ] C4 Shell follows the tab's position [`embed.lua`; SR.C8]

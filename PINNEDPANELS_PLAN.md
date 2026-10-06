@@ -281,7 +281,7 @@ Small, independent, each closes a finding outright.
 - [x] A8 Refuse scenes and menus of any class [`recipes.lua`; SR.N18, SR.N14, D32]
   - Keyboard driving of other addons' menu classes (`nav.lua`) is left as it is: their option API can't be checked without the game. Revisit in phase G.
   - verify: Helix menu and `ArcCW.InvHUD` refused; PAC editor (240 wide) not; `MSD.DMenu`, `PIXEL.Menu` refused.
-- [ ] A9 Cursor key default avoids `gm_showspare2` outside sandbox [`actions.lua`; SR.N11, D37]
+- [x] A9 Cursor key default avoids `gm_showspare2` outside sandbox [`actions.lua`; SR.N11, D37]
 - [ ] A10 Re-assert the screen clicker [`input.lua`; SR.B5 first half, D31]
 
 ### Phase B — Coming back (≈ 3 days)

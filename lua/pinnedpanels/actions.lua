@@ -240,9 +240,22 @@ end
 
 -- ── Global ──────────────────────────────────────────────────
 
+-- F-keys can't be blocked (G6): where the gamemode opens its own menu with F4, the cursor key starts
+-- unbound and the player is told at each join until one is chosen (D37).
+local function cursorKey()
+	if engine.ActiveGamemode() ~= "sandbox" and input.LookupKeyBinding(KEY_F4) == "gm_showspare2" then return KEY_NONE end
+	return KEY_F4
+end
+
+hook.Add("InitPostEntity", "PinnedPanels.Actions", function()
+	if cursorKey() == KEY_NONE and Settings.Get("keyCursor") == KEY_NONE then
+		notification.AddLegacy(PP.L("notify.cursor_unbound"), NOTIFY_HINT, 10)
+	end
+end)
+
 Actions.Add({
 	id = "cursor", scope = "global", icon = "icon16/cursor.png", label = "act.toggle_cursor",
-	sub = "sub.show_cursor", palette = true, bindable = true, key = KEY_F4,
+	sub = "sub.show_cursor", palette = true, bindable = true, key = cursorKey(),
 	run = function() Input.SetCursorMode(not Input.cursorMode) end,
 })
 

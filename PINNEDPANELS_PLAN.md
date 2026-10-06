@@ -210,7 +210,7 @@ Only what changes. Everything else is as the archived plan describes.
 
 | Change | Mechanism |
 |---|---|
-| Owner's size wins (D29) | Each frame compare the shell's size with the last size we set. If it differs, the owner changed it: resize our window so the box matches |
+| Owner's size wins (D29) | Each frame compare the shell's size with the box's. If they differ the same way for two frames, the owner set it: resize our window by the difference, once per disagreement. Skipped while the window is dragged, animated, cropped in the editor, or not in its normal state |
 | Shell follows the tab | Each frame set the shell's position to the box's screen position |
 | Ghost invariant | Each frame, three getters; re-ghost on any mismatch |
 | New children | Each frame compare `shell:ChildCount()` with the count after the last adoption |
@@ -311,7 +311,7 @@ Small, independent, each closes a finding outright.
 - [x] C3 Reclaimed, orphaned and dead panels; prune `moved` [`embed.lua`; SR.B3, SR.C1, R19]
   - verify by trace: ULX `processModules`, PAC tree `Populate`, Cloudbox `DContentMain:Think`, LVS `CreatePanel`.
 - [x] C4 Shell follows the tab's position [`embed.lua`; SR.C8]
-- [ ] C5 Owner's size wins [`embed.lua`, `vgui/window.lua`; SR.N7, SR.N15, D29]
+- [x] C5 Owner's size wins [`embed.lua`; SR.N7, SR.N15, D29]
   - verify by trace: PAC (`SetTall(ScrH())` each frame) → window settles at full height, no oscillation; a window that never resizes itself → user resize sticks.
 - [ ] C6 Enter cursor mode when an owner re-shows its window [`embed.lua`; SR.B5 second half]
 - [ ] C7 Host rebuilds when its built content dies (capped at 3); warn when a builder replaces commands [`vgui/tabs.lua`, `sources.lua`; SR.N1, D38]

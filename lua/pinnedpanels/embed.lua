@@ -26,7 +26,8 @@ local fights = {} -- src -> { since, n }
 
 -- ── PinnedPanelsEmbedBox ────────────────────────────────────
 -- The tab content: holds the adopted panels while the tab exists, hidden and unparented while it doesn't.
--- An embedded window's shell follows its size, so its owner lays the contents out for the size they have.
+-- An embedded window's shell is given its size, so its owner lays the contents out for the size they
+-- have; if the owner then sets another, the window follows that (ownerSize, D29).
 
 local BOX = {}
 
@@ -231,21 +232,44 @@ local function follow(s, box)
 	if sx ~= x or sy ~= y then s:SetPos(x, y) end
 end
 
+-- The owner's size wins (D29). The tab gives the shell its size (BOX:PerformLayout); when the shell then
+-- has another, its owner set it, and the window is resized by the difference so the contents get the
+-- size their owner lays them out for. Acted on once per disagreement, and only when it has held for two
+-- frames (a layout still on its way looks the same for one). A window that can't be given that size
+-- (it wouldn't fit the screen) keeps what fits; a resize by the player is undone only if the owner
+-- insists.
+local function ownerSize(src, e, s, box)
+	local sw, sh = s:GetSize()
+	local bw, bh = box:GetSize()
+	if sw == bw and sh == bh then return end
+	if e.sw ~= sw or e.sh ~= sh or e.bw ~= bw or e.bh ~= bh then
+		e.sw, e.sh, e.bw, e.bh, e.sized = sw, sh, bw, bh, false
+		return
+	end
+	if e.sized then return end
+	local win = Layout.Find(src)
+	local panel = win and Desktop.panels[win.id]
+	if not IsValid(panel) or panel.drag or panel.resize or panel.animating or panel.editing or win.state ~= "normal" then return end
+	e.sized = true
+	Layout.SetGeometry(win.id, win.x, win.y, win.w + sw - bw, win.h + sh - bh, true)
+end
+
 -- Every frame, for a window's contents, with getters only. The owner re-popped its window: it is ghosted
 -- again before it shows or takes a click. The owner gave it new children: they are adopted, so a window
 -- that swaps its page on every click doesn't go blank.
-local function frame(e, s)
+local function frame(src, e, s)
 	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
 	if s:ChildCount() ~= e.count then adoptChildren(e) end
 	local box = e.box
 	if e.closed or not box:IsVisible() or not IsValid(box:GetParent()) then return end
 	follow(s, box)
+	ownerSize(src, e, s, box)
 end
 
 function Embed.Frame()
-	for _, e in pairs(Embed.live) do
+	for src, e in pairs(Embed.live) do
 		local s = e.shell
-		if e.mode == "embed" and IsValid(s) and not s:IsMarkedForDeletion() then frame(e, s) end
+		if e.mode == "embed" and IsValid(s) and not s:IsMarkedForDeletion() then frame(src, e, s) end
 	end
 end
 

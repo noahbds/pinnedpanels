@@ -14,12 +14,17 @@ Input.cursorMode = Input.cursorMode or false
 -- Other addons' windows under management take the keyboard like ours (§33.5); keyed by panel.
 Input.keyboardOwners = Input.keyboardOwners or setmetatable({}, { __mode = "k" })
 
-local binds = {}   -- id -> { key, press, release, repeating }
-local watched = {} -- key -> true
+-- Key bindings and per-frame work survive a reload of this file too: whoever registered them isn't
+-- reloaded with it.
+Input.binds = Input.binds or {}
+Input.frames = Input.frames or {}
+local binds = Input.binds -- id -> { key, press, release, repeating }
+local watched = {}        -- key -> true
+for _, b in pairs(binds) do watched[b.key] = true end
 local held = {}    -- key -> true when its press fired, false when it was already down during a gate
 local nextRepeat = {} -- key -> RealTime of its next repeat, while held with a repeating binding
 local chatOpen, spawnOpen, contextOpen, altHeld = false, false, false, false
-local frames = {}  -- id -> function called every frame (Input.EachFrame)
+local frames = Input.frames -- id -> function called every frame (Input.EachFrame)
 
 -- Held keys repeat after a delay, on real time so pause and host_timescale don't matter (G5, B28).
 local REPEAT_DELAY, REPEAT_INTERVAL = 0.35, 0.055
@@ -28,10 +33,19 @@ local function inputChanged()
 	hook.Run("PinnedPanelsInputChanged")
 end
 
--- Hotkeys stay quiet while the player is typing or looking at another UI (E13, E35, G8, G19).
+-- What the keyboard is typing into, if anything: a text field or a web page. A window that merely holds
+-- the keyboard (most addon windows do, by MakePopup) isn't typing.
+local TYPING = { TextEntry = true, HTML = true, Awesomium = true, Chromium = true }
+local function typing()
+	local focus = vgui.GetKeyboardFocus()
+	return IsValid(focus) and TYPING[focus:GetClassName()] == true
+end
+
+-- Hotkeys stay quiet while the player is typing or looking at the game's own UI (E13, E35, G8, G19).
+-- Another addon's window being open doesn't silence them: pinning what is on screen is for those.
 local function gated()
 	return chatOpen or gui.IsConsoleVisible() or gui.IsGameUIVisible() or not system.HasFocus()
-		or input.IsKeyTrapping() or IsValid(vgui.GetKeyboardFocus())
+		or input.IsKeyTrapping() or typing()
 end
 
 -- pressed: true (press), false (release) or "repeat" (only repeating bindings). Handlers are collected

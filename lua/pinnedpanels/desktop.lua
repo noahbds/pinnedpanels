@@ -69,7 +69,7 @@ function Desktop.UpdateStates()
 			win:SetVisible(Desktop.Shown(rec))
 			win:SetMouseInputEnabled(interactive)
 			if not interactive then win:SetKeyboardInputEnabled(false) end
-			local alpha = (interactive or Desktop.peeking or PP.Nav.Opaque(id)) and 1 or math.max(rec.opacity or idle, 0.05)
+			local alpha = (interactive or Desktop.peeking or PP.Nav.Opaque(id)) and 1 or (rec.opacity or idle)
 			win:SetAlpha(math.Round(alpha * 255))
 		end
 	end

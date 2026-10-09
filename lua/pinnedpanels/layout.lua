@@ -154,7 +154,7 @@ end
 local function newWindow(tabs, x, y, w, h, title)
 	return add({
 		tabs = tabs, active = 1, x = x, y = y, w = w, h = h, state = "normal", title = title,
-		locked = false, clickThrough = false, filterBar = false, colors = {},
+		locked = false, filterBar = false, colors = {},
 	})
 end
 
@@ -443,7 +443,7 @@ end
 -- has kind = "managed"; embedded ("embed", "part"), it lives in a tab like any source. Either way its tab
 -- is "adopt:<n>" and carries the adopt record (§33.10).
 
-local ADOPT_FIELDS = { mode = true, signature = true, recipe = true, needsKeyboard = true, noGeometry = true }
+local ADOPT_FIELDS = { mode = true, signature = true, recipe = true, needsKeyboard = true, noGeometry = true, autoOpen = true, autoFails = true }
 
 -- A new window holding one adopted tab. Returns the window id and the tab's src.
 function Layout.PinAdopted(adopt, x, y, w, h)
@@ -467,6 +467,11 @@ function Layout.SetAdopt(id, i, fields)
 	for k, v in pairs(fields) do
 		if ADOPT_FIELDS[k] then tab.adopt[k] = v end
 	end
+	-- Reopening at join is on unless turned off (D41). Turned off, it was for the opener the pin had:
+	-- another one starts again, on.
+	if fields.recipe and fields.autoOpen == nil then tab.adopt.autoOpen, tab.adopt.autoFails = nil, nil end
+	if tab.adopt.autoOpen ~= false then tab.adopt.autoOpen = nil end
+	if tab.adopt.autoFails == 0 then tab.adopt.autoFails = nil end
 	local kind = tab.adopt.mode == "manage" and "managed" or nil
 	if win.kind == kind then
 		changed("style", id)
@@ -604,7 +609,6 @@ local function setFlag(field, kind)
 end
 
 Layout.SetLocked = setFlag("locked", "state")
-Layout.SetClickThrough = setFlag("clickThrough", "state")
 Layout.SetFilterBar = setFlag("filterBar", "style")
 
 -- "contextmenu" shows the window only while the C menu is open (FF5); nil always.
@@ -620,7 +624,7 @@ end
 function Layout.SetOpacity(id, frac)
 	local win = byId[id]
 	if not win then return false end
-	win.opacity = Util.Finite(frac) and math.Clamp(frac, 0.05, 1) or nil
+	win.opacity = Util.Finite(frac) and math.Clamp(frac, 0, 1) or nil
 	changed("style", id)
 	return true
 end

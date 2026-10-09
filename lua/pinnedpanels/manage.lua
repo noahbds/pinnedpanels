@@ -42,11 +42,11 @@ end
 local function desired(id, rec, entry)
 	local interactive = Input.Interactive()
 	local shown = (Desktop.Shown(rec) and not Desktop.held[id]) or Desktop.peeking
-	local mouse = interactive and (not rec.clickThrough or Input.AltHeld())
+	local mouse = interactive
 	local focus = vgui.GetKeyboardFocus()
 	local typing = IsValid(focus) and (focus == entry.panel or focus:HasParent(entry.panel))
 	local keyboard = mouse and (entry.keyboard == true or typing)
-	local alpha = (interactive or Desktop.peeking) and 1 or math.max(rec.opacity or Settings.Get("idleOpacity") / 100, 0.05)
+	local alpha = (interactive or Desktop.peeking) and 1 or (rec.opacity or Settings.Get("idleOpacity") / 100)
 	return shown, mouse, keyboard, math.Round(alpha * 255)
 end
 
@@ -129,6 +129,7 @@ function Manage.Release(id)
 	forget(id, entry)
 	local p, o = entry.panel, entry.original
 	if IsValid(p) and not p:IsMarkedForDeletion() then
+		PP.Recipes.Forget(p)
 		p:SetPos(o.x, o.y)
 		p:SetSize(o.w, o.h)
 		p:SetAlpha(o.alpha)

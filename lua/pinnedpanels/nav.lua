@@ -593,6 +593,18 @@ function bindKeys()
 	end
 end
 
+-- Using the mouse ends what the keyboard had selected: the ring would stay on a control the player has
+-- left, on a page that may not even be showing any more, and Enter would use it. Menus the keyboard
+-- is driving are the exception, since clicking one of their options is using them.
+hook.Add("VGUIMousePressed", "PinnedPanels.Nav", function()
+	if Nav.state == "off" or Nav.state == "menu" then return end
+	Nav.memory = {}
+	if Nav.state == "content" or Nav.state == "adjust" then
+		Nav.root, Nav.element = nil, nil
+		go("windows")
+	end
+end)
+
 local function refreshLater() Nav.Refresh() end
 hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Nav", refreshLater)
 hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Nav", refreshLater)

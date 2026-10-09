@@ -78,6 +78,47 @@ end
 
 vgui.Register("PinnedPanelsEmbedBox", BOX, "Panel")
 
+-- ── Standing in for the window ──────────────────────────────
+-- A window's contents call into it through GetParent(): a tab button tells its frame which tab is
+-- active, a close button closes it. Their parent is our box now, so the box answers for the window:
+-- every Lua method the window has and a plain panel hasn't is passed on to it, and what they read
+-- from their parent is read from the window. What the engine itself calls on a panel is left out, or
+-- the window would think, lay out and paint twice.
+local ENGINE = {
+	Init = true, Paint = true, PaintOver = true, Think = true, PerformLayout = true, AnimationThink = true, ApplySchemeSettings = true,
+	OnRemove = true, OnDeletion = true, OnChildAdded = true, OnChildRemoved = true, OnSizeChanged = true, OnScreenSizeChanged = true,
+	OnMousePressed = true, OnMouseReleased = true, OnMouseWheeled = true, OnCursorMoved = true, OnCursorEntered = true,
+	OnCursorExited = true, OnKeyCodePressed = true, OnKeyCodeReleased = true, OnFocusChanged = true, OnTextChanged = true,
+	TestHover = true, ActionSignal = true, DragHoverClick = true, DragHoverEnd = true, DroppedOn = true, LoadCookies = true,
+	PreAutoRefresh = true, PostAutoRefresh = true, GenerateExample = true, PaintManual = true, DoModal = true,
+	-- Nor what says which panel this is, or how the engine left it.
+	ClassName = true, Base = true, BaseClass = true, ThisClass = true, Hovered = true, Depressed = true, Dragging = true,
+}
+
+local function standIn(inner, s)
+	local t = inner:GetTable()
+	local function forward(name)
+		return function(_, ...)
+			if not IsValid(s) then return end
+			local fn = s[name]
+			if isfunction(fn) then return fn(s, ...) end
+		end
+	end
+	for name, v in pairs(s:GetTable()) do
+		if isstring(name) and isfunction(v) and not ENGINE[name] and inner[name] == nil then t[name] = forward(name) end
+	end
+	-- Anything else it is asked for: the window's value, as it is at that moment.
+	setmetatable(t, { __index = function(_, name)
+		if ENGINE[name] or not IsValid(s) then return nil end
+		local v = s:GetTable()[name]
+		if isfunction(v) then
+			v = forward(name)
+			rawset(t, name, v)
+		end
+		return v
+	end })
+end
+
 -- ── Moving panels ───────────────────────────────────────────
 
 local function remember(p)
@@ -107,10 +148,146 @@ local function ghost(e)
 	s:SetAlpha(0)
 end
 
+-- An overlay window comes with a backdrop: a bare full-screen popup, painted by the same file, that
+-- dims the screen and closes the window when clicked. Left as it is, it would dim the tab its window
+-- is in and take every click meant for it. It is ghosted with its window and comes back with it; its
+-- owner removes it when the window goes.
+local function backdropOf(s)
+	local from = isfunction(s.Paint) and PP.Recipes.FileOf(s.Paint)
+	if not from then return nil end
+	for _, p in ipairs(vgui.GetWorldPanel():GetChildren()) do
+		if p ~= s and p:IsVisible() and p:IsPopup() and p:ChildCount() == 0 and isfunction(p.Paint) and PP.Recipes.FileOf(p.Paint) == from
+			and PP.Recipes.Refusal(p, p) == "refuse.scene" then
+			return { panel = p, alpha = p:GetAlpha(), mouse = p:IsMouseInputEnabled(), keyboard = p:IsKeyboardInputEnabled() }
+		end
+	end
+end
+
+local function ghostBackdrop(b)
+	local p = b.panel
+	p:SetMouseInputEnabled(false)
+	p:SetKeyboardInputEnabled(false)
+	p:SetAlpha(0)
+end
+
 local function watch()
 	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, Embed.Check) end
 	Input.EachFrame("embed", Embed.Frame)
 end
+
+-- ── Colours ─────────────────────────────────────────────────
+-- A window that paints itself dark puts light text on it, which our own background would make
+-- unreadable. So a pinned window takes the colours of the one it holds: what the emptied window paints
+-- is drawn into a render target, once over black and once over white. Where the two agree it painted
+-- that colour; where they differ as the clears do, it painted nothing. The body's and the title
+-- strip's most common colours become the window's, unless the player has chosen colours already.
+
+local PROBE_HOOK = "PinnedPanels.Embed.Colours"
+local PROBE_COLS, PROBE_ROWS = 8, 5
+local PROBE_SOLID = 0.5   -- less opaque than this isn't a background
+local PROBE_SHARE = 1 / 3 -- of the samples that have to agree
+local PROBE_DARK = 140    -- a header darker than this gets light text
+local probing = {}        -- src -> true
+local probeRT
+
+-- The shell's Paint over a grey level, read at the points and at one point outside it (the clear itself,
+-- as the target gives it back). Its own function, under pcall (R18).
+local function paintOn(s, w, h, shade, points, ref)
+	render.PushRenderTarget(probeRT)
+	render.Clear(shade, shade, shade, 255, true, true)
+	cam.Start2D()
+	-- Whatever was painted last left its alpha and its clipping behind: a ghosted shell's 0, a
+	-- rectangle somewhere else on screen.
+	local alpha = surface.GetAlphaMultiplier()
+	local clipping = DisableClipping(true)
+	surface.SetAlphaMultiplier(1)
+	local ok = pcall(s.Paint, s, w, h)
+	surface.SetAlphaMultiplier(alpha)
+	DisableClipping(clipping)
+	cam.End2D()
+	local out
+	if ok then
+		render.CapturePixels()
+		out = { ref = { render.ReadPixel(ref[1], ref[2]) } }
+		for i, pt in ipairs(points) do out[i] = { render.ReadPixel(pt[1], pt[2]) } end
+	end
+	render.PopRenderTarget()
+	return out
+end
+
+-- The most common painted colour at points[from..to], or nil when too little there was painted alike.
+local function common(black, white, from, to)
+	local span = math.max((white.ref[1] - black.ref[1] + white.ref[2] - black.ref[2] + white.ref[3] - black.ref[3]) / 3, 1)
+	local buckets, best = {}, nil
+	for i = from, to do
+		local b, w = black[i], white[i]
+		local alpha = 1 - (w[1] - b[1] + w[2] - b[2] + w[3] - b[3]) / 3 / span
+		if alpha >= PROBE_SOLID then
+			-- A see-through background has no colour of its own on screen: it gets the one it shows
+			-- over mid grey. (Dividing the blend out isn't exact here: the target doesn't blend linearly.)
+			local r, g, bl = (b[1] + w[1]) / 2, (b[2] + w[2]) / 2, (b[3] + w[3]) / 2
+			local key = math.floor(r / 8) * 1024 + math.floor(g / 8) * 32 + math.floor(bl / 8)
+			local bucket = buckets[key] or { n = 0, r = 0, g = 0, b = 0 }
+			buckets[key] = bucket
+			bucket.n, bucket.r, bucket.g, bucket.b = bucket.n + 1, bucket.r + r, bucket.g + g, bucket.b + bl
+			if not best or bucket.n > best.n then best = bucket end
+		end
+	end
+	if not best or best.n < (to - from + 1) * PROBE_SHARE then return nil end
+	return Color(math.Round(best.r / best.n), math.Round(best.g / best.n), math.Round(best.b / best.n))
+end
+
+local function probe(src)
+	local e, win = Embed.live[src], Layout.Find(src)
+	local s = e and e.shell	if not (win and e.mode == "embed" and IsValid(s) and isfunction(s.Paint)) then return end
+	if #win.tabs ~= 1 or next(win.colors) ~= nil then return end
+	local w, h = s:GetSize()
+	w, h = math.min(w, ScrW() - 2), math.min(h, ScrH() - 2)
+	if w < PROBE_COLS or h < PROBE_ROWS then return end
+	local _, top = s:GetDockPadding()
+	local strip = IsValid(s.lblTitle) and top >= 8 and top < h / 2 and top or 0
+	local points = {}
+	for row = 1, PROBE_ROWS do
+		for col = 1, PROBE_COLS do
+			points[#points + 1] = { math.floor(w * (col - 0.5) / PROBE_COLS), math.floor(strip + (h - strip) * (row - 0.5) / PROBE_ROWS) }
+		end
+	end
+	local body = #points
+	for col = 1, strip > 0 and PROBE_COLS or 0 do
+		points[#points + 1] = { math.floor(w * (col - 0.5) / PROBE_COLS), math.floor(strip / 2) }
+	end
+	probeRT = probeRT or GetRenderTarget("PinnedPanelsProbe", ScrW(), ScrH())
+	local ref = { w + 1, h + 1 }
+	local black = paintOn(s, w, h, 0, points, ref)
+	local white = black and paintOn(s, w, h, 255, points, ref)
+	if not white then return end
+	local bg = common(black, white, 1, body)
+	if not bg then return end
+	-- No strip of its own, or nothing painted there: a header a shade off its background.
+	local header = body < #points and common(black, white, body + 1, #points)
+	if not header then
+		local shift = (bg.r + bg.g + bg.b) / 3 < PROBE_DARK and 18 or -18
+		header = Color(math.Clamp(bg.r + shift, 0, 255), math.Clamp(bg.g + shift, 0, 255), math.Clamp(bg.b + shift, 0, 255))
+	end
+	local light = (header.r * 299 + header.g * 587 + header.b * 114) / 1000 < PROBE_DARK
+	Layout.SetColors(win.id, { bg = bg, header = header, text = light and Color(240, 240, 240) or Color(30, 30, 30) })
+end
+
+-- Drawing is only possible while the frame is drawn, so the look is taken in the next one.
+local function probeSoon(src)
+	if not Embed.live[src] then return end
+	probing[src] = true
+	hook.Add("PostRenderVGUI", PROBE_HOOK, function()
+		hook.Remove("PostRenderVGUI", PROBE_HOOK)
+		local list = probing
+		probing = {}
+		for s in pairs(list) do
+			local ok, err = pcall(probe, s)
+			if not ok then ErrorNoHalt("[Pinned Panels] " .. s .. " colours: " .. tostring(err) .. "\n") end
+		end
+	end)
+end
+Embed.MatchColours = probeSoon
 
 -- The window whose part this is: the panel just below a root (the world panel, or the HUD's).
 local function windowOf(p)
@@ -118,8 +295,13 @@ local function windowOf(p)
 	return p
 end
 
+local giveKeyboard
+
 -- Moves target into tab src: a window's contents (mode "embed") or the one panel (mode "part").
 function Embed.Attach(src, target, mode)
+	-- A pinned window that was given the keyboard gives it back first: the window being emptied loses
+	-- it, and the engine would hand it to that one and raise it.
+	giveKeyboard(nil)
 	local e = { mode = mode, target = target, moved = {}, skip = {} }
 	e.box = vgui.Create("PinnedPanelsEmbedBox")
 	e.box.src = src
@@ -135,6 +317,9 @@ function Embed.Attach(src, target, mode)
 		ph:DockMargin(target:GetDockMargin())
 		ph:SetZPos(target:GetZPos())
 		ph:MoveToBefore(target)
+		-- The placeholder answers for the part where it was: an owner that goes through its children and
+		-- calls them (a tool list clearing every category's selected row) still reaches the part.
+		standIn(ph, target)
 		e.placeholder = ph
 		adopt(e, target)
 		target:Dock(FILL)
@@ -150,11 +335,33 @@ function Embed.Attach(src, target, mode)
 		e.box:SetSize(s:GetSize())
 		e.box.inner:DockPadding(s:GetDockPadding())
 		Embed.shells[s] = e
+		standIn(e.box.inner, s)
 		adoptChildren(e)
 		ghost(e)
+		e.backdrop = backdropOf(s)
+		if e.backdrop then ghostBackdrop(e.backdrop) end
+		probeSoon(src)
 	end
 	watch()
 	hook.Run("PinnedPanelsAdoptChanged")
+end
+
+-- How much of a window's top is only its title strip, which our own header replaces: a DFrame's top
+-- padding, but no further down than the first thing its owner put there (header buttons stay).
+function Embed.Strip(s)
+	if not IsValid(s.lblTitle) then return 0 end
+	local _, top = s:GetDockPadding()
+	local chrome = {}
+	for _, k in ipairs(CHROME) do
+		if IsValid(s[k]) then chrome[s[k]] = true end
+	end
+	for _, c in ipairs(s:GetChildren()) do
+		if not chrome[c] and c:IsVisible() and not c:IsPopup() then
+			local _, y = c:GetPos()
+			top = math.min(top, math.max(y, 0))
+		end
+	end
+	return top
 end
 
 -- A new pinned window for target, where it is on screen. A window's title strip is cropped away, so its
@@ -163,20 +370,31 @@ end
 function Embed.Take(target, adoptRec, waiting)
 	local x, y = target:LocalToScreen(0, 0)
 	local w, h = target:GetSize()
-	local _, top = target:GetDockPadding()
-	local strip = adoptRec.mode == "embed" and IsValid(target.lblTitle) and top or 0
+	local strip = adoptRec.mode == "embed" and Embed.Strip(target) or 0
 	local id, src = Layout.PinAdopted(adoptRec, x - CHROME_W / 2, y - CHROME_H, w + CHROME_W, h - strip + CHROME_HEADER + CHROME_H)
 	if strip > 0 then Layout.SetCrop(id, 1, { l = 0, t = strip, r = 0, b = 0 }) end
 	if not waiting then Embed.Attach(src, target, adoptRec.mode) end
-	Desktop.Front(id)
+	Embed.Front(id)
 	return id
+end
+
+-- Brings the window that just took a panel to the front, and keeps it there for a few frames: a
+-- window that loses the keyboard by being emptied hands it back to whichever had it before, and the
+-- engine raises that one over ours right after.
+local FRONT_FRAMES = 4
+local fronting = {} -- window id -> frames left
+
+function Embed.Front(id)
+	Desktop.Front(id)
+	fronting[id] = FRONT_FRAMES
 end
 
 -- Gives everything back: children to their parents with their layout, in their order; the part to its
 -- placeholder's place; the shell its size, alpha and input. If the owner removed its window, or the place
 -- the part was in, the adopted panels go too (R15). A panel its owner already took back is left where the
--- owner put it (R19).
-function Embed.Release(src)
+-- owner put it (R19). close: the player unpinned it, so a window is then closed as its own close button
+-- would (D39) instead of coming back on screen; one without a Close is hidden if it is a popup.
+function Embed.Release(src, close)
 	local e = Embed.live[src]
 	if not e then return end
 	Embed.live[src] = nil
@@ -204,14 +422,33 @@ function Embed.Release(src)
 	if IsValid(e.placeholder) then e.placeholder:Remove() end
 	local s, o = e.shell, e.original
 	if o then Embed.shells[s] = nil end
-	if o and IsValid(s) and not s:IsMarkedForDeletion() then
+	local alive = IsValid(s) and not s:IsMarkedForDeletion()
+	if alive then PP.Recipes.Forget(s) end
+	local b = e.backdrop
+	-- Unpinned, the window is closed and its owner removes the backdrop; if it only hides the window,
+	-- the backdrop stays as it is, unseen, rather than dimming the screen for a window that isn't there.
+	if b and alive and not close and IsValid(b.panel) and not b.panel:IsMarkedForDeletion() then
+		b.panel:SetAlpha(b.alpha)
+		b.panel:SetMouseInputEnabled(b.mouse)
+		b.panel:SetKeyboardInputEnabled(b.keyboard)
+	end
+	if o and alive then
 		s:SetPos(o.x, o.y)
 		s:SetSize(o.w, o.h)
 		s:SetAlpha(o.alpha)
 		s:SetMouseInputEnabled(o.mouse)
 		s:SetKeyboardInputEnabled(o.keyboard)
 		s:InvalidateLayout(true)
+		if close and s:IsVisible() and PP.Recipes.IsWindow(s) then
+			if isfunction(s.Close) then
+				ProtectedCall(function() s:Close() end) -- R18
+			elseif s:IsPopup() then
+				s:SetVisible(false)
+			end
+		end
 	end
+	-- The window brought the cursor and is gone or closed now: the cursor goes with it.
+	if e.cursor and (close or not alive) then Input.SetCursorMode(false) end
 	if IsValid(e.box) then e.box:Remove() end
 	hook.Run("PinnedPanelsAdoptChanged")
 end
@@ -295,6 +532,8 @@ local function frame(src, e, s)
 		end
 	end
 	if s:IsMouseInputEnabled() or s:IsKeyboardInputEnabled() or s:GetAlpha() > 0 then ghost(e) end
+	local b = e.backdrop
+	if b and IsValid(b.panel) and (b.panel:IsMouseInputEnabled() or b.panel:GetAlpha() > 0) then ghostBackdrop(b) end
 	if s:ChildCount() ~= e.count then adoptChildren(e) end
 	local box = e.box
 	if e.closed or not box:IsVisible() or not IsValid(box:GetParent()) then return end
@@ -303,6 +542,10 @@ local function frame(src, e, s)
 end
 
 function Embed.Frame()
+	for id, left in pairs(fronting) do
+		if Layout.Get(id) then Desktop.Front(id) end
+		fronting[id] = left > 1 and left - 1 or nil
+	end
 	for src, e in pairs(Embed.live) do
 		local s = e.shell
 		if e.mode == "embed" and IsValid(s) and not s:IsMarkedForDeletion() then frame(src, e, s) end
@@ -339,6 +582,8 @@ local function check(src, e)
 	local win, i = Layout.Find(src)
 	if not win then return Embed.Release(src) end
 	local s = e.shell
+	-- Something in the window removed its parent, which was our box: it meant the window.
+	if e.mode == "embed" and IsValid(s) and not (IsValid(e.box) and IsValid(e.box.inner)) then s:Remove() end
 	local gone = not IsValid(s) or s:IsMarkedForDeletion() or not IsValid(e.target) or e.target:IsMarkedForDeletion()
 	local tookBack = false
 	if e.mode == "part" and not gone then
@@ -370,7 +615,11 @@ hook.Add("PinnedPanelsChanged", "PinnedPanels.Embed", function(kind)
 	if kind ~= "windows" and kind ~= "tabs" then return end
 	for src in pairs(Embed.live) do
 		local win, i = Layout.Find(src)
-		if not win or win.tabs[i].adopt.mode == "manage" then Embed.Release(src) end
+		if not win then
+			Embed.Release(src, true)
+		elseif win.tabs[i].adopt.mode == "manage" then
+			Embed.Release(src)
+		end
 	end
 end)
 
@@ -379,7 +628,7 @@ end)
 -- (Desktop.UpdateStates).
 local keyboardWindow
 
-local function giveKeyboard(win)
+function giveKeyboard(win)
 	if IsValid(keyboardWindow) and keyboardWindow ~= win then keyboardWindow:SetKeyboardInputEnabled(false) end
 	keyboardWindow = win
 	if IsValid(win) then win:SetKeyboardInputEnabled(true) end

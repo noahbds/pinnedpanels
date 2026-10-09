@@ -92,7 +92,7 @@ end
 -- Declared in the commit that first reads them (§21.1); the full list is §21.2.
 
 Settings.Add("autoRestore", { type = "bool", default = true, page = "general", section = "behavior", label = "opt.autorestore" })
-Settings.Add("idleOpacity", { type = "int", min = 10, max = 100, default = 100, page = "general", section = "behavior", label = "opt.idle_alpha" })
+Settings.Add("idleOpacity", { type = "int", min = 0, max = 100, default = 100, page = "general", section = "behavior", label = "opt.idle_alpha" })
 Settings.Add("navEverywhere", { type = "bool", default = false, page = "general", section = "behavior", label = "opt.kbnav_outside" })
 Settings.Add("snap", { type = "bool", default = true, page = "general", section = "snapping", label = "opt.snap" })
 Settings.Add("snapDistance", { type = "int", min = 0, max = 40, default = 12, page = "general", section = "snapping", label = "opt.snap_dist" })

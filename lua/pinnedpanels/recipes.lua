@@ -172,7 +172,8 @@ function Recipes.Title(adopt)
 	local s = adopt.signature
 	if s.title then return phrase(s.title) end
 	if s.desktop then return PP.Sources.Title("desktop:" .. s.desktop) end
-	return s.class or s.addon or PP.L("adopt.window")
+	-- Its addon says more than a class like "xlib_Panel" does.
+	return s.addon or s.class or PP.L("adopt.window")
 end
 
 -- A live panel's name, for the picker: its title, else its class or base.
@@ -225,8 +226,12 @@ end
 
 -- A full-screen panel that paints itself is a scene over the world (a character screen, a weapon
 -- bench), not a window (D32).
+-- So is a full-screen layer that isn't a window at all: a web page over the whole screen (an addon's
+-- HUD drawn in HTML), or anything that size that takes no clicks.
+local WEB = { HTML = true, HtmlPanel = true, Awesomium = true, Chromium = true }
 local function isScene(p)
 	if p:GetWide() < ScrW() or p:GetTall() < ScrH() then return false end
+	if WEB[p:GetClassName()] or not p:IsMouseInputEnabled() then return true end
 	return isfunction(p.Paint) and not isStock(fileOf(p.Paint))
 end
 
@@ -284,6 +289,13 @@ function Recipes.RootFor(panel, root)
 	return root
 end
 
+-- Whether a panel is a window: just below a root (the world panel, or the HUD's), or a desktop widget's
+-- window in the C menu (G47).
+function Recipes.IsWindow(p)
+	local parent = p:GetParent()
+	return not IsValid(parent) or not IsValid(parent:GetParent()) or PP.Openers.DesktopId(p) ~= nil
+end
+
 -- What pinning panel (root, or a part of root) would do (§33.9): embed it. A desktop widget's own window
 -- comes back by being opened as the C menu does; anything else through the command that is tied to it
 -- (Openers.Best), else when its addon opens it. Recreating its class is never suggested, only offered
@@ -321,6 +333,28 @@ end
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 -- waiting: the pinned window is made now and takes the panel when it is caught.
 function Recipes.Take(panel, root, mode, recipe, waiting)
+	-- A scroll panel's canvas is a piece of it, not a panel of its own: taken alone, its owner can no
+	-- longer scroll it or reach what is in it (a tool list stops clearing its selected row). The scroll
+	-- panel is what is meant.
+	while panel ~= root do
+		local parent = panel:GetParent()
+		local ok, canvas = pcall(function() return isfunction(parent.GetCanvas) and parent:GetCanvas() end)
+		if not (ok and canvas == panel) then break end
+		panel = parent
+	end
+	if panel == root and mode == "part" then mode = "embed" end
+	-- A tool's page in the spawn menu is the spawn menu's: it takes the page back and lays it out again
+	-- every time the tool is chosen. The tool itself is pinned instead, with a page of its own.
+	if panel.ClassName == "ControlPanel" and isstring(panel.Name) and PP.Sources.catalogue["tool:" .. panel.Name] then
+		return Desktop.PinSource("tool:" .. panel.Name)
+	end
+	-- Only a window is taken whole. A panel that sits inside one by now (a tool's page, recorded as it
+	-- was made and then put in the spawn menu) is a part of it: emptied like a window, its children
+	-- would lose the parent they call into.
+	if mode ~= "part" and not Recipes.IsWindow(root) then
+		panel, mode = root, "part"
+		while not Recipes.IsWindow(root) do root = root:GetParent() end
+	end
 	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root), needsKeyboard = root:IsKeyboardInputEnabled() }
 	if mode == "manage" then return PP.Manage.Take(root, adopt) end
 	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
@@ -338,8 +372,8 @@ function Recipes.SwitchMode(id, index, mode)
 		if not IsValid(panel) then return end
 		PP.Manage.Release(id)
 		Layout.SetAdopt(id, index, { mode = "embed" })
-		local _, top = panel:GetDockPadding()
-		if IsValid(panel.lblTitle) and top > 0 then Layout.SetCrop(id, index, { l = 0, t = top, r = 0, b = 0 }) end
+		local top = PP.Embed.Strip(panel)
+		if top > 0 then Layout.SetCrop(id, index, { l = 0, t = top, r = 0, b = 0 }) end
 		PP.Embed.Attach(tab.src, panel, "embed")
 		Desktop.Front(id)
 		return
@@ -405,6 +439,11 @@ function Recipes.Attach(w, panel, opened)
 	if not IsValid(panel) then return false end
 	PP.Embed.Attach(w.tab.src, panel, mode)
 	PP.Embed.live[w.tab.src].cursor = cursor or nil -- the window brought the cursor: closing it takes it back
+	-- The player just opened it: it shows, in front, where it would have.
+	if opened and w.index then
+		Layout.Activate(w.rec.id, w.index)
+		PP.Embed.Front(w.rec.id)
+	end
 	return true
 end
 
@@ -420,6 +459,19 @@ local function settled(p)
 	settling[p] = { w, h, a }
 	return false
 end
+-- Windows that were already on screen when a tab started waiting (at join, after a reload, given back):
+-- caught like any other, but the player didn't just open them, so they don't bring the cursor or come
+-- to the front. Noted the moment a tab starts waiting: by the first look, half a second later, a
+-- window opened in between would count as one of them.
+local present = setmetatable({}, { __mode = "k" })
+
+-- A window given back while it is still open (its part was taken back, its tab reloaded) is looked at
+-- again: it was marked as seen when it was caught.
+function Recipes.Forget(panel)
+	checked[panel] = nil
+	present[panel] = true
+end
+
 local ticks = 0
 -- Window id -> RealTime until which a window appearing for it is the one we opened (not the player).
 local expecting = {}
@@ -496,9 +548,10 @@ function Recipes.Catch()
 				end
 				if best then
 					local ours = (expecting[best.rec.id] or 0) > RealTime()
+					local opened = not ours and not present[p]
 					if bestStrong then
-						Recipes.Attach(best, p, not ours)
-						if not ours then learn(best) end
+						Recipes.Attach(best, p, opened)
+						if opened then learn(best) end
 					else
 						ask(best, p, cand)
 					end
@@ -521,7 +574,13 @@ function Recipes.Wake()
 		fresh = fresh or not known[w.tab.src]
 	end
 	known = now
-	if fresh then checked = setmetatable({}, { __mode = "k" }) end
+	if fresh then
+		checked = setmetatable({}, { __mode = "k" })
+		for _, p in ipairs(Recipes.TopLevels()) do present[p] = true end
+		if IsValid(g_ContextMenu) then
+			for _, p in ipairs(g_ContextMenu:GetChildren()) do present[p] = true end
+		end
+	end
 	if not timer.Exists(CATCH_TIMER) then timer.Create(CATCH_TIMER, CATCH_INTERVAL, 0, Recipes.Catch) end
 end
 
@@ -552,6 +611,19 @@ function Recipes.Open(rec, tab)
 		local panel
 		ProtectedCall(function() panel = vgui.Create(r.class) end)
 		if not IsValid(panel) then return end
+		-- A class that only makes a bare frame (a UI library's, filled by whoever uses it) isn't the
+		-- window: it would sit in the tab empty. The pin goes back to what does open it.
+		if not PP.Openers.Filled(panel) then
+			panel:Remove()
+			expecting[rec.id] = nil
+			local best = PP.Openers.Best(PP.Openers.Commands(tab.adopt.signature))
+			local recipe = best and { kind = "command", command = best, confirmed = true } or { kind = "watch" }
+			for i, other in ipairs(rec.tabs) do
+				if other == tab then Layout.SetAdopt(rec.id, i, { recipe = recipe }) end
+			end
+			notification.AddLegacy(PP.L("recipe.class_empty", Recipes.Title(tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_HINT, 10)
+			return
+		end
 		if tab.adopt.signature.popup then panel:MakePopup() end
 		Recipes.Attach({ rec = rec, tab = tab }, panel)
 	else
@@ -564,6 +636,62 @@ hook.Add("PinnedPanelsChanged", "PinnedPanels.Recipes", function(kind)
 end)
 hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Recipes", Recipes.Wake)
 
--- On join, windows already open are caught, and the rest wait for the player to open them: an opener is
--- another addon's code, and only a click runs it (D25, R17).
+-- ── Reopening at join (D41) ─────────────────────────────────
+
+local AUTO_TIMER, AUTO_DELAY, AUTO_GRACE, AUTO_RETRY, AUTO_STRIKES = "PinnedPanels.AutoOpen", 5, 6, 2, 2
+-- Whether a pin is reopened at join: one that comes back with a command the player allowed, unless
+-- the player turned that off (or it stopped working).
+function Recipes.AutoOpens(adopt)
+	return adopt.autoOpen ~= false and adopt.recipe.kind == "command" and adopt.recipe.confirmed == true
+end
+
+-- The one case where an opener runs without a click (D25, R17): a pin's allowed command, at join.
+-- Once per session, a few seconds after the player is in the game, when the other addons have loaded
+-- (the catalogue is ready much earlier, on the loading screen). A pin whose window doesn't come back
+-- on AUTO_STRIKES joins running stops being reopened, and says so.
+local function autoOpen()
+	-- Not in the game yet: the opener would run against a player that doesn't exist.
+	if not Desktop.ready or not IsValid(LocalPlayer()) then
+		return timer.Create(AUTO_TIMER, AUTO_RETRY, 1, autoOpen)
+	end
+	local tried = {}
+	for _, w in ipairs(Recipes.Waiting()) do
+		local a = w.tab.adopt
+		if Recipes.AutoOpens(a) and Recipes.CanOpen(a) then
+			Recipes.Open(w.rec, w.tab)
+			tried[#tried + 1] = w
+		end
+	end
+	if #tried == 0 then return end
+	timer.Create(AUTO_TIMER, AUTO_GRACE, 1, function()
+		for _, w in ipairs(tried) do
+			local rec = Layout.Get(w.rec.id)
+			if rec and rec.tabs[w.index] == w.tab then
+				local back = Recipes.IsLive(rec, w.tab)
+				local fails = not back and (w.tab.adopt.autoFails or 0) + 1 or nil
+				if fails and fails >= AUTO_STRIKES then
+					Layout.SetAdopt(rec.id, w.index, { autoOpen = false, autoFails = 0 })
+					notification.AddLegacy(PP.L("auto.failed", Recipes.Title(w.tab.adopt), w.tab.adopt.recipe.command), NOTIFY_HINT, 10)
+				elseif fails ~= w.tab.adopt.autoFails then
+					Layout.SetAdopt(rec.id, w.index, { autoFails = fails or 0 })
+				end
+			end
+		end
+	end)
+end
+Recipes.AutoOpen = autoOpen
+
+-- Loaded into a session that is already under way (a reload): that isn't a join.
+if Desktop.ready and IsValid(LocalPlayer()) then Recipes.joined = true end
+
+local function joined()
+	if Recipes.joined then return end
+	Recipes.joined = true
+	timer.Create(AUTO_TIMER, AUTO_DELAY, 1, autoOpen)
+end
+Recipes.Joined = joined
+
+-- On join, windows already open are caught; the rest wait for the player to open them (an opener is
+-- another addon's code, and only a click runs it: D25, R17), or are reopened by their command (D41).
 hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", Recipes.Wake)
+hook.Add("InitPostEntity", "PinnedPanels.Recipes", joined)

@@ -102,7 +102,12 @@ local function sanitizeAdopt(a)
 			sig.path[i] = { i = index, class = text(step.class, MAX_TITLE) }
 		end
 	end
-	return { mode = a.mode, signature = sig, recipe = sanitizeRecipe(a.recipe), needsKeyboard = a.needsKeyboard == true, noGeometry = a.noGeometry == true }
+	local recipe = sanitizeRecipe(a.recipe)
+	-- Reopening at join (D41) is on unless turned off; autoFails counts joins it didn't come back on.
+	local autoOpen
+	if a.autoOpen == false then autoOpen = false end
+	return { mode = a.mode, signature = sig, recipe = recipe, needsKeyboard = a.needsKeyboard == true, noGeometry = a.noGeometry == true,
+		autoOpen = autoOpen, autoFails = int(a.autoFails, 1, 9) }
 end
 
 local function number(v)
@@ -213,14 +218,13 @@ local function sanitizeWindow(w, seen, summary)
 		title = title,
 		accent = Util.ArrayToColor(w.accent),
 		locked = w.locked == true,
-		clickThrough = w.clickThrough == true,
 		filterBar = w.filterBar == true,
 		quickKey = int(w.quickKey, 1, 511),
 		showWith = w.showWith == "contextmenu" and "contextmenu" or nil,
 		colors = {},
 	}
 	local opacity = tonumber(w.opacity)
-	if Util.Finite(opacity) then win.opacity = math.Clamp(opacity, 0.05, 1) end
+	if Util.Finite(opacity) then win.opacity = math.Clamp(opacity, 0, 1) end
 	if istable(w.colors) then
 		win.colors.bg = Util.ArrayToColor(w.colors.bg)
 		win.colors.header = Util.ArrayToColor(w.colors.header)
@@ -299,7 +303,7 @@ function Storage.Encode(doc)
 				id = w.id, kind = w.kind, tabs = tabs, active = math.min(w.active, math.max(#tabs, 1)),
 				x = w.x, y = w.y, w = w.w, h = w.h, state = w.state, restore = w.restore,
 				title = w.title, accent = colorOrNil(w.accent),
-				locked = w.locked, clickThrough = w.clickThrough, filterBar = w.filterBar,
+				locked = w.locked, filterBar = w.filterBar,
 				opacity = w.opacity, quickKey = w.quickKey, showWith = w.showWith,
 				colors = { bg = colorOrNil(w.colors.bg), header = colorOrNil(w.colors.header), text = colorOrNil(w.colors.text) },
 			}

@@ -32,11 +32,6 @@ local function collect()
 				Desktop.RestoreAndFront(id)
 				Input.SetCursorMode(true)
 			end)
-			if rec.clickThrough then
-				add("action", PP.L("act.restore_inter", title), PP.L("sub.disable_ct"), "icon16/cursor.png", function()
-					Layout.SetClickThrough(id, false)
-				end)
-			end
 		end
 	end
 	for _, e in ipairs(Sources.tools) do

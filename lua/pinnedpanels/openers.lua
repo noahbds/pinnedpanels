@@ -23,6 +23,12 @@ local RISKY = {
 	run = true, close = true, hide = true, dump = true, debug = true, cleanup = true, restart = true, disconnect = true,
 }
 local STOP_WORDS = { the = true, ["and"] = true, ["for"] = true, with = true, your = true }
+-- File names that say nothing about what the file is for.
+local PLAIN_FILES = {
+	init = true, client = true, shared = true, server = true, main = true, core = true, base = true, util = true, utils = true,
+	helpers = true, frame = true, derma = true, vgui = true, autorun = true, hud = true, lib = true, library = true,
+}
+local NAME_SCORE = 7
 -- Folders shared by many addons, which say nothing about which addon a file belongs to.
 local SHARED_ROOTS = { ["lua/autorun/"] = true, ["lua/vgui/"] = true, ["lua/includes/"] = true, ["lua/entities/"] = true,
 	["lua/weapons/"] = true, ["lua/effects/"] = true, ["lua/matproxy/"] = true, ["lua/postprocess/"] = true }
@@ -72,6 +78,20 @@ function Openers.Risky(name)
 	return false
 end
 
+-- The words of a signature's file names: "lua/ulx/modules/cl/xgui_helpers.lua" → xgui, helpers. A command
+-- called exactly one of them is named after the file that builds the window ("xgui"), which ties it to
+-- the window even when it is registered somewhere else (through a command library, say). Words that
+-- only say "this opens something" or "this is a file" don't count.
+local function fileWords(sig)
+	local out = {}
+	for _, src in ipairs({ sig.src, sig.src2 }) do
+		for _, w in ipairs(words((src:match("([^/]+)%.lua$")))) do
+			if not OPEN_WORDS[w] and not PLAIN_FILES[w] then out[w] = true end
+		end
+	end
+	return out
+end
+
 -- A command whose own variables hold a function from the window's file (or a table of them) leads to it.
 -- Upvalues are read with the deprecated debug.getupvalue while it exists (G62); without it this adds nothing.
 local function upvalueEvidence(fn, src)
@@ -103,11 +123,11 @@ function Openers.Commands(sig)
 	local src = sig.src
 	if not src then return out end
 	-- The picker asks again for every panel under the cursor, and this walks every console command.
-	local key = table.concat({ src, sig.title or "", sig.class or "", sig.addon or "" }, "\n")
+	local key = table.concat({ src, sig.src2 or "", sig.title or "", sig.class or "", sig.addon or "" }, "\n")
 	if memo.key == key and RealTime() - memo.at < MEMO_TIME then return memo.list end
 	memo.key, memo.at, memo.list = key, RealTime(), out
 	local root = rootOf(src)
-	local titleWords, classWords = set(words(sig.title)), set(words(sig.class))
+	local titleWords, classWords, nameWords = set(words(sig.title)), set(words(sig.class)), fileWords(sig)
 	for name, fn in pairs(concommand.GetTable()) do
 		if isfunction(fn) and not ours(name) and not name:find("^[%+%-]") then
 			local from = fileOf(fn)
@@ -120,6 +140,7 @@ function Openers.Commands(sig)
 				score = 3
 			end
 			local evidence = upvalueEvidence(fn, src)
+			if nameWords[name:lower()] then evidence = evidence + NAME_SCORE end
 			score = score + evidence
 			if score > 0 then
 				local named = false
@@ -197,7 +218,10 @@ local function tops()
 end
 
 -- Whether a widget's init put something in the frame it was given. Most don't (G71).
-local function filled(frame)
+local filled
+function Openers.Filled(frame) return filled(frame) end
+
+function filled(frame)
 	if not IsValid(frame) or frame:IsMarkedForDeletion() or not frame:IsVisible() then return false end
 	local chrome = {}
 	for _, k in ipairs(CHROME) do

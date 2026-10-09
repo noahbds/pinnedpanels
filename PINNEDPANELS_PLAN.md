@@ -107,6 +107,9 @@
 | **D35** | Does part mode have a fallback? | **No.** Wrap and Manage act on whole windows. A part that fails is released and its tab removed | Non-goal 2 |
 | **D36** | What ships as 2.0.0? | Phases A–D and the release work of §8. **Wrap and the health watch may ship as 2.1.0** if the spike slips; Manage ships in 2.0 either way, because it is the tier that cannot break | Manage is ≈ 280 lines that already existed (removed in `659d2ec`) |
 | **D37** | Default cursor key | Stays `F4`, except when `F4` is bound to `gm_showspare2` and the gamemode is not sandbox: then unbound, with one notification | SR.N11 |
+| **D39** | What happens to an embedded window when the player unpins it? | **It is closed**, the way its own close button would (`Close`, under `ProtectedCall`); a popup without `Close` is hidden. A part goes back into its window. Released for any other reason (reload, import, switch to Manage, step-down), the window is given back as it was | Decided by the owner on 2026-10-06, in game: a window popping back on screen after "unpin" reads as a bug |
+| **D40** | What colours does a window holding another addon's window have? | **That window's own**, read once when it is taken: its `Paint` is drawn into a render target over black and over white, and the body's and title strip's most common colours become the window's background and header (title text light or dark to suit). Only for a single-tab window whose colours the player hasn't chosen; a window that paints nothing, or only a faint tint, keeps ours | Decided by the owner on 2026-10-06. Most addon windows are dark with light text; ours is light |
+| **D41** | Is a pin reopened at join? | **Yes, by default, when it comes back with a `command` the player allowed**; "Reopen When I Join" in the tab's menu turns it off per pin. Never for `class` or `desktop` recipes, nor for a shared layout's commands until they are allowed. Once per session, 5 s after `InitPostEntity` (the catalogue is ready much earlier, on the loading screen, where the opener would run against nothing). A pin whose window hasn't come back 6 s later on two joins running is switched off, with one notification. Narrows D25 and R17: this is the one opener that runs without a click | Decided by the owner on 2026-10-06, twice: first as an option, then on by default. D25 was written when the opener was often a wrong guess; a command the player accepted and that keeps working isn't one |
 | **D38** | Singleton spawn-menu tabs | Not fixed. A builder that replaces console commands while it runs triggers a one-time warning; a host whose content dies rebuilds (capped) | SR.N1 |
 
 ---
@@ -338,6 +341,72 @@ What was merged by hand:
 - "Takes the Keyboard When Clicked" stays a tab action and now applies to managed windows too.
 - The picker still pins in Embed mode (D24: Embed first). Record mode offers both again.
 
+### Found in game (2026-10-06)
+
+Live tests are in `tests/`, run on a connected client through the gluals MCP (`tests/00_harness.lua` first; results in the client's `data/pinnedpanels_test/`).
+
+- [x] X1 Unpinning an embedded window closes it instead of restoring it [`embed.lua`; D39]
+- [x] X2 Only a window is taken whole: a panel that sits inside one is taken as a part, whatever the caller asked [`Recipes.Take`, `Recipes.IsWindow`]
+  - Seen with Record mode: a tool's `ControlPanel` is created without a parent, recorded as a window, then put in the spawn menu. Emptied, its `DCategoryHeader` called `GetExpanded` on our box.
+- [x] X3 A window that brought the cursor takes it away when its owner closes it by removing it (`DFrame:Close`), not only when it is hidden [`embed.lua`; SR.B5]
+- [ ] X4 A child its owner puts back into the emptied window is invisible there until the owner adds another child, then it is adopted again [`embed.lua`; C3]
+- [x] X5 A window that paints its own dark background was unreadable in a tab (LVS: white text on our light window). A pinned window now takes the colours of the window it holds [`embed.lua`, "Colours"; D40]
+  - Seen in game with LVS: grey body, dark red header, light title. The paint passthrough (C9, S3) is still open, for what a window draws besides a flat background (a logo, a phone's body).
+
+- [x] X6 The title strip is cropped no further down than the first thing the owner put in it, so header buttons stay (RareLoad's Refresh / Clear / close sit in a 107 px header) [`Embed.Strip`]
+
+First rows of the phase G matrix, from `tests/real_window.lua` (pin whole window, cursor mode, unpin; no Lua errors at any step):
+
+| Window | Result | Notes |
+|---|---|---|
+| RareLoad timeline (`RARELOAD.Timeline.Open`) | works | Dark colours taken. Recipe `watch` (no console command opens it). The title and subtitle its frame paints in the header are not shown: C9/S3 |
+| ULX XGUI (`xgui show`) | works | Kept and hidden by its owner, not removed: unpin hides it and `xgui show` brings it back whole. No colours taken (its frame paints nothing). Titled by its class, `xlib_Panel` |
+| LVS settings (`lvs_openmenu`) | works | Colours taken (grey body, dark red header) |
+
+- [x] X7 A window given back while still open (its part taken back, its tab released without being unpinned) is caught again: it stayed marked as seen from when it was first caught [`Recipes.Forget`, called by `Embed.Release` and `Manage.Release`]
+
+Used and cycled while pinned, with real mouse and key input sent through the engine (`tests/real_rareload.lua`, `tests/real_xgui.lua`):
+
+| Window | Controls | Life while pinned |
+|---|---|---|
+| RareLoad timeline | Row, filter chips, sort menu, search box (takes the keyboard, typing arrives), header Refresh: all reach the control and are handled | Closed by its own button → tab waits; opened again → caught, same crop and colours; replaced by its owner → new one caught; already open while its tab waits → caught |
+| ULX XGUI | Sheet tabs, a command category | `xgui hide` → tab says closed; `xgui show` / `toggle` → back, panels where they were, shell stays invisible through XGUI's fade, cursor comes and goes with it; given back and caught again; opens and closes normally after unpin |
+
+- [x] X8 An overlay window's backdrop (a bare full-screen popup painted by the same file, which dims the screen and closes the window when clicked) is ghosted with its window and comes back with it [`embed.lua`, `backdropOf`]
+  - Seen with RareLoad's objects inspector: pinned, its backdrop dimmed everything and the first click anywhere closed it.
+- [x] X9 A window that just took a panel stays in front for a few frames, and a pinned window holding the keyboard gives it back first: the emptied window loses the keyboard, the engine hands it to that one and raises it over the new window [`Embed.Front`, `Embed.Attach`]
+- [x] X10 A window the player just opened and that is caught comes to the front with its tab active [`Recipes.Attach`]
+
+- [x] X11 Bound keys work while another addon's window is open. They were silenced whenever anything held the keyboard, which most addon windows do by `MakePopup`; now only while a text field or a web page has it [`input.lua`, `gated`]. Changes E13: "typing" no longer means "any keyboard focus"
+  - Key bindings and per-frame work also survive a reload of `input.lua`.
+
+- [x] X12 A command named after the file that builds the window is tied to it, wherever it is registered: `xgui` is registered by ULib's command library, in another addon, and its window is built by `xgui_helpers.lua` [`openers.lua`, `fileWords`; extends D26's evidence rules]
+- [x] X13 The `class` recipe checks what it made: a class that only gives a bare frame (`xlib_Panel`, a UI library's) is removed again, and the pin changes to the command tied to it, else to `watch`, with one notification [`Recipes.Open`; SR.B1]
+
+- [x] X14 Pins are reopened at join by their allowed command; "Reopen When I Join" turns it off per pin [`recipes.lua` `autoOpen`, `actions.lua`, `layout.lua`, `storage.lua`; D41]. Test: `tests/auto_open.lua`; checked with a real reconnect on XGUI (ran `xgui` 5 s in, caught 1 s later)
+- [x] X15 A window that was already on screen when its tab started waiting (at join, after a reload, given back) is caught without bringing the cursor or coming to the front: the player didn't just open it [`recipes.lua`, `present`]
+
+Reported by the owner on 2026-10-09. Run in game the same day: `tests/batch_1009.lua` (41 checks) and `tests/real_glide.lua`.
+
+- [x] X16 Click-through is removed: the action, the window flag, the palette entry, the header-only hover test, the ALT override and its strings. Old saves' `clickThrough` is ignored. ALT still suspends snapping
+- [x] X17 Idle opacity can be 0 (invisible outside cursor mode): the setting, the per-window value and the menu (was 10 % and 5 % floors). The setting is a console variable whose lower bound is fixed when the game creates it: a session begun before this change keeps 10 until the game restarts
+- [x] X18 A full-screen layer that isn't a window is refused as a scene: a web page over the whole screen (Glide draws its HUD in one, and it could be pinned), or anything that size that takes no clicks [`recipes.lua`, `isScene`; D32]
+- [x] X19 The box stands in for the window its contents came from: the window's Lua methods are passed on from the contents' new parent, and what they read from it is the window's [`embed.lua`, `standIn`]. Glide's tabbed frame: `styled_theme_tabbed_frame.lua:29: attempt to call method 'SetActiveTab'`, a tab button calling its parent. A child that removes its parent removes the window
+  - In game: a metatable on a panel's table is consulted, so plain fields read through the box too. Glide's settings window pins and its tabs work.
+- [x] X20 The "(cropped)" mark is for a crop the player made, not for a pinned window's title strip, which is always cropped away [`vgui/window.lua`]
+- [x] X21 Using the mouse ends what the keyboard had selected: the ring stayed on a control of a page the player had left [`nav.lua`]
+- [x] X22 Picking a tool's page in the spawn menu pins the tool itself, with a page of its own: the spawn menu takes its page back and lays it out again every time the tool is chosen [`Recipes.Take`]
+- [x] X23 A pin without a title or a telling class is named after its addon ("ULX", not "xlib_Panel") [`Recipes.Title`]
+
+- [x] X24 Yellow rows in a pinned tool list (every tool once chosen stayed marked): ours, when the pin was a piece inside the list. The list clears the selected row by going through its children. Two fixes: a scroll panel's canvas is never taken alone, the scroll panel is [`Recipes.Take`]; and a part's placeholder answers for the part where it was, as the box does for a window, so a single category pinned out of the list is still reached [`embed.lua`, `standIn` on the placeholder]. Checked with the list, its canvas and one category pinned: one row selected each time.
+- [x] X25 Windows already on screen are noted the moment a tab starts waiting, not at the first look half a second later: a window reopened within that time was taken for one of them and didn't bring the cursor [`Recipes.Wake`; corrects X15]
+
+| Window | Controls | Life while pinned |
+|---|---|---|
+| RareLoad objects inspector (opened from the timeline's objects button) | Opened from a pinned timeline: opens over it, its rail filters and close button work, the timeline stays pinned. Pinned itself: no backdrop left, in front of the timeline, filters work, colours taken | Unpinned → closed with its backdrop; given back → window and backdrop as they were |
+
+Known and left: RareLoad's ↑/↓/Enter/Delete keys act only while its own frame has focus, which an emptied frame never has. A real disconnect and rejoin was tried for XGUI (X14).
+
 ### Phase E — In-game spike (≈ ½ day) ⚑ game
 
 - [ ] E1 Run §7 and write each result into §7's table.
@@ -377,7 +446,7 @@ Each row settles something the review could not. Results go in the last column.
 | S3 | Does calling a shell's `Paint` from our box draw at the right origin and clip? Test with LVS (header), gPhone (body), PAC (render bar) | C9: passthrough on or removed | |
 | S4 | Does resizing a `FILL`-docked child from outside re-invalidate its new parent's layout? | Part mode on PAC's divider | |
 | S5 | With D29, does a tab holding PAC settle at full height without flicker? | C5 thresholds | |
-| S6 | Is `IsValid` still true on a panel in the frame `Remove()` was called? | B5 detail | |
+| S6 | Is `IsValid` still true on a panel in the frame `Remove()` was called? | B5 detail | **No.** `IsValid` is false and `IsMarkedForDeletion` true at once (2026-10-06) |
 | S7 | Does `GetText` on a removed panel throw? | Whether A2 was fixing a real error | |
 | S8 | After a click on an embedded panel with `needsKeyboard`, does the cursor key still work? | SR.C12 | |
 | S9 | In TTT2 or Cinema after A1: do windows, taskbar and palette work? Is there any way to reach the hub's pages? | Whether the hub needs a standalone window | |
@@ -433,7 +502,7 @@ Two of these are now better motivated by the review:
 - [ ] This file is updated if the design changed.
 
 ### Rule checks (run before every phase is closed)
-- [ ] `grep -rn "Recipes.Open(" lua` → only `vgui/hub_pinned.lua` and `openers.lua` (R17).
+- [ ] `grep -rn "Recipes.Open(" lua` → only `vgui/hub_pinned.lua`, `openers.lua` and `autoOpen` in `recipes.lua` (R17, D41).
 - [ ] `grep -rn 'hook.Add( *"Think"' lua` → 1 match (`input.lua`).
 - [ ] `grep -rn "gui.EnableScreenClicker" lua` → only `input.lua`.
 - [ ] `grep -rn "timer.Simple" lua` → only inside `Util.NextFrame`.

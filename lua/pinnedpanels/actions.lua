@@ -494,18 +494,6 @@ Actions.Add({
 	run = function(ctx) Layout.SetFilterBar(ctx.id, not ctx.window.filterBar) end,
 })
 
-Actions.Add({
-	id = "clickthrough", scope = "window", managed = true, name = "ctx.clickthrough",
-	icon = function(ctx) return ctx.window.clickThrough and "icon16/shape_square.png" or "icon16/shape_square_go.png" end,
-	label = function(ctx) return PP.L(ctx.window.clickThrough and "ctx.disable_ct" or "ctx.clickthrough") end,
-	menu = { group = "style", window = 44 },
-	run = function(ctx)
-		local on = not ctx.window.clickThrough
-		Layout.SetClickThrough(ctx.id, on)
-		if on then notification.AddLegacy(PP.L("clickthrough.notify"), NOTIFY_GENERIC, 6) end
-	end,
-})
-
 -- Another addon's panel that isn't a text field (an editor, say) can take the keyboard when clicked
 -- (§33.5, §33.6), embedded or managed.
 Actions.Add({
@@ -514,6 +502,19 @@ Actions.Add({
 	menu = { group = "style", window = 45, tab = 45 },
 	visible = function(ctx) return ctx.tab.adopt ~= nil end,
 	run = function(ctx) Layout.SetAdopt(ctx.id, ctx.index, { needsKeyboard = not ctx.tab.adopt.needsKeyboard }) end,
+})
+
+-- A pin that comes back with a command the player allowed has it run at join (D41), unless this is
+-- turned off: it is the one opener that runs without a click.
+Actions.Add({
+	id = "auto_open", scope = "tab", managed = true, name = "ctx.auto_open", label = "ctx.auto_open",
+	icon = function(ctx) return PP.Recipes.AutoOpens(ctx.tab.adopt) and "icon16/tick.png" or "icon16/application_go.png" end,
+	menu = { group = "style", window = 46, tab = 46 },
+	visible = function(ctx)
+		local a = ctx.tab.adopt
+		return a ~= nil and a.recipe.kind == "command" and a.recipe.confirmed == true
+	end,
+	run = function(ctx) Layout.SetAdopt(ctx.id, ctx.index, { autoOpen = not PP.Recipes.AutoOpens(ctx.tab.adopt), autoFails = 0 }) end,
 })
 
 -- ── Window: groups (F15) ────────────────────────────────────
@@ -614,7 +615,7 @@ Actions.Add({
 		local items = {
 			{ text = PP.L("ctx.use_global", Settings.Get("idleOpacity")), icon = tick(current == nil), run = function() Layout.SetOpacity(ctx.id, nil) end },
 		}
-		for _, pct in ipairs({ 100, 75, 50, 25, 1 }) do
+		for _, pct in ipairs({ 100, 75, 50, 25, 0 }) do
 			items[#items + 1] = { text = pct .. "%", icon = tick(current == pct / 100), run = function() Layout.SetOpacity(ctx.id, pct / 100) end }
 		end
 		items[#items + 1] = { spacer = true }
@@ -622,7 +623,7 @@ Actions.Add({
 			local pct = math.Round((current or Settings.Get("idleOpacity") / 100) * 100)
 			PP.Dialogs.Text(PP.L("custom.idle_title"), PP.L("custom.idle_desc"), tostring(pct), function(value)
 				local n = tonumber(value)
-				if n then Layout.SetOpacity(ctx.id, math.Clamp(n, 10, 100) / 100) end
+				if n then Layout.SetOpacity(ctx.id, math.Clamp(n, 0, 100) / 100) end
 			end, "btn.apply")
 		end }
 		return items

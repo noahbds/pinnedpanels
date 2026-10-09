@@ -85,8 +85,10 @@ function PANEL:Refresh()
 	local tab, shown = self:ShownTab()
 	local crop = self:ActiveCrop(tab)
 	local title = rec.title or (tab and Layout.TabTitle(tab)) or ""
-	if rec.clickThrough then title = title .. "  " .. PP.L("ind.clickthrough") end
-	if crop then title = title .. "  " .. PP.L("ind.cropped") end
+	-- Not for a pinned window's own title strip, which is always cropped away: only for a crop the
+	-- player made.
+	local strip = crop and tab and tab.adopt and crop.l == 0 and crop.r == 0 and crop.b == 0
+	if crop and not strip then title = title .. "  " .. PP.L("ind.cropped") end
 	self.titleText = title
 
 	local items = {}
@@ -157,15 +159,6 @@ function PANEL:Zone(x, y)
 		return (n and "n" or s and "s" or "") .. (west and "w" or e and "e" or "")
 	end
 	if y < HEADER then return "header" end
-end
-
--- Click-through windows let clicks through everywhere but the header, unless ALT is held (F11, G25).
-function PANEL:TestHover(x, y)
-	local rec = self.rec
-	if rec and rec.clickThrough and not Input.AltHeld() and not self.editing then
-		local _, ly = self:ScreenToLocal(x, y)
-		return ly >= 0 and ly < HEADER
-	end
 end
 
 -- ── Gestures ────────────────────────────────────────────────

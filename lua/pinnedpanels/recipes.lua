@@ -581,8 +581,13 @@ function Recipes.Wake()
 			for _, p in ipairs(g_ContextMenu:GetChildren()) do present[p] = true end
 		end
 	end
-	if not timer.Exists(CATCH_TIMER) then timer.Create(CATCH_TIMER, CATCH_INTERVAL, 0, Recipes.Catch) end
+	-- Through the table, so the timer runs this file's Catch and not the one it was made with.
+	if not timer.Exists(CATCH_TIMER) then timer.Create(CATCH_TIMER, CATCH_INTERVAL, 0, function() Recipes.Catch() end) end
 end
+
+-- A timer left running by an earlier load of this file (a pin was still waiting when the addon was
+-- reloaded) would go on calling that load's Catch, which knows nothing of what this one opens.
+timer.Remove(CATCH_TIMER)
 
 -- ── Opening ─────────────────────────────────────────────────
 
@@ -695,3 +700,6 @@ Recipes.Joined = joined
 -- another addon's code, and only a click runs it: D25, R17), or are reopened by their command (D41).
 hook.Add("PinnedPanelsCatalogChanged", "PinnedPanels.Recipes", Recipes.Wake)
 hook.Add("InitPostEntity", "PinnedPanels.Recipes", joined)
+
+-- Reloaded on its own while pins wait: the timer removed above starts again.
+if Desktop.ready then Recipes.Wake() end

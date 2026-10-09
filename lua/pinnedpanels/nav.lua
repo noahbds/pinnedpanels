@@ -71,7 +71,7 @@ function Nav.Windows()
 	local list = {}
 	for id, win in pairs(Desktop.panels) do
 		local rec = Layout.Get(id)
-		if IsValid(win) and win:IsVisible() and rec then list[#list + 1] = { id = id, title = Layout.Title(rec):lower() } end
+		if IsValid(win) and win:IsVisible() and rec then list[#list + 1] = { id = id, title = Util.SortKey(Layout.Title(rec)) } end
 	end
 	table.sort(list, function(a, b)
 		if a.title ~= b.title then return a.title < b.title end
@@ -608,9 +608,13 @@ end)
 local function refreshLater() Nav.Refresh() end
 hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Nav", refreshLater)
 hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Nav", refreshLater)
+-- Once for a frame's changes, not once for each: noted here, and done by the desktop after it has
+-- made the windows visible or not. Done from a hook of its own, in whatever order hooks run, this
+-- could see a window just restored as still hidden and move the focus off it.
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Nav", function(kind)
-	if kind ~= "geometry" then Nav.Refresh() end
+	if kind ~= "geometry" then Nav.stale = true end
 end)
+hook.Remove("PinnedPanelsFlushed", "PinnedPanels.Nav")
 hook.Add("PinnedPanelsSettingChanged", "PinnedPanels.Nav", function(key)
 	if key == "navEverywhere" then Nav.Refresh() elseif key:sub(1, 3) == "nav" then bindKeys() end
 end)

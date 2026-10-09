@@ -16,7 +16,9 @@ local VERSION = 2
 local PREFIX = "PP2:"
 local MAX_IMPORT = 64 * 1024
 local MAX_DECOMPRESSED = 256 * 1024
-local MAX_WINDOWS, MAX_TABS = 64, 16
+-- Bounds for what a saved or shared layout may hold. Windows: well above what anyone pins by hand (a
+-- player with 62 was two away from the old limit of 64, past which windows were dropped on loading).
+local MAX_WINDOWS, MAX_TABS = 512, 16
 local MAX_TITLE, MAX_SRC = 64, 128
 local MAX_COORD = 32768
 local KINDS = { tool = true, creation = true, postprocess = true, adopt = true, active = true, quick = true }

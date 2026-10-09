@@ -171,8 +171,9 @@ local function ghostBackdrop(b)
 end
 
 local function watch()
-	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, Embed.Check) end
-	Input.EachFrame("embed", Embed.Frame)
+	-- Through the table, so a reload of this file is what runs from then on.
+	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, function() Embed.Check() end) end
+	Input.EachFrame("embed", function() Embed.Frame() end)
 end
 
 -- ── Colours ─────────────────────────────────────────────────
@@ -239,7 +240,7 @@ end
 
 local function probe(src)
 	local e, win = Embed.live[src], Layout.Find(src)
-	local s = e and e.shell	if not (win and e.mode == "embed" and IsValid(s) and isfunction(s.Paint)) then return end
+	local s = e and e.shell	if not (e and win and e.mode == "embed" and IsValid(s) and isfunction(s.Paint)) then return end
 	if #win.tabs ~= 1 or next(win.colors) ~= nil then return end
 	local w, h = s:GetSize()
 	w, h = math.min(w, ScrW() - 2), math.min(h, ScrH() - 2)

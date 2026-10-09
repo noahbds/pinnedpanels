@@ -107,6 +107,22 @@ function HEADER:SetText(text)
 	self.text = text:upper()
 end
 
+-- A tools category can be pinned whole: every tool of it that isn't pinned yet, in one tabbed window.
+function HEADER:SetCategory(category)
+	local b = self:Add("PinnedPanelsButton")
+	b:Dock(RIGHT)
+	b:SetWide(74)
+	b:DockMargin(0, 2, 3, 2)
+	b:SetLabel(PP.L("btn.pin_all"))
+	b:SetIcon("icon16/folder_add.png")
+	b:SetTooltip(PP.L("tip.pin_category"))
+	b.DoClick = function()
+		local made = PP.Batch.PinCategory(category)
+		if #made == 0 then return notification.AddLegacy(PP.L("pin.category_none", category), NOTIFY_HINT, 5) end
+		Desktop.RestoreAndFront(made[1])
+	end
+end
+
 function HEADER:Paint(w, h)
 	draw.RoundedBox(3, 0, 0, w, h, T.categoryBg)
 	surface.SetDrawColor(T.accent)
@@ -179,6 +195,7 @@ function CATALOG:Populate()
 			category = e.category
 			header = self.list:Add("PinnedPanelsCatalogHeader")
 			header:SetText(category)
+			if self.kind == "tool" then header:SetCategory(category) end
 			header:Dock(TOP)
 			header:DockMargin(2, #self.headers == 0 and 1 or 6, 2, 2)
 			self.headers[#self.headers + 1] = header

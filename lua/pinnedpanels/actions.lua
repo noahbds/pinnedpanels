@@ -275,7 +275,17 @@ Actions.Add({
 Actions.Add({
 	id = "arrange", scope = "global", icon = "icon16/application_tile_horizontal.png", label = "act.auto_arrange",
 	name = "kb.auto_arrange", sub = "sub.tile_visible", palette = true, bindable = true,
-	run = function() Layout.Arrange() end,
+	-- Not the windows that aren't on screen (hidden, or waiting for their addon's window): they would
+	-- take room from those that are.
+	run = function()
+		local how, minimized = Layout.Arrange(function(win) return Desktop.held[win.id] or Desktop.IsDormant(win) end)
+		-- Said when windows were changed to make them fit, since nothing else tells why they shrank.
+		if minimized > 0 then
+			notification.AddLegacy(PP.L("arrange.minimized", minimized), NOTIFY_HINT, 8)
+		elseif how == "grid" then
+			notification.AddLegacy(PP.L("arrange.grid"), NOTIFY_HINT, 6)
+		end
+	end,
 })
 
 Actions.Add({
@@ -335,11 +345,8 @@ Actions.Add({
 
 Actions.Add({
 	id = "unpin_all", scope = "global", icon = "icon16/cross.png", label = "act.unpin_all", sub = "sub.remove_every", palette = true,
-	run = function()
-		local ids = {}
-		for _, rec in ipairs(Layout.Windows()) do ids[#ids + 1] = rec.id end
-		for _, id in ipairs(ids) do Layout.Unpin(id) end
-	end,
+	-- Asks first when there are more than a few (Batch.Unpin).
+	run = function() PP.Batch.Unpin(PP.Batch.All()) end,
 })
 
 -- ── Window: tool ────────────────────────────────────────────
@@ -393,15 +400,6 @@ Actions.Add({
 	icon = function(ctx) return ctx.window.showWith and "icon16/tick.png" or "icon16/application_view_icons.png" end,
 	label = "ctx.with_context", menu = { group = "view", window = 24 },
 	run = function(ctx) Layout.SetShowWith(ctx.id, not ctx.window.showWith and "contextmenu" or nil) end,
-})
-
--- Hidden for this session; the Pinned page and palette show it again.
-Actions.Add({
-	id = "hide", scope = "window", managed = true, icon = "icon16/eye.png", label = "ctx.hide_panel", name = "kb.toggle_hide",
-	menu = { group = "view", window = 23 }, bindable = true,
-	run = function(ctx)
-		if Desktop.held[ctx.id] then Desktop.Show(ctx.id) else Desktop.Hide(ctx.id) end
-	end,
 })
 
 -- ── Window: size and content ────────────────────────────────
@@ -741,6 +739,318 @@ concommand.Add("pinnedpanels_debug", function(_, _, args)
 	print(string.format("[Pinned Panels] %d windows in the layout, %d window controls, %d tab hosts (%d built), %d managed, %d embedded, taskbar %s, %d Lua panels in total",
 		#Layout.Windows(), controls, hosts, built, table.Count(PP.Manage.live), table.Count(PP.Embed.live), IsValid(Desktop.taskbar) and "on" or "off", #vgui.GetAll()))
 end, nil, "Pinned Panels diagnostics: pinnedpanels_debug panels")
+
+-- ── Several windows at once ─────────────────────────────────
+-- A selection (made on the Pinned page or by Ctrl-clicking taskbar entries) and what can be done to a
+-- list of windows in one go. Every operation takes the ids it works on, so "all" and "the selection"
+-- are the same code; all of one call's changes land in the same frame, which makes them one undo step.
+
+-- A table of its own each load, so nothing an earlier load defined lingers; the selection is kept.
+PP.Batch = { selected = PP.Batch and PP.Batch.selected or {} } -- selected: window id -> true, for the session
+local Batch = PP.Batch
+
+local MAX_GROUP_TABS = 16 -- a window holds this many tabs at most (Storage's limit)
+local CONFIRM_ABOVE = 3   -- unpinning more windows than this asks first
+
+local function selectionChanged()
+	hook.Run("PinnedPanelsSelectionChanged")
+end
+
+function Batch.IsSelected(id)
+	return Batch.selected[id] == true
+end
+
+function Batch.Toggle(id, on)
+	if on == nil then on = not Batch.selected[id] end
+	Batch.selected[id] = on and true or nil
+	selectionChanged()
+end
+
+function Batch.Set(ids)
+	Batch.selected = {}
+	for _, id in ipairs(ids) do Batch.selected[id] = true end
+	selectionChanged()
+end
+
+function Batch.Clear()
+	if next(Batch.selected) == nil then return end
+	Batch.selected = {}
+	selectionChanged()
+end
+
+local function byTitle(ids)
+	table.sort(ids, function(a, b)
+		local ta, tb = PP.Util.SortKey(Layout.Title(Layout.Get(a))), PP.Util.SortKey(Layout.Title(Layout.Get(b)))
+		if ta ~= tb then return ta < tb end
+		return a < b
+	end)
+	return ids
+end
+
+-- The selected windows that still exist, by title. Ones that were unpinned since are forgotten.
+function Batch.Ids()
+	local ids = {}
+	for id in pairs(Batch.selected) do
+		if Layout.Get(id) then ids[#ids + 1] = id else Batch.selected[id] = nil end
+	end
+	return byTitle(ids)
+end
+
+function Batch.Count()
+	return #Batch.Ids()
+end
+
+-- Every window, by title.
+function Batch.All()
+	local ids = {}
+	for _, rec in ipairs(Layout.Windows()) do ids[#ids + 1] = rec.id end
+	return byTitle(ids)
+end
+
+local function each(ids, fn)
+	local n = 0
+	for _, id in ipairs(ids) do
+		local rec = Layout.Get(id)
+		if rec and fn(id, rec) ~= false then n = n + 1 end
+	end
+	return n
+end
+
+function Batch.Minimize(ids)
+	return each(ids, function(id, rec)
+		if rec.state == "minimized" or #rec.tabs == 0 then return false end
+		Layout.Minimize(id)
+	end)
+end
+
+-- Back on screen: restored if it was minimized, and shown if it was still held back from joining
+-- (the "restore when joining" setting turned off).
+function Batch.Restore(ids)
+	Desktop.SetHeld(ids, false)
+	return each(ids, function(id) Layout.Restore(id) end)
+end
+
+function Batch.Lock(ids, on)
+	return each(ids, function(id) Layout.SetLocked(id, on) end)
+end
+
+function Batch.Opacity(ids, frac)
+	return each(ids, function(id) Layout.SetOpacity(id, frac) end)
+end
+
+-- Unpins them. More than a few asks first, unless sure is given: this is how a layout gets lost.
+function Batch.Unpin(ids, sure)
+	local list = {}
+	for _, id in ipairs(ids) do
+		if Layout.Get(id) then list[#list + 1] = id end
+	end
+	if #list == 0 then return 0 end
+	if #list > CONFIRM_ABOVE and not sure then
+		Derma_Query(PP.L("batch.unpin_confirm", #list), PP.L("batch.unpin_title"),
+			PP.L("batch.unpin_yes", #list), function() Batch.Unpin(list, true) end,
+			PP.L("btn.cancel"), function() end)
+		return 0
+	end
+	for _, id in ipairs(list) do
+		Batch.selected[id] = nil
+		Layout.Unpin(id)
+	end
+	selectionChanged()
+	return #list
+end
+
+local function moveAll(fromId, toId)
+	local from = Layout.Get(fromId)
+	while from and #from.tabs > 0 and Layout.Get(fromId) do
+		if not Layout.MoveTab(fromId, 1, toId) then break end
+	end
+end
+
+local function tabCount(ids)
+	local n = 0
+	for _, id in ipairs(ids) do
+		local rec = Layout.Get(id)
+		if rec and rec.kind ~= "managed" then n = n + #rec.tabs end
+	end
+	return n
+end
+
+-- Puts the windows' tabs together in tabbed windows: one, or as many as it takes at MAX_GROUP_TABS
+-- tabs each. Named title if given (a second one is "title (2)"), else the first window takes the
+-- others. Managed windows are other addons' and stay as they are. Returns the ids of the windows
+-- that hold them now.
+function Batch.Group(ids, title)
+	local sources = {}
+	for _, id in ipairs(ids) do
+		local rec = Layout.Get(id)
+		if rec and rec.kind ~= "managed" and #rec.tabs > 0 then sources[#sources + 1] = id end
+	end
+	if tabCount(sources) < 2 then return {} end
+	local targets, target = {}, nil
+	local function room()
+		local rec = target and Layout.Get(target)
+		return rec and MAX_GROUP_TABS - #rec.tabs or 0
+	end
+	local function nextTarget(first)
+		if title then
+			target = Layout.NewGroup(#targets == 0 and title or (title .. " (" .. (#targets + 1) .. ")"))
+		else
+			target = first
+		end
+		targets[#targets + 1] = target
+	end
+	for _, id in ipairs(sources) do
+		local rec = Layout.Get(id)
+		if rec then
+			if not target or (id ~= target and #rec.tabs > room()) then
+				-- An untitled group grows from one of the windows themselves.
+				nextTarget(id)
+			end
+			if id ~= target then moveAll(id, target) end
+		end
+	end
+	for _, id in ipairs(sources) do Batch.selected[id] = nil end
+	selectionChanged()
+	return targets
+end
+
+-- The spawn-menu category of a window that holds a single tool, or nil.
+local function categoryOf(rec)
+	if rec.kind == "managed" or rec.title or #rec.tabs ~= 1 then return nil end
+	local e = Sources.catalogue[rec.tabs[1].src]
+	return e and e.kind == "tool" and e.category or nil
+end
+
+-- Tool windows are put together by spawn-menu category, each category in a tabbed window of its
+-- name (sixty windows become a handful). A category with one window is left alone. Returns how many
+-- windows were merged away and how many groups hold them.
+function Batch.GroupByCategory(ids)
+	local cats, order = {}, {}
+	for _, id in ipairs(ids) do
+		local rec = Layout.Get(id)
+		local cat = rec and categoryOf(rec)
+		if cat then
+			if not cats[cat] then
+				cats[cat] = {}
+				order[#order + 1] = cat
+			end
+			cats[cat][#cats[cat] + 1] = id
+		end
+	end
+	local merged, groups = 0, 0
+	for _, cat in ipairs(order) do
+		if #cats[cat] >= 2 then
+			local made = Batch.Group(cats[cat], cat)
+			merged, groups = merged + #cats[cat], groups + #made
+		end
+	end
+	return merged, groups
+end
+
+-- One window's look (colours, accent, idle opacity) given to the others.
+function Batch.CopyLook(fromId, ids)
+	local from = Layout.Get(fromId)
+	if not from then return 0 end
+	local function copy(c) return c and Color(c.r, c.g, c.b, c.a) or nil end
+	return each(ids, function(id)
+		if id == fromId then return false end
+		Layout.SetColors(id, { bg = copy(from.colors.bg), header = copy(from.colors.header), text = copy(from.colors.text) })
+		Layout.SetAccent(id, copy(from.accent))
+		Layout.SetOpacity(id, from.opacity)
+	end)
+end
+
+-- One window's size given to the others, each where it is. Locked and managed windows keep theirs.
+function Batch.CopySize(fromId, ids)
+	local from = Layout.Get(fromId)
+	if not from then return 0 end
+	return each(ids, function(id, rec)
+		if id == fromId or rec.locked or rec.kind == "managed" then return false end
+		Layout.SetGeometry(id, rec.x, rec.y, from.w, from.h)
+	end)
+end
+
+-- Pins every tool of a spawn-menu category that isn't pinned yet, together in a tabbed window named
+-- after it (several when there are more than MAX_GROUP_TABS). Returns the ids of those windows.
+function Batch.PinCategory(category)
+	local keys = {}
+	for _, e in ipairs(Sources.tools) do
+		if e.category == category and not Layout.Find(e.key) then keys[#keys + 1] = e.key end
+	end
+	if #keys == 0 then return {} end
+	if #keys == 1 then return { (Layout.Pin(keys[1])) } end
+	local made = {}
+	for _, key in ipairs(keys) do made[#made + 1] = (Layout.Pin(key)) end
+	local groups = Batch.Group(made, category)
+	for _, id in ipairs(groups) do Desktop.Show(id) end
+	return groups
+end
+
+-- The menu for a list of windows: the Pinned page's "Actions" button and a right-click on a selected
+-- taskbar entry.
+function Actions.OpenBatchMenu(ids)
+	if #ids == 0 then return end
+	local menu = DermaMenu()
+	local function add(key, icon, fn)
+		menu:AddOption(PP.L(key, #ids), fn):SetIcon(icon)
+	end
+	add("batch.restore", "icon16/application_get.png", function() Batch.Restore(ids) end)
+	add("batch.minimize", "icon16/application_put.png", function() Batch.Minimize(ids) end)
+	menu:AddSpacer()
+	add("batch.group", "icon16/folder_add.png", function()
+		PP.Dialogs.Text(PP.L("new.group_title"), PP.L("new.group_desc"), "", function(name) Batch.Group(ids, name) end, "btn.create")
+	end)
+	add("batch.group_category", "icon16/folder_wrench.png", function() Batch.GroupByCategory(ids) end)
+	menu:AddSpacer()
+	add("batch.lock", "icon16/lock.png", function() Batch.Lock(ids, true) end)
+	add("batch.unlock", "icon16/lock_open.png", function() Batch.Lock(ids, false) end)
+	local sub, option = menu:AddSubMenu(PP.L("ctx.idle_opacity"))
+	option:SetIcon("icon16/contrast.png")
+	sub:AddOption(PP.L("ctx.use_global", Settings.Get("idleOpacity")), function() Batch.Opacity(ids, nil) end)
+	for _, pct in ipairs({ 100, 75, 50, 25, 0 }) do
+		sub:AddOption(pct .. "%", function() Batch.Opacity(ids, pct / 100) end)
+	end
+	menu:AddSpacer()
+	add("batch.unpin", "icon16/cross.png", function() Batch.Unpin(ids) end)
+	menu:AddSpacer()
+	menu:AddOption(PP.L("batch.clear"), Batch.Clear):SetIcon("icon16/shape_square.png")
+	menu:Open()
+	return menu
+end
+
+Actions.Add({
+	id = "minimize_all", scope = "global", icon = "icon16/application_put.png", label = "act.minimize_all",
+	sub = "sub.minimize_all", palette = true, bindable = true,
+	run = function() Batch.Minimize(Batch.All()) end,
+})
+
+Actions.Add({
+	id = "group_by_category", scope = "global", icon = "icon16/folder_wrench.png", label = "act.group_category",
+	sub = "sub.group_category", palette = true,
+	run = function()
+		local merged, groups = Batch.GroupByCategory(Batch.All())
+		notification.AddLegacy(merged > 0 and PP.L("batch.grouped", merged, groups) or PP.L("batch.grouped_none"), NOTIFY_GENERIC, 6)
+	end,
+})
+
+-- This window's look or size, given to every other window or to the selected ones.
+Actions.Add({
+	id = "apply_to_others", scope = "window", icon = "icon16/paintbrush.png", label = "ctx.apply_to_others",
+	menu = { group = "opacity", window = 62 },
+	children = function(ctx)
+		local selected = Batch.Ids()
+		local items = {
+			{ text = PP.L("apply.look_all"), icon = "icon16/color_wheel.png", run = function() Batch.CopyLook(ctx.id, Batch.All()) end },
+			{ text = PP.L("apply.size_all"), icon = "icon16/arrow_inout.png", run = function() Batch.CopySize(ctx.id, Batch.All()) end },
+		}
+		if #selected > 0 then
+			items[#items + 1] = { spacer = true }
+			items[#items + 1] = { text = PP.L("apply.look_selected", #selected), icon = "icon16/color_wheel.png", run = function() Batch.CopyLook(ctx.id, selected) end }
+			items[#items + 1] = { text = PP.L("apply.size_selected", #selected), icon = "icon16/arrow_inout.png", run = function() Batch.CopySize(ctx.id, selected) end }
+		end
+		return items
+	end,
+})
 
 -- Re-runs the loader (G2): windows rebuild from the saved document, with no duplicate hooks or panels (E25).
 concommand.Add("pinnedpanels_reload", function()

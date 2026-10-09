@@ -401,6 +401,51 @@ Reported by the owner on 2026-10-09. Run in game the same day: `tests/batch_1009
 - [x] X24 Yellow rows in a pinned tool list (every tool once chosen stayed marked): ours, when the pin was a piece inside the list. The list clears the selected row by going through its children. Two fixes: a scroll panel's canvas is never taken alone, the scroll panel is [`Recipes.Take`]; and a part's placeholder answers for the part where it was, as the box does for a window, so a single category pinned out of the list is still reached [`embed.lua`, `standIn` on the placeholder]. Checked with the list, its canvas and one category pinned: one row selected each time.
 - [x] X25 Windows already on screen are noted the moment a tab starts waiting, not at the first look half a second later: a window reopened within that time was taken for one of them and didn't bring the cursor [`Recipes.Wake`; corrects X15]
 
+The taskbar, 2026-10-09 (`tests/taskbar.lua`, 38 checks; seen in game through a `DrawOverlay` capture):
+
+- [x] X26 No taskbar after a reload: it was only made when the desktop first became ready or a taskbar setting changed. `Desktop.Reconcile` makes it when it is wanted and gone
+- [x] X27 The taskbar is rewritten [`vgui/taskbar.lua`]:
+  - An entry for **every** pinned window, with its state: in front (full mark), on screen (short mark), minimized (dimmed), hidden (dimmer), waiting for its addon (its own mark), closed by its addon. New setting `taskbarShow` (`all`, default, or `minimized` as before). Keyboard navigation still goes through the entries that are away only
+  - A click does what the entry needs: bring to the front, minimize (the one in front), restore, show, or open a waiting pin (its allowed opener, a click: R17; else a hint). Middle click minimizes or restores. Right click: the taskbar menu for a window that is away, the window menu otherwise
+  - The bar is as long as its entries and sits where `taskbarAlign` says (`start`, `center` default, `end`), rounded away from the edge. It used to span the whole edge and take every click along it
+  - Entries that don't fit shrink together, down to the icon; what still doesn't fit scrolls with the wheel, with a mark at each end
+  - A tooltip on hover: title, state, and what a click does. Side bars have no labels, so this is how their entries are told apart
+  - Labels are cut on whole characters (a title cut inside an accented letter drew a box); a short title keeps its label
+  - Icons per kind (tool, active tool, creation tab, post-process, quick panel, another addon's window, group, managed)
+- [x] X28 The three watch timers call through their module table, and the catch timer is removed when `recipes.lua` loads: a pin still waiting across a reload kept the old load's `Catch` running, which didn't know what the new one had opened (a reopened window brought the cursor, an already-open one wasn't caught)
+
+- [x] X29 Taskbar, seen with the owner's own 62 pins (all minimized): entries that don't fit take a common width limit, like tabs in a browser, and under 72 px none keeps a label; an entry without a label shows two whole characters of its title (the first letters of its first two words that count: "Data - Plug/Socket" is DP) instead of sixty identical wrenches; titles sort as they read ("Émetteur" with the E's); the mouse's tooltip wins over the keyboard's while it is on an entry
+- [x] X30 Where a new pin goes [`Geom.FreeSpot`, `Layout.Pin`; `tests/placement.lua`]. It was: the usual spot (120, 120) if free, else the first free spot, else the usual spot anyway, with minimized windows ignored. With no room left every new window landed exactly on 120, 120 (thirty of the owner's did). Now: the spot that covers the least of the other windows; a minimized window's place counts, for less; landing on another window's corner costs as much as covering it, so windows step off each other when there is no room. A crowded desktop (over 30 windows) is searched in wider steps: 15 ms a pin with 62 windows, where the first version took 290
+- [x] X31 Auto-Arrange [`Layout.Arrange`, the `arrange` action]: windows that aren't on screen (hidden, or waiting for their addon's window) are left out, since a waiting pin 1437 px tall took a whole row; and when there are more than fit, the rest start again from the corner a step further in each time, instead of piling on the first row
+- [x] X32 The colour read no longer errors when its window was let go before the next frame (`embed.lua`: `attempt to index local 'e'`)
+
+- [x] X33 Restoring 62 minimized windows froze the game for over ten seconds. Each window's change was announced on its own, and on each one the hub's Pinned page (hidden in the spawn menu) rebuilt its whole list: 170 ms, 62 times, in one frame. Measured: `Layout.FlushChanges` 11 500 ms, of which the Pinned page 10 400. Now [`hub_pinned.lua`, `hub_layout.lua`, `hub_settings.lua`, `layout.lua`, `desktop.lua`, `nav.lua`]: the hub's pages only note that they are stale and rebuild in `Think`, which runs while they are visible; `PinnedPanelsFlushed` runs once after a frame's changes, and the windows' states, the taskbar and keyboard navigation are worked out there, once. Same action afterwards: 20 ms. Building the 62 tool pages themselves is 2.9 s in all, one a frame (the worst, Wire's gates, 500 ms)
+- [x] X34 A tool that keeps hold of the first control panel it is given (Falco's Prop Protection: `AdminPanel = AdminPanel or Panel`) errored for the rest of the session, in the spawn menu too, once our panel was removed: `Tried to use a NULL Panel` from its `Clear`. A page whose builder still refers to our panel is now kept when its tab goes, hidden, and shown again where the tool is next pinned [`sources.lua`, `Sources.kept`]. A reference already dead can't be mended (`debug.setupvalue` isn't there): that needs a map change or a rejoin
+- [x] X35 A saved layout held 64 windows at most and dropped the rest on loading, without a word: now 512 [`storage.lua`]
+
+- [x] X36 Auto-Arrange with more windows than fit [`Layout.Arrange`, the `arrange` action]. The cascade of X31 was a mess with 62 windows (the owner's screenshot of the layout editor). Now: rows at their own sizes when they all fit; otherwise an even grid, each window shrunk to its cell, with the column count whose cells come closest to a window's usual shape; and when even the smallest tiles (200 x 160) can't hold them all (108 on a 2560 x 1600 screen), as many as fit are tiled and the rest minimized. The action says so when it shrank or minimized anything. Run on the owner's 61 visible windows: 11 x 6, cells of 224 x 257, no overlap, nothing off the screen, 11 ms. `tests/placement.lua`: 21 checks
+- [x] X37 `layout.lua` reloaded on its own (the game refreshes a file that was just edited) started from an empty document: the desktop lost every window, and the next save would have written that over the saved layout. The new load takes the document over from the last one [`layout.lua`, `Layout.Document`]. Seen when the debug session dropped between an edit and the full reload that used to follow it; the saved files were intact
+- [x] X38 Titles sort as they read everywhere they are sorted (Auto-Arrange, the taskbar, keyboard navigation's windows): `Util.SortKey`, which folds accented Latin letters one whole character at a time (`utf8.charpattern`). The patterns first written for the taskbar had their byte escapes turned into characters on saving and only worked by accident
+- [x] X39 Keyboard navigation is refreshed by the desktop after a frame's changes, once the windows are shown or hidden as they should be. From a hook of its own (X33) it sometimes ran first, saw a window just restored as still hidden, and moved the focus to another
+
+Several windows at once, 2026-10-10 (asked for by the owner; `tests/batch.lua`, 37 checks). One core, `PP.Batch` in `actions.lua`: a selection for the session, and operations that each take the ids they work on, so "all" and "the selection" are the same code and one call's changes are one undo step.
+
+- [x] X40 Minimize All: an action for the palette and for a key, beside Restore All [`minimize_all`] (Hide All and Show All Hidden were added with it and removed again: X47)
+- [x] X41 A selection on the Pinned page: a tick box on every window's row (a click on the row does the same; Shift-click takes the rows in between), Select All and None, and one button that opens the batch menu for the ticked windows, or for all when none is ticked: restore, minimize, group into one tabbed window, group by category, lock, unlock, idle opacity, unpin [`vgui/hub_pinned.lua`, `Actions.OpenBatchMenu`]
+- [x] X42 The same in the taskbar: Ctrl-click picks entries (outlined), and a right-click on one of several picked opens the batch menu [`vgui/taskbar.lua`, `Input.CtrlHeld`]
+- [x] X43 Group Tools by Category: tool windows become the tabs of one window per spawn-menu category, named after it, 16 tabs a window at most; a category with one window is left alone [`Batch.GroupByCategory`, the `group_by_category` action, a button on the Pinned page]
+- [x] X44 Pin All on a category of the Tools page: every tool of it that isn't pinned yet, as tabs of one window [`Batch.PinCategory`, `vgui/hub_catalog.lua`]
+- [x] X45 Apply to Other Panels, in a window's menu: its look (colours, accent, idle opacity) or its size, for all windows or for the selected ones [`apply_to_others`, `Batch.CopyLook`, `Batch.CopySize`]
+- [x] X46 Unpinning more than three windows at once asks first, Unpin All included [`Batch.Unpin`]
+
+- [x] X47 Hide is gone, Minimize stays (the owner, 2026-10-10: they did the same thing). Removed: the window's Hide Panel action and its key, Hide All and Show All Hidden, the batch menu's Hide, the Pinned page's Hide button (Minimize in its place), `Desktop.Hide`, `Batch.Hide`, `Batch.Show`. What is left of the state behind it (`Desktop.held`) is the one case that wasn't a second Minimize: windows not brought up at join because "restore when joining" is off. Those read "not restored" on the Pinned page and in the taskbar, and Show, Restore or a click brings them up. This amends X40 and X41
+
+Tried through the functions the controls call, with the test's own windows. Not clicked with the mouse: the tick boxes, Pin All, the menus' entries. Not run at all, since they would act on the owner's layout: Minimize All and Group by Category on everything.
+
+Done since, by Auto-Arrange's grid (X36): the owner's windows that were stacked at 120, 120 are tiled with the rest.
+
+Left: the layout editor's picture of the taskbar still shows a full-width bar with minimized windows only.
+
 | Window | Controls | Life while pinned |
 |---|---|---|
 | RareLoad objects inspector (opened from the timeline's objects button) | Opened from a pinned timeline: opens over it, its rail filters and close button work, the timeline stays pinned. Pinned itself: no backdrop left, in front of the timeline, filters work, colours taken | Unpinned → closed with its backdrop; given back → window and backdrop as they were |
@@ -502,7 +547,7 @@ Two of these are now better motivated by the review:
 - [ ] This file is updated if the design changed.
 
 ### Rule checks (run before every phase is closed)
-- [ ] `grep -rn "Recipes.Open(" lua` → only `vgui/hub_pinned.lua`, `openers.lua` and `autoOpen` in `recipes.lua` (R17, D41).
+- [ ] `grep -rn "Recipes.Open(" lua` → only `vgui/hub_pinned.lua`, `openers.lua`, a click on a waiting entry in `vgui/taskbar.lua`, and `autoOpen` in `recipes.lua` (R17, D41).
 - [ ] `grep -rn 'hook.Add( *"Think"' lua` → 1 match (`input.lua`).
 - [ ] `grep -rn "gui.EnableScreenClicker" lua` → only `input.lua`.
 - [ ] `grep -rn "timer.Simple" lua` → only inside `Util.NextFrame`.

@@ -24,10 +24,25 @@ local KIND = {
 	quick = { label = "kind.quick", icon = "icon16/lightning.png", color = T.accent },
 }
 
+-- Rows read whether they are selected when they paint, never from a snapshot (L1).
 local function paintRow(row, w, h)
-	draw.RoundedBox(6, 0, 0, w, h, row:IsHovered() and T.rowHover or T.card)
+	local selected = PP.Batch.IsSelected(row.id)
+	draw.RoundedBox(6, 0, 0, w, h, (selected or row:IsHovered()) and T.rowHover or T.card)
 	surface.SetDrawColor(row.stripe)
 	surface.DrawRect(0, 0, 4, h)
+	if selected then
+		surface.SetDrawColor(T.accent)
+		surface.DrawOutlinedRect(0, 0, w, h, 1)
+	end
+end
+
+-- The tick box at the left of a window's row: filled when its window is selected.
+local function paintCheck(check, w, h)
+	local x, y = math.floor((w - 14) / 2), math.floor((h - 14) / 2)
+	local on = PP.Batch.IsSelected(check.id)
+	surface.SetDrawColor(on and T.accent or T.textMuted)
+	surface.DrawOutlinedRect(x, y, 14, 14, 1)
+	if on then draw.RoundedBox(2, x + 3, y + 3, 8, 8, T.accent) end
 end
 
 local function paintTabRow(row, w, h)
@@ -68,16 +83,85 @@ function PAGE:Init()
 	record:SetTooltip(PP.L("tip.record"))
 	record.DoClick = function() PP.Record.Toggle() end
 
+	-- Several windows at once: tick rows (Shift-click for a range), then one menu for all of them.
+	-- With nothing ticked, the same menu is about every window.
+	self.batch = self:Add("Panel")
+	self.batch:Dock(TOP)
+	self.batch:SetTall(26)
+	self.batch:DockMargin(16, 8, 16, 0)
+	local function batchButton(key, icon, wide, tip, fn)
+		local b = self.batch:Add("PinnedPanelsButton")
+		b:Dock(LEFT)
+		b:DockMargin(0, 0, 6, 0)
+		b:SetWide(wide)
+		b:SetLabel(PP.L(key))
+		b:SetIcon(icon)
+		b:SetTooltip(PP.L(tip))
+		b.DoClick = fn
+		return b
+	end
+	batchButton("btn.select_all", "icon16/table_multiple.png", 100, "tip.select_all", function() PP.Batch.Set(self.order or {}) end)
+	batchButton("btn.select_none", "icon16/shape_square.png", 70, "tip.select_none", function() PP.Batch.Clear() end)
+	self.actions = batchButton("btn.batch_all", "icon16/cog.png", 190, "tip.batch", function()
+		local ids = PP.Batch.Ids()
+		PP.Actions.OpenBatchMenu(#ids > 0 and ids or PP.Batch.All())
+	end)
+	batchButton("act.group_category", "icon16/folder_wrench.png", 190, "tip.group_category", function()
+		local ids = PP.Batch.Ids()
+		local merged, groups = PP.Batch.GroupByCategory(#ids > 0 and ids or PP.Batch.All())
+		notification.AddLegacy(merged > 0 and PP.L("batch.grouped", merged, groups) or PP.L("batch.grouped_none"), NOTIFY_GENERIC, 6)
+	end)
+	self.selectedCount = -1
+
 	self.list = self:Add("PinnedPanelsScroll")
 	self.list:Dock(FILL)
 	self.list:DockMargin(16, 8, 16, 16)
 	self:Rebuild()
+	-- The list is made again when it is next looked at, once, however many changes there were: made
+	-- again on each one, restoring sixty windows rebuilt sixty rows sixty times in a single frame, for
+	-- a page nobody was looking at.
+	local function stale() self.stale = true end
 	hook.Add("PinnedPanelsChanged", self, function(_, kind)
-		if kind ~= "geometry" then self:Rebuild() end
+		if kind ~= "geometry" then self.stale = true end
 	end)
-	hook.Add("PinnedPanelsCatalogChanged", self, self.Rebuild)
-	hook.Add("PinnedPanelsHeldChanged", self, self.Rebuild)
-	hook.Add("PinnedPanelsAdoptChanged", self, self.Rebuild)
+	hook.Add("PinnedPanelsCatalogChanged", self, stale)
+	hook.Add("PinnedPanelsHeldChanged", self, stale)
+	hook.Add("PinnedPanelsAdoptChanged", self, stale)
+end
+
+-- Think only runs while the page is visible (G4).
+function PAGE:Think()
+	if self.stale then
+		self.stale = false
+		self:Rebuild()
+	end
+	-- The menu button says what it is about: the ticked windows, or all of them.
+	local n = PP.Batch.Count()
+	if n ~= self.selectedCount then
+		self.selectedCount = n
+		self.actions:SetLabel(n > 0 and PP.L("btn.batch_selected", n) or PP.L("btn.batch_all"))
+		self.actions:SetOn(n > 0)
+	end
+end
+
+-- A click on a row's tick box, or on the row itself: that window in or out of the selection. With
+-- Shift, every row from the last one clicked to this one, as that one was set.
+function PAGE:Select(id)
+	local on = not PP.Batch.IsSelected(id)
+	if PP.Input.ShiftHeld() and self.lastSelected and self.lastSelected ~= id then
+		local from, to
+		for i, other in ipairs(self.order) do
+			if other == self.lastSelected then from = i end
+			if other == id then to = i end
+		end
+		if from and to then
+			for i = math.min(from, to), math.max(from, to) do PP.Batch.Toggle(self.order[i], on) end
+			self.lastSelected = id
+			return
+		end
+	end
+	PP.Batch.Toggle(id, on)
+	self.lastSelected = id
 end
 
 -- A button docked to the right of a row, right to left in the order they are added.
@@ -106,13 +190,26 @@ function PAGE:AddWindowRow(rec)
 	row:SetTall(ROW_H)
 	row:DockMargin(0, 0, 0, 6)
 	row.stripe = info.color
+	row.id = id
 	row.Paint = paintRow
+	row.OnMousePressed = function(_, code)
+		if code == MOUSE_LEFT then self:Select(id) end
+	end
+
+	local check = row:Add("DButton")
+	check:SetText("")
+	check:Dock(LEFT)
+	check:SetWide(22)
+	check:DockMargin(6, 0, 0, 0)
+	check.id = id
+	check.Paint = paintCheck
+	check.DoClick = function() self:Select(id) end
 
 	local icon = row:Add("DImage")
 	icon:SetImage(info.icon)
 	icon:SetSize(14, 14)
 	icon:Dock(LEFT)
-	icon:DockMargin(10, 13, 6, 13)
+	icon:DockMargin(4, 13, 6, 13)
 
 	local title = Layout.Title(rec)
 	if kind == "group" then title = title .. " " .. PP.L("group.panels", #rec.tabs) end
@@ -158,7 +255,7 @@ function PAGE:AddWindowRow(rec)
 		elseif rec.state == "minimized" then
 			button(row, PP.L("btn.restore"), "icon16/arrow_up.png", 74, "tip.restore_tb", function() Desktop.RestoreAndFront(id) end)
 		else
-			button(row, PP.L("btn.hide"), "icon16/eye.png", 74, "tip.hide_panel", function() Desktop.Hide(id) end)
+			button(row, PP.L("btn.minimize"), "icon16/application_put.png", 84, "tip.minimize_panel", function() Layout.Minimize(id) end)
 		end
 	end
 
@@ -211,6 +308,7 @@ end
 
 function PAGE:Rebuild()
 	self.list:Clear()
+	self.order = {}
 	local windows = {}
 	for _, rec in ipairs(Layout.Windows()) do windows[#windows + 1] = rec end
 	if #windows == 0 then
@@ -221,8 +319,15 @@ function PAGE:Rebuild()
 		empty.Paint = paintEmpty
 		return
 	end
-	table.sort(windows, function(a, b) return Layout.Title(a):lower() < Layout.Title(b):lower() end)
-	for _, rec in ipairs(windows) do self:AddWindowRow(rec) end
+	table.sort(windows, function(a, b)
+		local ta, tb = PP.Util.SortKey(Layout.Title(a)), PP.Util.SortKey(Layout.Title(b))
+		if ta ~= tb then return ta < tb end
+		return a.id < b.id
+	end)
+	for i, rec in ipairs(windows) do
+		self.order[i] = rec.id
+		self:AddWindowRow(rec)
+	end
 end
 
 function PAGE:Paint(w, h)

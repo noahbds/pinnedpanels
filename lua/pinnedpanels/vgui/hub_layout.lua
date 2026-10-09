@@ -37,9 +37,19 @@ function CANVAS:Init()
 	self.scale, self.ox, self.oy = 0.25, 0, 0
 	self.screenText = ""
 	self:Prepare()
-	hook.Add("PinnedPanelsChanged", self, function() if not self.drag then self:Prepare() end end)
-	hook.Add("PinnedPanelsHeldChanged", self, self.Prepare)
-	hook.Add("PinnedPanelsAdoptChanged", self, self.Prepare)
+	-- Worked out again when it is next drawn, once per frame at most (see the Pinned page).
+	local function stale() self.stale = true end
+	hook.Add("PinnedPanelsChanged", self, stale)
+	hook.Add("PinnedPanelsHeldChanged", self, stale)
+	hook.Add("PinnedPanelsAdoptChanged", self, stale)
+end
+
+-- Think only runs while the canvas is visible (G4). Not in the middle of a drag: the boxes are the
+-- player's then.
+function CANVAS:Think()
+	if not self.stale or self.drag then return end
+	self.stale = false
+	self:Prepare()
 end
 
 function CANVAS:PerformLayout(w, h)

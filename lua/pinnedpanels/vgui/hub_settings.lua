@@ -380,9 +380,15 @@ PAGES[#PAGES + 1] = { id = "groups", label = "page.groups", icon = "icon16/folde
 		c:InvalidateLayout()
 	end
 	fill()
+	-- Filled again when it is next looked at, once (see the Pinned page).
 	hook.Add("PinnedPanelsChanged", list, function(_, kind)
-		if kind == "windows" or kind == "tabs" or kind == "style" then fill() end
+		if kind == "windows" or kind == "tabs" or kind == "style" then list.stale = true end
 	end)
+	list.Think = function()
+		if not list.stale then return end
+		list.stale = false
+		fill()
+	end
 
 	local r = row(c, 28)
 	r:DockMargin(0, 6, 0, 0)

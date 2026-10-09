@@ -41,28 +41,55 @@ function Geom.Overlap(a, b, pad)
 		and a.y < b.y + b.h + pad and b.y < a.y + a.h + pad
 end
 
--- Where a new w×h window can go without overlapping others (L23): the preferred spot if free,
--- else the first free spot scanning rows top-left first, else the preferred spot anyway.
+-- Where a new w×h window goes (L23): the preferred spot if nothing is there, else the spot that covers
+-- the least of the other windows, scanning rows top-left first. A minimized window's place counts
+-- too, for less: it is where that window comes back. Landing on another window's corner costs as much
+-- as covering it whole, so when there is no room left windows still step off each other and every
+-- title bar can be reached. (Records qualify as rects, which is how a minimized one is told.)
 local FREE_STEP, FREE_PAD = 28, 20
+local AWAY_WEIGHT, SAME_CORNER, CROWDED = 0.3, 24, 30
 
 function Geom.FreeSpot(w, h, rects, px, py, ux, uy, uw, uh)
 	local maxX, maxY = math.max(ux, ux + uw - w), math.max(uy, uy + uh - h)
-	local probe = { x = math.Clamp(px, ux, maxX), y = math.Clamp(py, uy, maxY), w = w, h = h }
-	local function free()
-		for _, r in ipairs(rects) do
-			if Geom.Overlap(probe, r, FREE_PAD) then return false end
-		end
-		return true
+	-- The rects once, padded, as plain numbers: the scan below asks about a few thousand spots, and
+	-- with sixty windows open that is a few hundred thousand comparisons.
+	local n, x1, y1, x2, y2, weight, cx, cy = #rects, {}, {}, {}, {}, {}, {}, {}
+	for i, r in ipairs(rects) do
+		x1[i], y1[i], x2[i], y2[i] = r.x - FREE_PAD, r.y - FREE_PAD, r.x + r.w + FREE_PAD, r.y + r.h + FREE_PAD
+		weight[i], cx[i], cy[i] = r.state == "minimized" and AWAY_WEIGHT or 1, r.x, r.y
 	end
-	if free() then return probe.x, probe.y end
-	local baseX, baseY = probe.x, probe.y
-	for y = uy, maxY, FREE_STEP do
-		for x = ux, maxX, FREE_STEP do
-			probe.x, probe.y = x, y
-			if free() then return x, y end
+	local whole = w * h
+	-- What a window at x, y would cover, given up as soon as it passes limit.
+	local function cost(x, y, limit)
+		local c, xr, yb = 0, x + w, y + h
+		for i = 1, n do
+			if x < x2[i] and xr > x1[i] and y < y2[i] and yb > y1[i] then
+				local ox = (xr < x2[i] and xr or x2[i]) - (x > x1[i] and x or x1[i])
+				local oy = (yb < y2[i] and yb or y2[i]) - (y > y1[i] and y or y1[i])
+				c = c + ox * oy * weight[i]
+				local dx, dy = x - cx[i], y - cy[i]
+				if dx < SAME_CORNER and dx > -SAME_CORNER and dy < SAME_CORNER and dy > -SAME_CORNER then c = c + whole end
+				if c >= limit then return c end
+			end
+		end
+		return c
+	end
+	local bx, by = math.Clamp(px, ux, maxX), math.Clamp(py, uy, maxY)
+	local best = cost(bx, by, math.huge)
+	if best == 0 then return bx, by end
+	-- A crowded desktop is searched in wider steps: no spot is free there, and which of two covered
+	-- ones is taken matters less than not making the player wait for it.
+	local step = n > CROWDED and FREE_STEP * 2 or FREE_STEP
+	for y = uy, maxY, step do
+		for x = ux, maxX, step do
+			local c = cost(x, y, best)
+			if c < best then
+				best, bx, by = c, x, y
+				if c == 0 then return x, y end
+			end
 		end
 	end
-	return baseX, baseY
+	return bx, by
 end
 
 -- Snaps one axis of a rect: pos/size on axis "x" or "y", against the area's edges and centre and the
@@ -179,6 +206,21 @@ function Util.BeginOverride(tbl, key, replacement)
 		tbl[key] = original
 		return true
 	end
+end
+
+-- ── Text ────────────────────────────────────────────────────
+
+-- Titles sort as they read: "Émetteur" with the E's, not after Z. The accented Latin letters of the
+-- languages the addon is translated into, folded to their plain ones.
+local FOLD = {}
+for plain, accented in pairs({
+	a = "àáâãäåÀÁÂÃÄÅ", c = "çÇ", e = "èéêëÈÉÊË", i = "ìíîïÌÍÎÏ", n = "ñÑ", o = "òóôõöøÒÓÔÕÖØ", u = "ùúûüÙÚÛÜ", y = "ýÿÝ",
+}) do
+	for char in accented:gmatch(utf8.charpattern) do FOLD[char] = plain end
+end
+-- One whole character at a time (utf8.charpattern), so a letter of several bytes is looked up as one.
+function Util.SortKey(title)
+	return (title:gsub(utf8.charpattern, FOLD)):lower()
 end
 
 -- ── Timing ──────────────────────────────────────────────────

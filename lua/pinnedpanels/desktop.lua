@@ -102,7 +102,8 @@ function Desktop.Reconcile()
 		Desktop.pendingFront = nil
 	end
 	Desktop.UpdateStates()
-	if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+	-- Made here too if it is wanted and gone: a reload removes it, and nothing else would bring it back.
+	Desktop.UpdateTaskbar()
 end
 
 -- Minimizing with the taskbar off says once where the window went (E23, B15).
@@ -121,9 +122,25 @@ hook.Add("PinnedPanelsChanged", "PinnedPanels.Desktop", function(kind, id)
 	local win = Desktop.panels[id]
 	if IsValid(win) then win:Refresh() end
 	if kind == "state" or kind == "style" then
+		Desktop.statesStale = true
+		if kind == "state" then minimized(id) end
+	end
+end)
+
+-- Every window's visibility and opacity, and the taskbar, are worked out once for a frame's changes,
+-- not once for each (restoring sixty windows is sixty of them); keyboard navigation then sees the
+-- taskbar's entries as they are.
+hook.Add("PinnedPanelsFlushed", "PinnedPanels.Desktop", function()
+	local states = Desktop.statesStale
+	if states then
+		Desktop.statesStale = false
 		Desktop.UpdateStates()
 		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
-		if kind == "state" then minimized(id) end
+	end
+	-- After the windows are shown or hidden as they should be, which is what it looks at.
+	if states or PP.Nav.stale then
+		PP.Nav.stale = false
+		PP.Nav.Refresh()
 	end
 end)
 
@@ -259,13 +276,10 @@ function Desktop.RestoreAndFront(id)
 	Desktop.Front(id)
 end
 
--- Hiding isn't a document change, so it has its own event for the hub.
-function Desktop.Hide(id)
-	Desktop.held[id] = true
-	Desktop.Reconcile()
-	hook.Run("PinnedPanelsHeldChanged")
-end
-
+-- Held windows are the ones not brought up at join because "restore when joining" is off: they wait,
+-- without a window control, until the player asks for them. (There used to be a Hide action that put
+-- any window in this state for the session; it did nothing Minimize doesn't, and is gone.) Showing
+-- one isn't a document change, so it has its own event for the hub.
 function Desktop.Show(id)
 	if not Desktop.held[id] then return end
 	Desktop.held[id] = nil
@@ -273,7 +287,21 @@ function Desktop.Show(id)
 	hook.Run("PinnedPanelsHeldChanged")
 end
 
--- Shows every window held back by autoRestore = off or hidden.
+-- Holds or shows several windows in one go: one reconcile for all of them.
+function Desktop.SetHeld(ids, held)
+	local any = false
+	for _, id in ipairs(ids) do
+		if Layout.Get(id) and (Desktop.held[id] == true) ~= held then
+			Desktop.held[id] = held or nil
+			any = true
+		end
+	end
+	if not any then return end
+	Desktop.Reconcile()
+	hook.Run("PinnedPanelsHeldChanged")
+end
+
+-- Shows every window held back by autoRestore = off.
 function Desktop.ShowHeld()
 	Desktop.held = {}
 	Desktop.Reconcile()

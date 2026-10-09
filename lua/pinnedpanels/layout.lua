@@ -13,6 +13,8 @@ local MIN_SIZE = 40 -- a sanity floor; the window control enforces the real mini
 local MAX_TITLE = 64
 local CLOSED_MAX = 15
 local ARRANGE_MARGIN = 8
+-- The smallest a window is made when the screen is tiled with more windows than fit at their sizes.
+local TILE_MIN_W, TILE_MIN_H = 200, 160
 local KIND_ORDER = { windows = 1, tabs = 2, state = 3, geometry = 4, style = 5 }
 local UNDO_MAX = 50
 local QUICK_H = 220
@@ -27,8 +29,13 @@ local GROUP_ACCENTS = {
 -- "Recently closed" lives for the session only (§13.2) and survives pinnedpanels_reload.
 Layout.closed = Layout.closed or {}
 
-local doc = { v = 2, windows = {}, nextId = 1 }
+-- The document outlives a reload of this file on its own (the game refreshes a file that was just
+-- edited): it is the player's layout. Starting empty here would leave the desktop without a window,
+-- and have the next save write that emptiness over the real one. Layout.Document is still the last
+-- load's at this point, and hands over what it had.
+local doc = Layout.Document and Layout.Document() or { v = 2, windows = {}, nextId = 1 }
 local byId = {}
+for _, w in ipairs(doc.windows) do byId[w.id] = w end
 local bySrc -- src -> window, rebuilt lazily after tab changes
 
 -- ── Change events ───────────────────────────────────────────
@@ -54,6 +61,8 @@ function Layout.FlushChanges()
 		return (a.id or "") < (b.id or "")
 	end)
 	for _, e in ipairs(list) do hook.Run("PinnedPanelsChanged", e.kind, e.id) end
+	-- Once per frame's worth of changes, for what only needs doing once however many there were.
+	hook.Run("PinnedPanelsFlushed")
 end
 
 -- id nil means "every window".
@@ -135,10 +144,19 @@ local function others(except)
 	return rects
 end
 
+-- Every window that has a place, minimized ones too: a new window keeps off where they come back.
+local function places()
+	local rects = {}
+	for _, w in ipairs(doc.windows) do
+		if #w.tabs > 0 and w.kind ~= "managed" then rects[#rects + 1] = w end
+	end
+	return rects
+end
+
 local function place(w, h, px, py)
 	local ux, uy, uw, uh = Geom.Usable()
 	w, h = math.min(w, uw), math.min(h, uh)
-	local x, y = Geom.FreeSpot(w, h, others(), px, py, ux, uy, uw, uh)
+	local x, y = Geom.FreeSpot(w, h, places(), px, py, ux, uy, uw, uh)
 	return x, y, w, h
 end
 
@@ -703,19 +721,25 @@ end
 
 -- ── Whole layout ────────────────────────────────────────────
 
--- Tiles visible, unlocked windows in rows from the top-left, sorted by title (F18, E18).
-function Layout.Arrange()
+-- Tiles visible, unlocked windows from the top-left, sorted by title (F18, E18). At their own sizes, in
+-- rows, when they all fit that way. When they don't, in an even grid, each shrunk to its cell: the grid
+-- with the roomiest cells that still holds them all. And when there are more than even the smallest
+-- cells can hold, the grid takes as many as it can and the rest are minimized, to the taskbar.
+-- skip(win): windows to leave alone. Returns "rows" or "grid", and how many were minimized.
+function Layout.Arrange(skip)
 	local list = {}
 	for _, win in ipairs(doc.windows) do
-		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 and not (win.kind == "managed" and win.tabs[1].adopt.noGeometry) then
+		if win.state ~= "minimized" and not win.locked and #win.tabs > 0 and not (win.kind == "managed" and win.tabs[1].adopt.noGeometry)
+			and not (skip and skip(win)) then
 			list[#list + 1] = win
 		end
 	end
-	table.sort(list, function(a, b) return Layout.Title(a):lower() < Layout.Title(b):lower() end)
-
-	local ux, uy, uw, uh = Geom.Usable()
-	local m = ARRANGE_MARGIN
-	local x, y, rowH = ux + m, uy + m, 0
+	if #list == 0 then return "rows", 0 end
+	table.sort(list, function(a, b)
+		local ta, tb = Util.SortKey(Layout.Title(a)), Util.SortKey(Layout.Title(b))
+		if ta ~= tb then return ta < tb end
+		return a.id < b.id
+	end)
 	for _, win in ipairs(list) do
 		if win.state == "maximized" then
 			local r = win.restore or win
@@ -723,15 +747,64 @@ function Layout.Arrange()
 			win.w, win.h = r.w, r.h
 			changed("state", win.id)
 		end
+	end
+
+	local ux, uy, uw, uh = Geom.Usable()
+	local m = ARRANGE_MARGIN
+
+	-- Rows, at their own sizes: worked out first, used only if nothing falls off the bottom.
+	local spots, fits = {}, true
+	local x, y, rowH = ux + m, uy + m, 0
+	for i, win in ipairs(list) do
 		local w, h = math.min(win.w, uw - m * 2), math.min(win.h, uh - m * 2)
 		if x + w + m > ux + uw and x > ux + m then
 			x, y, rowH = ux + m, y + rowH + m, 0
 		end
-		if y + h + m > uy + uh then y = uy + m end
-		setRect(win, x, y, w, h)
+		if y + h + m > uy + uh then
+			fits = false
+			break
+		end
+		spots[i] = { x, y, w, h }
 		x = x + w + m
 		rowH = math.max(rowH, h)
 	end
+	if fits then
+		for i, win in ipairs(list) do setRect(win, spots[i][1], spots[i][2], spots[i][3], spots[i][4]) end
+		return "rows", 0
+	end
+
+	-- A grid. Among the column counts that hold every window in cells no smaller than the smallest
+	-- tile, the one whose cells come closest to a window's usual shape.
+	local n = #list
+	local function cells(cols, rows)
+		return math.floor((uw - m) / cols) - m, math.floor((uh - m) / rows) - m
+	end
+	local cols, rows, cw, ch, best
+	for c = 1, n do
+		local r = math.ceil(n / c)
+		local w, h = cells(c, r)
+		if w >= TILE_MIN_W and h >= TILE_MIN_H then
+			local score = math.min(w / DEFAULT_W, h / DEFAULT_H)
+			if not best or score > best then best, cols, rows, cw, ch = score, c, r, w, h end
+		end
+	end
+	local minimized = 0
+	if not best then
+		-- Too many for any grid: the smallest tiles, as many as there is room for.
+		cols = math.max(math.floor((uw - m) / (TILE_MIN_W + m)), 1)
+		rows = math.max(math.floor((uh - m) / (TILE_MIN_H + m)), 1)
+		cw, ch = cells(cols, rows)
+		for i = cols * rows + 1, n do
+			Layout.Minimize(list[i].id)
+			minimized = minimized + 1
+		end
+	end
+	for i = 1, math.min(n, cols * rows) do
+		local win = list[i]
+		local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+		setRect(win, ux + m + col * (cw + m), uy + m + row * (ch + m), math.min(win.w, cw), math.min(win.h, ch))
+	end
+	return "grid", minimized
 end
 
 -- Maximized windows fill the usable area; everything else is clamped into it (E4, E5).

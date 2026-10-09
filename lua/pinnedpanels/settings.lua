@@ -102,6 +102,10 @@ Settings.Add("colorText", { type = "color", default = Color(240, 245, 255, 255),
 Settings.Add("taskbar", { type = "bool", default = true, page = "taskbar", section = "taskbar", label = "opt.taskbar_enable" })
 Settings.Add("taskbarSide", { type = "enum", values = { "bottom", "top", "left", "right" }, default = "bottom", page = "taskbar", section = "taskbar",
 	label = "lbl.position", choices = { bottom = "pos.bottom", top = "pos.top", left = "pos.left", right = "pos.right" } })
+Settings.Add("taskbarShow", { type = "enum", values = { "all", "minimized" }, default = "all", page = "taskbar", section = "taskbar",
+	label = "opt.taskbar_show", choices = { all = "tbshow.all", minimized = "tbshow.minimized" } })
+Settings.Add("taskbarAlign", { type = "enum", values = { "start", "center", "end" }, default = "center", page = "taskbar", section = "taskbar",
+	label = "opt.taskbar_align", choices = { start = "tbalign.start", center = "tbalign.center", ["end"] = "tbalign.end" } })
 Settings.Add("taskbarSize", { type = "int", min = 20, max = 64, default = 32, page = "taskbar", section = "taskbar", label = "opt.bar_thickness" })
 Settings.Add("taskbarAutoHide", { type = "bool", default = false, page = "taskbar", section = "taskbar", label = "opt.reveal_hover" })
 Settings.Add("taskbarLabels", { type = "bool", default = true, page = "taskbar", section = "taskbar", label = "opt.show_labels" })

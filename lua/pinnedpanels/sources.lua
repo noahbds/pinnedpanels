@@ -196,8 +196,34 @@ local function notice(parent, text)
 	return scroll
 end
 
+-- Some tools keep hold of the first control panel they are given and fill that one from then on
+-- (Falco's Prop Protection: `AdminPanel = AdminPanel or Panel`). Removing ours leaves them holding
+-- nothing, and their page errors from then on, in the spawn menu as well, until the map changes. So a
+-- page whose builder still refers to our panel isn't removed with its tab: it is hidden, and shown
+-- again wherever the tool is next pinned.
+Sources.kept = Sources.kept or {} -- key -> the scroll panel holding the page
+local MAX_UPVALUES = 30
+
+local function holds(fn, panel)
+	if not debug.getupvalue then return false end
+	for i = 1, MAX_UPVALUES do
+		local ok, name, v = pcall(debug.getupvalue, fn, i)
+		if not ok or name == nil then break end
+		if v == panel then return true end
+	end
+	return false
+end
+
 local function buildTool(e, parent)
 	if not isfunction(e.item.CPanelFunction) then return notice(parent, PP.L("pin.no_cp")) end
+
+	local kept = Sources.kept[e.key]
+	if IsValid(kept) then
+		kept:SetParent(parent)
+		kept:Dock(FILL)
+		kept:SetVisible(true)
+		return kept
+	end
 
 	local scroll, cp = controlPanel(parent)
 	local before = #cp:GetChildren()
@@ -209,6 +235,7 @@ local function buildTool(e, parent)
 	if #cp:GetChildren() <= before then
 		Sources.WithControlPanelFallback(e.name, cp, function() hook.Run("PostReloadToolsMenu") end)
 	end
+	if holds(e.item.CPanelFunction, cp) then Sources.kept[e.key] = scroll end
 	return scroll
 end
 
@@ -271,7 +298,12 @@ end
 -- Before a tab host clears or removes its content: an embedded panel's box goes back to Embed, since
 -- other addons' panels are never removed with our controls (R15).
 function Sources.Unbuild(src, content)
-	if adopted(src) then PP.Embed.Unbuild(src, content) end
+	if adopted(src) then return PP.Embed.Unbuild(src, content) end
+	-- A page its tool holds on to is taken out before the host clears itself (see Sources.kept).
+	if Sources.kept[src] == content and IsValid(content) then
+		content:SetVisible(false)
+		content:SetParent(nil)
+	end
 end
 
 -- "Equip" only ever runs a tool that resolved in the live catalogue (R4, G16, F35).

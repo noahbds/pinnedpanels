@@ -85,7 +85,7 @@ end
 -- ── Taking and releasing ────────────────────────────────────
 
 local function watch()
-	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, Manage.Check) end
+	if not timer.Exists(TIMER) then timer.Create(TIMER, INTERVAL, 0, function() Manage.Check() end) end
 end
 
 -- Puts panel under window id's control. opened: the player just opened it, so cursor mode comes on to

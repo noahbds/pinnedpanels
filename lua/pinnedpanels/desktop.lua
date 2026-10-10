@@ -8,9 +8,12 @@ local Desktop = PP.Desktop
 local Layout, Sources, Input, Settings, Storage, Util = PP.Layout, PP.Sources, PP.Input, PP.Settings, PP.Storage, PP.Util
 
 Desktop.panels = Desktop.panels or {}
--- Hidden for this session: kept in the document, no control until shown again. Windows present at join
--- while autoRestore is off start hidden; "Hide" hides one.
+-- Held back: kept in the document, no control until shown. Windows present at join while autoRestore
+-- is off start this way.
 Desktop.held = Desktop.held or {}
+-- When each window was last clicked or brought up: the order they are stacked in (Desktop.Raise).
+Desktop.stack = Desktop.stack or {}
+Desktop.stackTop = Desktop.stackTop or 0
 Desktop.ready = Desktop.ready or false
 Desktop.peeking = false
 
@@ -146,14 +149,45 @@ end)
 
 hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Desktop", Desktop.UpdateStates)
 
--- The C menu is a popup made when it opens, so windows that come with it go in front of it (FF5, ⚑ verify).
-hook.Add("OnContextMenuOpen", "PinnedPanels.Desktop", function()
-	Util.NextFrame(nil, function()
-		for id, win in pairs(Desktop.panels) do
-			local rec = Layout.Get(id)
-			if IsValid(win) and rec and rec.showWith == "contextmenu" then win:MoveToFront() end
-		end
-	end)
+-- The spawn menu and the C menu are full-screen layers that come to the front each time they open: a
+-- pinned window under one shows through its empty parts but gets none of the clicks. So our windows go
+-- back in front of them, in the order they were stacked, and the taskbar last (FF5, X48).
+function Desktop.Raise()
+	local wins = {}
+	for id, win in pairs(Desktop.panels) do
+		if IsValid(win) then wins[#wins + 1] = { win = win, at = Desktop.stack[id] or 0 } end
+	end
+	table.sort(wins, function(a, b) return a.at < b.at end)
+	for _, w in ipairs(wins) do w.win:MoveToFront() end
+	if IsValid(Desktop.taskbar) then Desktop.taskbar:MoveToFront() end
+	-- A menu that is open belongs above everything, as it was.
+	for _, p in ipairs(vgui.GetWorldPanel():GetChildren()) do
+		if p.m_bIsMenuComponent and p:IsVisible() then p:MoveToFront() end
+	end
+end
+
+-- The menu is made a popup after the hook, so a frame later.
+local function raiseSoon()
+	Util.NextFrame(nil, Desktop.Raise)
+end
+hook.Add("OnContextMenuOpen", "PinnedPanels.Desktop", raiseSoon)
+hook.Add("OnSpawnMenuOpen", "PinnedPanels.Desktop", raiseSoon)
+
+-- A click in either menu brings it to the front again, over our windows, so they go back in front after
+-- every click that lands in one. (VGUIMousePressed is for a click on a panel, GUIMousePressed for one on
+-- the world through the C menu.)
+local function inMenu(p)
+	while IsValid(p) do
+		if p == g_SpawnMenu or p == g_ContextMenu then return true end
+		p = p:GetParent()
+	end
+	return false
+end
+hook.Add("VGUIMousePressed", "PinnedPanels.Desktop", function(panel)
+	if inMenu(panel) then raiseSoon() end
+end)
+hook.Add("GUIMousePressed", "PinnedPanels.Desktop", function()
+	if IsValid(g_ContextMenu) and g_ContextMenu:IsVisible() then raiseSoon() end
 end)
 -- An adopted panel was taken, let go or closed by its addon (§33).
 hook.Add("PinnedPanelsAdoptChanged", "PinnedPanels.Desktop", function() Desktop.Reconcile() end)
@@ -244,6 +278,10 @@ end
 -- The window keys and console commands act on when no id is given: the last one clicked or brought up.
 function Desktop.SetFocused(id)
 	Desktop.focused = id
+	if id then
+		Desktop.stackTop = Desktop.stackTop + 1
+		Desktop.stack[id] = Desktop.stackTop
+	end
 end
 
 -- A window that doesn't have its control yet comes to the front when the desktop creates it.
@@ -256,7 +294,7 @@ function Desktop.Front(id)
 	else
 		Desktop.pendingFront = id
 	end
-	Desktop.focused = id
+	Desktop.SetFocused(id)
 end
 
 -- Pins src (or brings back its window) and puts the window in front (E22). A desktop widget is opened and

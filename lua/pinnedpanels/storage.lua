@@ -101,7 +101,7 @@ local function sanitizeAdopt(a)
 		for i, step in ipairs(s.path) do
 			local index = istable(step) and int(step.i, 1, 4096)
 			if not index then return nil end
-			sig.path[i] = { i = index, class = text(step.class, MAX_TITLE) }
+			sig.path[i] = { i = index, n = int(step.n, 1, 4096) or nil, class = text(step.class, MAX_TITLE) }
 		end
 	end
 	local recipe = sanitizeRecipe(a.recipe)

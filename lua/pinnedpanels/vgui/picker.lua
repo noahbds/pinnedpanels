@@ -13,6 +13,7 @@ local CARD_W, CARD_PAD, LINE_H = 300, 10, 16
 local LIST_W, ROW_H = 320, 36
 local FOOTER_H = 26
 local MAX_DEPTH = 40
+local LIST_DEPTH = 3
 local OUTLINE, OUTLINE_REFUSED, FILL = Color(60, 200, 255), Color(230, 80, 80), Color(60, 200, 255, 30)
 
 local function contains(p, x, y)
@@ -72,6 +73,7 @@ function PICKER:RefreshTops()
 	for i = #popups, 1, -1 do tops[#tops + 1] = popups[i] end
 	for i = #others, 1, -1 do tops[#tops + 1] = others[i] end
 	self.tops = tops
+	if IsValid(self.list) then self:FillList() end
 end
 
 function PICKER:Think()
@@ -205,17 +207,19 @@ function ROW:Init()
 	self:SetTall(ROW_H)
 end
 
-function ROW:Setup(picker, panel)
-	self.picker, self.panel = picker, panel
+-- root is the top-level panel it belongs to: itself, or the spawn menu or C menu for one of their parts.
+function ROW:Setup(picker, panel, root)
+	self.picker, self.panel, self.root = picker, panel, root
 	local sig = Recipes.Signature(panel)
 	self.title = Recipes.SigTitle(sig)
-	self.sub = (sig.class or sig.base or "?") .. "  ·  " .. Recipes.AddonName(sig)
+	self.sub = (sig.class or sig.base or "?") .. "  ·  " .. Recipes.AddonName(sig) .. "  ·  " .. sig.w .. " × " .. sig.h
 end
 
 function ROW:OnCursorEntered()
 	local p = self.picker
+	if not IsValid(self.panel) then return end
 	p.fromList = true
-	p.root, p.chain, p.depth = self.panel, { self.panel }, 1
+	p.root, p.chain, p.depth = self.root, { self.panel }, 1
 	p:Select(self.panel)
 end
 
@@ -239,6 +243,63 @@ end
 
 vgui.Register("PinnedPanelsPickerRow", ROW, "DButton")
 
+-- The spawn menu and the C menu can't be pinned whole, so the list names what is in them instead: the
+-- first panels down that are something of their own (a class an addon or the gamemode made, or a desktop
+-- widget's window).
+local function addParts(out, parent, root, depth)
+	for _, kid in ipairs(parent:GetChildren()) do
+		if drawn(kid) and not Recipes.Refusal(kid, root) then
+			if PP.Openers.DesktopId(kid) or Recipes.Signature(kid).class then
+				out[#out + 1] = { panel = kid, root = root }
+			elseif depth < LIST_DEPTH then
+				addParts(out, kid, root, depth + 1)
+			end
+		end
+	end
+end
+
+function PICKER:ListEntries()
+	local out = {}
+	for _, p in ipairs(self.tops) do
+		if not drawn(p) then
+			-- closed since the last look
+		elseif not Recipes.Refusal(p, p) then
+			-- A bare stock panel with nothing of an addon's in it (a scroll list kept for later, a holder,
+			-- the game's own HUD layers) is nothing to choose by name. It can still be pinned by pointing at it.
+			local sig = Recipes.Signature(p)
+			if sig.popup or sig.title or sig.class or sig.src then out[#out + 1] = { panel = p, root = p } end
+		elseif p == g_SpawnMenu or p == g_ContextMenu then
+			addParts(out, p, p, 1)
+		end
+	end
+	return out
+end
+
+-- The list follows what is on screen: called with every refresh of the windows, it makes its rows again
+-- only when they would differ.
+function PICKER:FillList()
+	local entries, rows = self:ListEntries(), self.rows
+	local same = #entries == #rows
+	for i = 1, same and #entries or 0 do
+		if rows[i].panel ~= entries[i].panel then
+			same = false
+			break
+		end
+	end
+	if same then return end
+	for _, row in ipairs(rows) do row:Remove() end
+	-- A removed row under the cursor never says the cursor left it.
+	self.fromList = false
+	self.rows = {}
+	for i, e in ipairs(entries) do
+		local row = self.list:Add("PinnedPanelsPickerRow")
+		row:Dock(TOP)
+		row:DockMargin(6, 0, 6, 4)
+		row:Setup(self, e.panel, e.root)
+		self.rows[i] = row
+	end
+end
+
 function PICKER:ToggleList()
 	if IsValid(self.list) then
 		self.list:Remove()
@@ -255,15 +316,8 @@ function PICKER:ToggleList()
 	header:SetFont("DermaDefaultBold")
 	header:SetTextColor(T.textBright)
 	header:SetText(PP.L("picker.open_windows"))
-	for _, p in ipairs(self.tops) do
-		if not Recipes.Refusal(p, p) then
-			local row = list:Add("PinnedPanelsPickerRow")
-			row:Dock(TOP)
-			row:DockMargin(6, 0, 6, 4)
-			row:Setup(self, p)
-		end
-	end
-	self.list = list
+	self.list, self.rows = list, {}
+	self:RefreshTops()
 end
 
 -- ── Painting ────────────────────────────────────────────────

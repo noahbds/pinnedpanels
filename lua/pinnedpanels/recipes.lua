@@ -170,6 +170,10 @@ end
 -- A name for lists: the window title, else its class, else its addon.
 function Recipes.Title(adopt)
 	local s = adopt.signature
+	-- A part is named after itself, not after the window it came from: two parts of the spawn menu are
+	-- "CreationMenu" and "ToolMenu", not twice "sandbox". A stock class says nothing, so then the window does.
+	local last = s.path and s.path[#s.path]
+	if last and isstring(last.class) and not isStockClass(last.class) then return last.class end
 	if s.title then return phrase(s.title) end
 	if s.desktop then return PP.Sources.Title("desktop:" .. s.desktop) end
 	-- Its addon says more than a class like "xlib_Panel" does.
@@ -235,6 +239,17 @@ local function isScene(p)
 	return isfunction(p.Paint) and not isStock(fileOf(p.Paint))
 end
 
+-- The spawn menu and the C menu: made once by the gamemode and kept, shown and hidden with their keys.
+-- They can't be pinned whole, a part of them can, and nothing has to open them: they are always there.
+function Recipes.IsMenuRoot(p)
+	return p == g_SpawnMenu or p == g_ContextMenu
+end
+
+-- Making another one of these is never how a pin comes back.
+local function menuRootClass(class)
+	return (IsValid(g_SpawnMenu) and g_SpawnMenu.ClassName == class) or (IsValid(g_ContextMenu) and g_ContextMenu.ClassName == class)
+end
+
 -- Why panel (root's window, or root itself) can't be pinned: a localization key, or nil.
 function Recipes.Refusal(panel, root)
 	if not IsValid(panel) or panel:IsMarkedForDeletion() then return "refuse.gone" end
@@ -250,14 +265,22 @@ function Recipes.Refusal(panel, root)
 	if isScene(panel) then return "refuse.scene" end
 end
 
--- A part's place in its window: child indices and classes from the root down (§33.8).
+local function classOf(p)
+	return p.ClassName or p:GetClassName()
+end
+
+-- A part's place in its window, from the root down (§33.8): at each step the child's class, which one of
+-- its parent's children of that class it is (n), and its place among all of them (i). The place alone
+-- doesn't hold: the spawn menu's children aren't in the same order from one session to the next (X49).
 function Recipes.Path(root, part)
 	local path, p = {}, part
 	while p ~= root do
 		local parent = p:GetParent()
+		local class, n = classOf(p), 0
 		for i, c in ipairs(parent:GetChildren()) do
+			if classOf(c) == class then n = n + 1 end
 			if c == p then
-				table.insert(path, 1, { i = i, class = c.ClassName or c:GetClassName() })
+				table.insert(path, 1, { i = i, n = n, class = class })
 				break
 			end
 		end
@@ -266,12 +289,30 @@ function Recipes.Path(root, part)
 	return path
 end
 
--- The same part in a window made again, or nil when the window is laid out differently now.
+-- The same part in a window made again, or nil when the window is laid out differently now. A step is
+-- the n-th child of its class; a path saved before n was kept takes the child at its old place if the
+-- class agrees, else the only child of that class.
 function Recipes.FollowPath(root, path)
 	local p = root
 	for _, step in ipairs(path) do
-		p = p:GetChildren()[step.i]
-		if not IsValid(p) or (step.class and (p.ClassName or p:GetClassName()) ~= step.class) then return nil end
+		local kids = p:GetChildren()
+		local found
+		if not step.class then
+			found = kids[step.i]
+		else
+			local same = {}
+			for _, c in ipairs(kids) do
+				if classOf(c) == step.class then same[#same + 1] = c end
+			end
+			if step.n then
+				found = same[step.n]
+			else
+				local at = kids[step.i]
+				found = (IsValid(at) and classOf(at) == step.class) and at or (#same == 1 and same[1] or nil)
+			end
+		end
+		if not IsValid(found) then return nil end
+		p = found
 	end
 	return p
 end
@@ -323,7 +364,7 @@ function Recipes.Choices(info)
 	end
 	local class = info.signature.class
 	if info.signature.desktop then add({ kind = "desktop", id = info.signature.desktop }) end
-	if class and vgui.GetControlTable(class) then add({ kind = "class", class = class }) end
+	if class and vgui.GetControlTable(class) and not menuRootClass(class) then add({ kind = "class", class = class }) end
 	for _, c in ipairs(info.commands) do add({ kind = "command", command = c.name, confirmed = true }) end
 	add({ kind = "watch" })
 	add({ kind = "session" })
@@ -435,7 +476,18 @@ function Recipes.Attach(w, panel, opened)
 	end
 	local cursor = opened and panel:IsVisible() and panel:IsPopup() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode
 	if cursor then PP.Input.SetCursorMode(true) end
-	if mode == "part" then panel = Recipes.FollowPath(panel, w.tab.adopt.signature.path) end
+	if mode == "part" then
+		local root = panel
+		panel = Recipes.FollowPath(root, w.tab.adopt.signature.path)
+		-- Already in another pin: what stands at its place is that pin's placeholder.
+		if not IsValid(panel) or panel.ppPlaceholder or Recipes.Owner(panel) then return false end
+		-- A path saved the old way is written again as it is kept now.
+		if w.index and not w.tab.adopt.signature.path[1].n then
+			local sig = table.Copy(w.tab.adopt.signature)
+			sig.path = Recipes.Path(root, panel)
+			Layout.SetAdopt(w.rec.id, w.index, { signature = sig })
+		end
+	end
 	if not IsValid(panel) then return false end
 	PP.Embed.Attach(w.tab.src, panel, mode)
 	PP.Embed.live[w.tab.src].cursor = cursor or nil -- the window brought the cursor: closing it takes it back
@@ -530,30 +582,52 @@ function Recipes.Catch()
 	-- Newest first: of two windows that match, the one just opened is the one the player wants.
 	for n = #list, 1, -1 do
 		local p = list[n]
-		if not checked[p] and IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 and settled(p) then
+		-- The spawn menu and the C menu are there while hidden: their parts are taken without anyone
+		-- having to open them first (X49).
+		local menu = IsValid(p) and Recipes.IsMenuRoot(p)
+		if not checked[p] and IsValid(p) and (menu or (p:IsVisible() and p:GetAlpha() > 0 and settled(p))) then
 			checked[p] = true
 			-- The spawn and context menus can't be taken whole, but a part of them can.
 			local refusal = Recipes.Refusal(p, p)
 			local partsOnly = refusal == "refuse.root"
 			if not refusal or partsOnly then
 				local cand = Recipes.Signature(p)
-				local best, bestScore, bestStrong
+				local matches = {}
 				for _, w in ipairs(waiting) do
 					local a = w.tab.adopt
 					local fits = a.mode ~= "part" or Recipes.FollowPath(p, a.signature.path) ~= nil
 					local score, strong = Recipes.Match(a.signature, cand)
-					if score and fits and (a.mode == "part" or not partsOnly) and (not best or score > bestScore) then
-						best, bestScore, bestStrong = w, score, strong
+					if score and fits and (a.mode == "part" or not partsOnly) then
+						matches[#matches + 1] = { w = w, score = score, strong = strong }
 					end
 				end
+				table.sort(matches, function(a, b) return a.score > b.score end)
+				local best = matches[1]
 				if best then
-					local ours = (expecting[best.rec.id] or 0) > RealTime()
-					local opened = not ours and not present[p]
-					if bestStrong then
-						Recipes.Attach(best, p, opened)
-						if opened then learn(best) end
-					else
-						ask(best, p, cand)
+					-- A window goes whole to the one pin it matches best. Parts don't compete: every pin
+					-- that is a part of this window gets its own (the creation menu and the tool menu are
+					-- two parts of the one spawn menu).
+					local takers = { best }
+					if best.w.tab.adopt.mode == "part" then
+						takers = {}
+						for _, m in ipairs(matches) do
+							if m.w.tab.adopt.mode == "part" then takers[#takers + 1] = m end
+						end
+					end
+					for _, m in ipairs(takers) do
+						local ours = (expecting[m.w.rec.id] or 0) > RealTime()
+						local opened = not ours and not present[p] and p:IsVisible()
+						-- A pin saved with "make another spawn menu" as its way back never had one.
+						local r = m.w.tab.adopt.recipe
+						if r.kind == "class" and menuRootClass(r.class) then
+							Layout.SetAdopt(m.w.rec.id, m.w.index, { recipe = { kind = "watch" } })
+						end
+						if m.strong then
+							Recipes.Attach(m.w, p, opened)
+							if opened then learn(m.w) end
+						else
+							ask(m.w, p, cand)
+						end
 					end
 					waiting = Recipes.Waiting()
 					if #waiting == 0 then return end
@@ -595,7 +669,7 @@ timer.Remove(CATCH_TIMER)
 -- allowed and that exists now. Commands from an imported layout wait for the player (R16).
 function Recipes.CanOpen(adopt)
 	local r = adopt.recipe
-	if r.kind == "class" then return vgui.GetControlTable(r.class) ~= nil end
+	if r.kind == "class" then return vgui.GetControlTable(r.class) ~= nil and not menuRootClass(r.class) end
 	if r.kind == "desktop" then return PP.Openers.CanOpenDesktop(r.id) end
 	return r.kind == "command" and r.confirmed == true and concommand.GetTable()[r.command] ~= nil
 end

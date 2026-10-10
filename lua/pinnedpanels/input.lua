@@ -24,6 +24,19 @@ for _, b in pairs(binds) do watched[b.key] = true end
 local held = {}    -- key -> true when its press fired, false when it was already down during a gate
 local nextRepeat = {} -- key -> RealTime of its next repeat, while held with a repeating binding
 local chatOpen, spawnOpen, contextOpen, altHeld = false, false, false, false
+local cursorShown = false -- something that isn't ours shows a cursor
+local cursorSeen = false  -- a cursor shows at all, ours included
+local nextCursorLook = 0
+local CURSOR_LOOK = 0.2
+
+-- gui.EnableScreenClicker can't be asked whether it is on, so calls by others are noted on their way
+-- through. Ours go to the real one (kept across reloads, so it is never wrapped twice).
+Input.rawClicker = Input.rawClicker or gui.EnableScreenClicker
+local rawClicker = Input.rawClicker
+function gui.EnableScreenClicker(on)
+	Input.foreignClicker = on == true
+	return rawClicker(on)
+end
 local frames = Input.frames -- id -> function called every frame (Input.EachFrame)
 
 -- Held keys repeat after a delay, on real time so pause and host_timescale don't matter (G5, B28).
@@ -68,6 +81,24 @@ local function repeats(key)
 	return false
 end
 
+-- Whether something other than this addon shows a cursor: the chat, a screen clicker someone else
+-- turned on, or a window that takes the mouse (the spawn menu, the C menu, another addon's). Our own
+-- windows don't count: they show a cursor because they take the mouse, and would keep each other
+-- taking it for ever.
+local function ourPanel(p)
+	return p.ppOurs or p.ppTakesKeyboard or (isstring(p.ClassName) and p.ClassName:sub(1, 12) == "PinnedPanels")
+		or (PP.Manage and PP.Manage.byPanel[p] ~= nil)
+end
+
+local function foreignCursor()
+	if not vgui.CursorVisible() or gui.IsGameUIVisible() then return false end
+	if chatOpen or Input.foreignClicker then return true end
+	for _, p in ipairs(vgui.GetWorldPanel():GetChildren()) do
+		if p:IsVisible() and p:IsMouseInputEnabled() and p:IsPopup() and not ourPanel(p) then return true end
+	end
+	return false
+end
+
 local function think()
 	local alt = system.HasFocus() and (input.IsKeyDown(KEY_LALT) or input.IsKeyDown(KEY_RALT))
 	if alt ~= altHeld then
@@ -76,10 +107,25 @@ local function think()
 	end
 
 	-- Other addons turn the screen clicker off as well (D31): ours comes back while a reason wants it.
-	if Input.clickerOn and not vgui.CursorVisible() then gui.EnableScreenClicker(true) end
+	if Input.clickerOn and not vgui.CursorVisible() then rawClicker(true) end
+
+	-- No hook says a cursor appeared (X48), but asking whether one shows is a single cheap call, so it
+	-- is asked every frame: the frame it appears, what shows it is looked for, and windows take the
+	-- mouse at once. Once they do, they keep a cursor on screen themselves, so whether the other one
+	-- has gone has to be looked for now and then; being a moment late there costs nothing.
+	local now = RealTime()
+	local visible = vgui.CursorVisible()
+	if visible ~= cursorSeen or (cursorShown and now >= nextCursorLook) then
+		cursorSeen = visible
+		nextCursorLook = now + CURSOR_LOOK
+		local cursor = foreignCursor()
+		if cursor ~= cursorShown then
+			cursorShown = cursor
+			inputChanged()
+		end
+	end
 
 	local gate = gated()
-	local now = RealTime()
 	for key in pairs(watched) do
 		local isDown = input.IsKeyDown(key)
 		local was = held[key]
@@ -184,11 +230,12 @@ function Input.Cursor(reason, on)
 	if want == Input.clickerOn then return end
 	Input.clickerOn = want
 	if want then
-		gui.EnableScreenClicker(true)
+		rawClicker(true)
 		RestoreCursorPosition()
-	else
+	elseif not Input.foreignClicker then
+		-- Someone else's stays on: theirs to turn off.
 		RememberCursorPosition()
-		gui.EnableScreenClicker(false)
+		rawClicker(false)
 	end
 end
 
@@ -201,9 +248,10 @@ function Input.SetCursorMode(on)
 	inputChanged()
 end
 
--- Windows take the mouse in cursor mode and while the spawn menu or the C menu is open (F10, E16, FF5).
+-- Windows take the mouse whenever there is a cursor to click them with: in cursor mode, while the spawn
+-- menu or the C menu is open (F10, E16, FF5), and with anything else that shows one (X48).
 function Input.Interactive()
-	return Input.cursorMode or spawnOpen or contextOpen
+	return Input.cursorMode or spawnOpen or contextOpen or cursorShown
 end
 
 -- Windows set to show with the C menu appear only while it is open (FF5).

@@ -321,6 +321,7 @@ function Embed.Attach(src, target, mode)
 		-- The placeholder answers for the part where it was: an owner that goes through its children and
 		-- calls them (a tool list clearing every category's selected row) still reaches the part.
 		standIn(ph, target)
+		ph.ppPlaceholder = true
 		e.placeholder = ph
 		adopt(e, target)
 		target:Dock(FILL)

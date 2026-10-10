@@ -162,6 +162,8 @@ function Recipes.Match(sig, cand)
 	return score, strong
 end
 
+local sheetTabName
+
 local function phrase(text)
 	if text:sub(1, 1) ~= "#" then return text end
 	return language.GetPhrase(text:sub(2))
@@ -371,6 +373,20 @@ function Recipes.Choices(info)
 	return list
 end
 
+-- The name on the tab that shows panel, when panel is a page of a tab sheet.
+function sheetTabName(panel)
+	local sheet = panel:GetParent()
+	local items = IsValid(sheet) and sheet.Items
+	if not istable(items) then return nil end
+	for _, item in pairs(items) do
+		if istable(item) and item.Panel == panel then
+			local name = item.Name
+			if not isstring(name) and IsValid(item.Tab) then name = item.Tab:GetText() end
+			if isstring(name) and name ~= "" then return phrase(name) end
+		end
+	end
+end
+
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 -- waiting: the pinned window is made now and takes the panel when it is caught.
 function Recipes.Take(panel, root, mode, recipe, waiting)
@@ -399,7 +415,11 @@ function Recipes.Take(panel, root, mode, recipe, waiting)
 	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root), needsKeyboard = root:IsKeyboardInputEnabled() }
 	if mode == "manage" then return PP.Manage.Take(root, adopt) end
 	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
-	return PP.Embed.Take(mode == "part" and panel or root, adopt, waiting)
+	-- A page of a tab sheet is called what its tab is called ("Weapons"), which its class never says.
+	local name = mode == "part" and sheetTabName(panel)
+	local id = PP.Embed.Take(mode == "part" and panel or root, adopt, waiting)
+	if id and name then Layout.Rename(id, 1, name) end
+	return id
 end
 
 -- Moves an adopted panel between Manage and Embed (§33.6): "Embed for full features" on a managed window,

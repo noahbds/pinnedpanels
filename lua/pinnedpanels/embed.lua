@@ -12,6 +12,7 @@ local Layout, Desktop, Input = PP.Layout, PP.Desktop, PP.Input
 local TIMER, INTERVAL = "PinnedPanels.Embed", 0.25
 -- Our window's chrome around a tab's content: its edges, and its header when there is no title strip to crop.
 local CHROME_W, CHROME_H, CHROME_HEADER = 10, 4, 29
+local BIG, BIG_START = 0.8, 0.6 -- of the screen, each way
 local CHROME = { "btnClose", "btnMaxim", "btnMinim", "lblTitle", "imgIcon" } -- DFrame's own (G57)
 
 -- src -> { mode, target, shell, box, moved = { { panel, parent, dock, margin, x, y, w, h, z } }, skip,
@@ -298,6 +299,37 @@ end
 
 local giveKeyboard
 
+-- A part is still its owner's to show, hide, place and size: a tab sheet hides the page it leaves and
+-- lays out the one it shows, a list re-docks its rows. Left alone, that reaches the part in our window
+-- (a pinned page went blank the moment another tab was chosen). So while a part is pinned, what its
+-- owner says to it about its place goes to the placeholder, which is what stands in that place; the
+-- part stays shown and filling its tab. The engine's own functions are kept to act on the part itself.
+local META = FindMetaTable("Panel")
+local PLACE = { "SetVisible", "SetPos", "SetSize", "SetWide", "SetTall", "Dock", "DockMargin", "SetZPos" }
+
+local function shield(e)
+	local t, ph = e.target:GetTable(), e.placeholder
+	e.shielded = {}
+	for _, name in ipairs(PLACE) do
+		e.shielded[name] = rawget(t, name) or false
+		t[name] = function(_, ...)
+			if IsValid(ph) then return META[name](ph, ...) end
+		end
+	end
+end
+
+local function unshield(e)
+	if not e.shielded or not IsValid(e.target) then return end
+	local t = e.target:GetTable()
+	for name, was in pairs(e.shielded) do t[name] = was or nil end
+	e.shielded = nil
+end
+
+-- Says where the part went, in the place it left (its sheet still has a tab for it).
+local function paintPlaceholder(_, w, h)
+	draw.SimpleText(PP.L("embed.elsewhere"), "DermaDefault", w / 2, h / 2, PP.Theme.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+end
+
 -- Moves target into tab src: a window's contents (mode "embed") or the one panel (mode "part").
 function Embed.Attach(src, target, mode)
 	-- A pinned window that was given the keyboard gives it back first: the window being emptied loses
@@ -322,9 +354,16 @@ function Embed.Attach(src, target, mode)
 		-- calls them (a tool list clearing every category's selected row) still reaches the part.
 		standIn(ph, target)
 		ph.ppPlaceholder = true
+		ph.Paint = paintPlaceholder
+		ph:SetVisible(target:IsVisible())
 		e.placeholder = ph
 		adopt(e, target)
+		-- Filling its tab, without the margins it had in its owner's layout (the spawn menu keeps its
+		-- inside a hundred pixels from every edge), and shown even if it was a page its sheet had hidden.
 		target:Dock(FILL)
+		target:DockMargin(0, 0, 0, 0)
+		target:SetVisible(true)
+		shield(e)
 	else
 		local s = target
 		e.shell = s
@@ -372,6 +411,12 @@ end
 function Embed.Take(target, adoptRec, waiting)
 	local x, y = target:LocalToScreen(0, 0)
 	local w, h = target:GetSize()
+	-- A part that fills the screen where it is (the whole inside of the spawn menu) would cover the game
+	-- for good once pinned: it starts at a size that leaves room, and can be made larger.
+	if adoptRec.mode == "part" and w > ScrW() * BIG and h > ScrH() * BIG then
+		local nw, nh = math.Round(ScrW() * BIG_START), math.Round(ScrH() * BIG_START)
+		x, y, w, h = x + (w - nw) / 2, y + (h - nh) / 2, nw, nh
+	end
 	local strip = adoptRec.mode == "embed" and Embed.Strip(target) or 0
 	local id, src = Layout.PinAdopted(adoptRec, x - CHROME_W / 2, y - CHROME_H, w + CHROME_W, h - strip + CHROME_HEADER + CHROME_H)
 	if strip > 0 then Layout.SetCrop(id, 1, { l = 0, t = strip, r = 0, b = 0 }) end
@@ -404,18 +449,30 @@ function Embed.Release(src, close)
 		timer.Remove(TIMER)
 		Input.EachFrame("embed", nil)
 	end
+	unshield(e)
 	for _, m in ipairs(e.moved) do
 		local p, parent = m.panel, m.parent
 		Embed.byPanel[p] = nil
 		if IsValid(p) and not p:IsMarkedForDeletion() and p:GetParent() == e.box.inner then
 			if not e.orphaned and IsValid(parent) and not parent:IsMarkedForDeletion() and IsValid(e.shell) and not e.shell:IsMarkedForDeletion() then
 				p:SetParent(parent)
-				if IsValid(e.placeholder) then p:MoveToBefore(e.placeholder) end
-				p:Dock(m.dock)
-				p:DockMargin(m.margin[1], m.margin[2], m.margin[3], m.margin[4])
-				p:SetPos(m.x, m.y)
-				p:SetSize(m.w, m.h)
-				p:SetZPos(m.z)
+				local ph = e.placeholder
+				if IsValid(ph) then
+					-- A part goes back as its owner has its place now, which the placeholder kept.
+					p:MoveToBefore(ph)
+					p:Dock(ph:GetDock())
+					p:DockMargin(ph:GetDockMargin())
+					p:SetPos(ph:GetPos())
+					p:SetSize(ph:GetSize())
+					p:SetZPos(ph:GetZPos())
+					p:SetVisible(ph:IsVisible())
+				else
+					p:Dock(m.dock)
+					p:DockMargin(m.margin[1], m.margin[2], m.margin[3], m.margin[4])
+					p:SetPos(m.x, m.y)
+					p:SetSize(m.w, m.h)
+					p:SetZPos(m.z)
+				end
 			else
 				p:Remove()
 			end

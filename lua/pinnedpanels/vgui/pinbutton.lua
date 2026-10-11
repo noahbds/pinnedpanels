@@ -106,6 +106,10 @@ local function targetUnder(hovered)
 	end
 	if root:GetWide() < MIN_W or root:GetTall() < MIN_H or not root:IsMouseInputEnabled() then return nil end
 	if Recipes.Refusal(root, root) then return nil end
+	-- A bare stock panel that is nobody's window (an empty scroll list an addon left in a corner of the
+	-- screen, invisible, was offered as "Window"): the picker's list of windows leaves those out too.
+	local sig = Recipes.Signature(root)
+	if not (sig.popup or sig.title or sig.class or sig.src) then return nil end
 	return root, root
 end
 
@@ -163,6 +167,10 @@ local function describe()
 	lines[1] = PinButton.names[PinButton.index] or Recipes.PartName(panel)
 	lines[2] = PP.L(panel ~= root and "picker.size_part" or "picker.size", sig.w, sig.h)
 	lines[3] = PP.L(panel ~= root and "picker.click_part" or "picker.click_embed")
+	-- The button offers areas; the picker points at anything. Its key, if it has one: a tip of its
+	-- own, apart from the card, which is about what a click here would pin.
+	local key = Settings.Get("keyPick")
+	PinButton.tip = key ~= KEY_NONE and PP.L("pinbutton.picker_key", PP.Util.KeyName(key)) or PP.L("pinbutton.picker_nokey")
 	local widest = 0
 	-- The choices themselves, under the lines: what says there is a wheel to turn (T.DrawChoices).
 	if #PinButton.names > 1 then widest = T.ChoicesSize(PinButton.names, PP.L("picker.wheel")) end
@@ -292,6 +300,18 @@ hook.Add("DrawOverlay", "PinnedPanels.PinButton", function()
 		draw.SimpleText(line, font, cx + CARD_PAD, cy + CARD_PAD + (i - 1) * LINE_H, tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 	end
 	if #names > 1 then T.DrawChoices(cx + CARD_PAD, cy + CARD_PAD + #lines * LINE_H + 6, cw - CARD_PAD * 2, names, PinButton.index, header) end
+
+	-- The picker's tip, in a box of its own on the far side of the card from the button.
+	local tip = PinButton.tip
+	if not tip then return end
+	surface.SetFont("DermaDefault")
+	local tw, th = surface.GetTextSize(tip) + CARD_PAD * 2, LINE_H + 8
+	local tx = math.Clamp(cx + cw - tw, 8, ScrW() - tw - 8)
+	local ty = cy > by and cy + ch + 6 or cy - th - 6
+	draw.RoundedBox(6, tx, ty, tw, th, T.popupBg)
+	surface.SetDrawColor(T.popupBorder)
+	surface.DrawOutlinedRect(tx, ty, tw, th, 1)
+	draw.SimpleText(tip, "DermaDefault", tx + CARD_PAD, ty + th / 2, T.textSubtle, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 end)
 
 -- ── Following the cursor ────────────────────────────────────

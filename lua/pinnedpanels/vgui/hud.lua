@@ -14,7 +14,7 @@ hook.Add("HUDPaint", "PinnedPanels.Hud", function()
 	if not Input.cursorMode then return end
 	if not text then
 		local key = Settings.Get("keyCursor")
-		local name = key ~= KEY_NONE and string.upper(input.GetKeyName(key) or "?") or PP.L("key.none")
+		local name = key ~= KEY_NONE and PP.Util.KeyName(key) or PP.L("key.none")
 		text = PP.L("hud.banner", name)
 		surface.SetFont(Theme.FONT_BANNER)
 		width = surface.GetTextSize(text) + PAD

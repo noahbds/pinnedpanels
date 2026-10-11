@@ -189,6 +189,20 @@ function PP.LN(key, n, ...)
 	return PP.L(key .. (n == 1 and "_one" or "_many"), n, ...)
 end
 
+-- A key as the player knows it. The game's own names are its config file's: the numpad's 0 is
+-- "KP_INS", its Enter "KP_ENTER". Those are said as "Numpad 0", "Numpad Enter"; the rest in capitals.
+local NUMPAD = {
+	[KEY_PAD_DIVIDE] = "/", [KEY_PAD_MULTIPLY] = "*", [KEY_PAD_MINUS] = "-", [KEY_PAD_PLUS] = "+",
+	[KEY_PAD_DECIMAL] = ".",
+}
+for i = 0, 9 do NUMPAD[KEY_PAD_0 + i] = tostring(i) end
+
+function Util.KeyName(key)
+	if NUMPAD[key] then return PP.L("key.numpad", NUMPAD[key]) end
+	if key == KEY_PAD_ENTER then return PP.L("key.numpad", "ENTER") end
+	return string.upper(input.GetKeyName(key) or "?")
+end
+
 -- Palette matching (v1): a substring scores its position; letters in order score behind any substring.
 -- Lower is better; nil means no match. needle must be lower case.
 function Util.Fuzzy(hay, needle)

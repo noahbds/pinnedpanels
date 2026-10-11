@@ -179,7 +179,7 @@ function Dialogs.Key(opts)
 		end
 		local conflicts = PP.Actions.Conflicts(key, opts.tag)
 		if #conflicts == 0 then return apply() end
-		Derma_Query(PP.L("conflict.query", string.upper(input.GetKeyName(key) or "?"), table.concat(conflicts, "\n- ")),
+		Derma_Query(PP.L("conflict.query", PP.Util.KeyName(key), table.concat(conflicts, "\n- ")),
 			PP.L("conflict.title"), PP.L("conflict.bind_anyway"), apply,
 			PP.L("btn.cancel"), function() if IsValid(binder) then binder:SetValue(opts.get()) end end)
 	end

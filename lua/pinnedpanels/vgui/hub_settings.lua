@@ -78,7 +78,7 @@ end
 
 local function keyName(key)
 	if not key or key == KEY_NONE then return PP.L("key.not_bound") end
-	return string.upper(input.GetKeyName(key) or "?")
+	return PP.Util.KeyName(key)
 end
 
 local function colorText(c)

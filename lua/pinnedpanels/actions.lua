@@ -257,7 +257,7 @@ hook.Add("InitPostEntity", "PinnedPanels.Actions", function()
 	for _, key in ipairs(CURSOR_KEYS) do
 		if #Actions.Conflicts(key) == 0 then
 			Settings.Set("keyCursor", key)
-			notification.AddLegacy(PP.L("notify.cursor_bound", string.upper(input.GetKeyName(key) or "?")), NOTIFY_HINT, 10)
+			notification.AddLegacy(PP.L("notify.cursor_bound", PP.Util.KeyName(key)), NOTIFY_HINT, 10)
 			return
 		end
 	end
@@ -342,7 +342,10 @@ Actions.Add({
 Actions.Add({
 	id = "pick", scope = "global", icon = "icon16/application_form_add.png", label = "act.pick",
 	sub = "sub.pick", palette = true, bindable = true,
-	run = function() PP.Picker.Open() end,
+	-- The key that opens the picker closes it too.
+	run = function()
+		if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() else PP.Picker.Open() end
+	end,
 })
 
 Actions.Add({
@@ -473,7 +476,7 @@ Actions.Add({
 	label = function(ctx)
 		local key = ctx.window.quickKey
 		if not key then return PP.L("ctx.assign_quick") end
-		return PP.L("ctx.quick_key", string.upper(input.GetKeyName(key) or "?"))
+		return PP.L("ctx.quick_key", PP.Util.KeyName(key))
 	end,
 	menu = { group = "style", window = 42 },
 	run = function(ctx)

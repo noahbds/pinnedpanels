@@ -430,7 +430,21 @@ end
 
 -- Says where the part went, in the place it left (its sheet still has a tab for it).
 -- Kept inside the place: a spawn icon's is 128 wide, and the sentence ran over its neighbours.
-local function paintPlaceholder(_, w, h)
+-- Not while the pinned window lies over the middle of the place, where the words go: the spawn menu is
+-- drawn over our windows, so the note was written across the very thing it says is elsewhere.
+local function paintPlaceholder(self, w, h)
+	local box = self.ppEntry and self.ppEntry.box
+	if IsValid(box) then
+		local shown, p = true, box
+		while IsValid(p) do
+			if not p:IsVisible() then
+				shown = false
+				break
+			end
+			p = p:GetParent()
+		end
+		if shown and PP.Util.Contains(box, self:LocalToScreen(w / 2, h / 2)) then return end
+	end
 	PP.Theme.Note(w, h, PP.L("embed.elsewhere"), PP.L("embed.elsewhere_short"))
 end
 
@@ -458,6 +472,7 @@ function Embed.Attach(src, target, mode)
 		-- calls them (a tool list clearing every category's selected row) still reaches the part.
 		standIn(ph, target)
 		ph.ppPlaceholder = true
+		ph.ppEntry = e
 		ph.Paint = paintPlaceholder
 		ph:SetVisible(target:IsVisible())
 		e.placeholder = ph

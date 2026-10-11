@@ -580,7 +580,8 @@ Unchecked in the archived plan's §26 and §27 on 2026-10-06. Nothing here is st
 
 ### Release work (phase H, after phase G)
 - [ ] Side-by-side v1/v2 screenshots of every screen and menu
-- [ ] 8 translations converted and completed [F33, B25]
+- [x] The note a pinned part leaves in its place ("Pinned: this is shown in its own window.") isn't drawn while the pinned window lies over the middle of that place (the owner, 2026-10-12, a screenshot of the note across the pinned props): the spawn menu is drawn over our windows, so the note was written on the very thing it says is elsewhere [`paintPlaceholder`, `ph.ppEntry`]. Written and syntax-checked, not run in game.
+- [x] 8 translations converted and completed [F33, B25]. Written 2026-10-12 from the English file, all 422 phrases each, as `resource/localization/<code>/pinnedpanels.properties`: `fr`, `de`, `es-ES`, `pt-BR`, `pl`, `ru`, `tr`, `zh-CN` (v1's eight, under the game's own language codes; v1's `pt` and `zh` are Brazilian Portuguese and Simplified Chinese here). Checked by script: same keys in the same order, same `%s`/`%d`/`{n}`/`\n` in every phrase, `%s` and `%d` in the same order, no empty phrase, UTF-8 without a mark at the start. Polish and Russian have more plural forms than `_one`/`_many`: their counts are written so that any number reads right ("Narzędzia: 5", "Инструментов: 5"). Titles sort by their plain letter in Polish and Turkish too [`Util.SortKey`]. **Not seen in game**: the game reads these files when it starts, so nothing was looked at on screen, in particular widths in German and Russian, and Chinese in the addon's own fonts. Written by the assistant, not checked by a native speaker of any of them
 - [ ] Live language switch across every screen [E11]
 - [ ] Manual matrix (archived §28.2)
 - [ ] Performance pass (archived §9)

@@ -237,7 +237,8 @@ end
 -- languages the addon is translated into, folded to their plain ones.
 local FOLD = {}
 for plain, accented in pairs({
-	a = "àáâãäåÀÁÂÃÄÅ", c = "çÇ", e = "èéêëÈÉÊË", i = "ìíîïÌÍÎÏ", n = "ñÑ", o = "òóôõöøÒÓÔÕÖØ", u = "ùúûüÙÚÛÜ", y = "ýÿÝ",
+	a = "àáâãäåąÀÁÂÃÄÅĄ", c = "çćÇĆ", e = "èéêëęÈÉÊËĘ", g = "ğĞ", i = "ìíîïıÌÍÎÏİ", l = "łŁ", n = "ñńÑŃ",
+	o = "òóôõöøÒÓÔÕÖØ", s = "śşßŚŞ", u = "ùúûüÙÚÛÜ", y = "ýÿÝ", z = "źżŹŻ",
 }) do
 	for char in accented:gmatch(utf8.charpattern) do FOLD[char] = plain end
 end

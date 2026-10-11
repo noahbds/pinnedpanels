@@ -35,12 +35,6 @@ function Geom.Fit(x, y, w, h, ux, uy, uw, uh)
 	return math.Clamp(x, ux, ux + uw - w), math.Clamp(y, uy, uy + uh - h), w, h
 end
 
-function Geom.Overlap(a, b, pad)
-	pad = pad or 0
-	return a.x < b.x + b.w + pad and b.x < a.x + a.w + pad
-		and a.y < b.y + b.h + pad and b.y < a.y + a.h + pad
-end
-
 -- Where a new w×h window goes (L23): the preferred spot if nothing is there, else the spot that covers
 -- the least of the other windows, scanning rows top-left first. A minimized window's place counts
 -- too, for less: it is where that window comes back. Landing on another window's corner costs as much
@@ -121,6 +115,19 @@ function Geom.SnapMove(x, y, w, h, rects, dist, ux, uy, uw, uh)
 	return Geom.SnapAxis(x, w, ux, uw, rects, "x", dist), Geom.SnapAxis(y, h, uy, uh, rects, "y", dist)
 end
 
+-- ── Panels ──────────────────────────────────────────────────
+
+-- Whether the screen point is on panel p.
+function Util.Contains(p, x, y)
+	local px, py = p:LocalToScreen(0, 0)
+	return x >= px and y >= py and x < px + p:GetWide() and y < py + p:GetTall()
+end
+
+-- Whether p shows something: visible, not see-through, with a size. (Not whether what it is in shows.)
+function Util.Drawn(p)
+	return IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 and p:GetWide() > 0 and p:GetTall() > 0
+end
+
 -- ── Colours ─────────────────────────────────────────────────
 -- Files store colours as [r, g, b, a] because JSON drops Color's metatable (G35); convars store "r g b a".
 
@@ -163,8 +170,23 @@ end
 function PP.L(key, ...)
 	local text = language.GetPhrase("pinnedpanels." .. key):gsub("\\n", "\n")
 	if select("#", ...) == 0 then return text end
+	-- "{1}", "{2}": what is filled in, by its number, so a translation can put the pieces in the order
+	-- its language wants (string.format's %s can only keep ours).
+	if text:find("{%d}") then
+		local args = { ... }
+		return (text:gsub("{(%d)}", function(i)
+			local v = args[tonumber(i)]
+			if v ~= nil then return tostring(v) end
+		end))
+	end
 	local ok, out = pcall(string.format, text, ...)
 	return ok and out or text
+end
+
+-- A phrase with a number in it, in its form for one or for several: "<key>_one" or "<key>_many", with
+-- the number as the first thing to fill in. (Languages with more forms than two share _many.)
+function PP.LN(key, n, ...)
+	return PP.L(key .. (n == 1 and "_one" or "_many"), n, ...)
 end
 
 -- Palette matching (v1): a substring scores its position; letters in order score behind any substring.
@@ -193,19 +215,6 @@ function Util.WithOverride(tbl, key, replacement, fn)
 	tbl[key] = original
 	if not ok then ErrorNoHalt("[Pinned Panels] " .. tostring(err) .. "\n") end
 	return ok
-end
-
--- The timed form, only for Record mode (R14): tbl[key] is replacement until the returned function is
--- called. That restores the original only if our replacement is still installed (another addon may have
--- wrapped it since, §33.17) and returns whether it did; the replacement must then pass calls through.
-function Util.BeginOverride(tbl, key, replacement)
-	local original = tbl[key]
-	tbl[key] = replacement
-	return function()
-		if tbl[key] ~= replacement then return false end
-		tbl[key] = original
-		return true
-	end
 end
 
 -- ── Text ────────────────────────────────────────────────────

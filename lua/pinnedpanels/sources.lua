@@ -258,21 +258,65 @@ end
 
 local BUILDERS = { tool = buildTool, postprocess = buildPostProcess, active = buildActive }
 
--- Each call returns a new, independent container (G13). Nearly always: a tab that registers console
--- commands while it builds has just pointed them at our copy, away from the spawn menu's, and the player
--- is told once that this tab is better pinned from the spawn menu with the picker (D38).
-local warned = {}
+-- The spawn menu's own page for a content tab, found by the tab's name.
+local function ownPage(e)
+	local sheet = IsValid(g_SpawnMenu) and g_SpawnMenu.CreateMenu
+	for _, item in pairs(IsValid(sheet) and istable(sheet.Items) and sheet.Items or {}) do
+		if istable(item) and IsValid(item.Panel) and (item.Name == e.name or (IsValid(item.Tab) and item.Tab:GetText() == language.GetPhrase((e.name:gsub("^#", ""))))) then
+			return item.Panel
+		end
+	end
+end
+
+-- A tab that is made to exist once (D38): the copy we just built took the tab's console commands away
+-- from the spawn menu's. The player used to be told to "unpin it and pin the spawn menu's own tab with
+-- the picker" (Z7). Now that is done: the commands go back to the spawn menu's, our copy is unpinned and
+-- the spawn menu's own page is pinned where it was. Next frame: this runs while the copy is being built.
+Sources.single = Sources.single or {} -- key -> true, for the session: pinned as the spawn menu's own from then on
+local function pinOwn(e, commands)
+	local list = concommand.GetTable()
+	for name, fn in pairs(commands) do
+		if list[name] ~= fn then list[name] = fn end
+	end
+	Sources.single[e.key] = true
+	PP.Util.NextFrame(nil, function()
+		local win, i = PP.Layout.Find(e.key)
+		local page = ownPage(e)
+		if not win or not IsValid(page) or PP.Recipes.Owner(page) then return end
+		local x, y, w, h = win.x, win.y, win.w, win.h
+		PP.Layout.UnpinTab(win.id, i)
+		local id = PP.Recipes.Take(page, g_SpawnMenu, "part", { kind = "watch" })
+		if id then PP.Layout.SetGeometry(id, x, y, w, h) end
+		notification.AddLegacy(PP.L("source.single", Sources.Title(e.key)), NOTIFY_GENERIC, 8)
+	end)
+end
+
+-- Pins the spawn menu's own page for a content tab known to exist once, or brings its window up.
+-- Returns the window id, or nil when the page can't be found (then a copy is built as before).
+function Sources.PinOwn(key)
+	local e = Sources.catalogue[key]
+	local page = e and ownPage(e)
+	if not IsValid(page) then return nil end
+	local e2 = PP.Embed.byPanel[page]
+	if e2 then
+		local win = PP.Layout.Find(e2.box.src)
+		if win then
+			PP.Desktop.RestoreAndFront(win.id)
+			return win.id
+		end
+	end
+	return PP.Recipes.Take(page, g_SpawnMenu, "part", { kind = "watch" })
+end
+
+-- Each call returns a new, independent container (G13), except for a tab made to exist once (pinOwn).
 local function buildCreation(e, parent)
 	local commands = {}
 	for name, fn in pairs(concommand.GetTable()) do commands[name] = fn end
 	local ok, panel = run(e.key, e.fn)
-	if not warned[e.key] then
-		for name, fn in pairs(concommand.GetTable()) do
-			if commands[name] and commands[name] ~= fn then
-				warned[e.key] = true
-				notification.AddLegacy(PP.L("source.singleton", Sources.Title(e.key)), NOTIFY_HINT, 10)
-				break
-			end
+	for name, fn in pairs(concommand.GetTable()) do
+		if commands[name] and commands[name] ~= fn then
+			pinOwn(e, commands)
+			break
 		end
 	end
 	if not ok then return nil end

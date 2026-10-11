@@ -88,7 +88,7 @@ function PANEL:Refresh()
 	-- Not for a pinned window's own title strip, which is always cropped away: only for a crop the
 	-- player made.
 	local strip = crop and tab and tab.adopt and crop.l == 0 and crop.r == 0 and crop.b == 0
-	if crop and not strip then title = title .. "  " .. PP.L("ind.cropped") end
+	if crop and not strip then title = PP.L("ind.cropped", title) end
 	self.titleText = title
 
 	local items = {}

@@ -18,14 +18,7 @@ local MAX_DEPTH = 40
 local LIST_DEPTH = 3
 local OUTLINE, FILL = Color(60, 200, 255), Color(60, 200, 255, 30)
 
-local function contains(p, x, y)
-	local px, py = p:LocalToScreen(0, 0)
-	return x >= px and y >= py and x < px + p:GetWide() and y < py + p:GetTall()
-end
-
-local function drawn(p)
-	return IsValid(p) and p:IsVisible() and p:GetAlpha() > 0 and p:GetWide() > 0 and p:GetTall() > 0
-end
+local contains, drawn = PP.Util.Contains, PP.Util.Drawn
 
 -- root and its deepest visible descendants under the point, top-most child first.
 local function chainAt(root, x, y)
@@ -161,7 +154,7 @@ function PICKER:Select(panel)
 	local line = Recipes.Lineage(panel)
 	local class = table.remove(line, 1)
 	lines[3] = #line > 0 and PP.L("picker.class", class, table.concat(line, " < ")) or PP.L("picker.unnamed", class)
-	lines[4] = PP.L("picker.size", sig.w, sig.h) .. (panel ~= root and "  ·  " .. PP.L("picker.part") or "")
+	lines[4] = PP.L(panel ~= root and "picker.size_part" or "picker.size", sig.w, sig.h)
 	local info = Recipes.Suggest(panel, root)
 	self.info = info
 	-- Two lines: together they were wider than the card.

@@ -15,37 +15,16 @@ local PEEK, REVEAL_MARGIN = 4, 6
 local FADE_SPEED, SLIDE_SPEED = 6, 8
 local WHEEL_STEP, ARROW = 60, 12
 
-local ICONS = {
-	tool = Material("icon16/wrench.png"),
-	active = Material("icon16/wand.png"),
-	creation = Material("icon16/application_view_list.png"),
-	postprocess = Material("icon16/color_wheel.png"),
-	quick = Material("icon16/lightning.png"),
-	adopt = Material("icon16/application.png"),
-	desktop = Material("icon16/application_double.png"),
-	group = Material("icon16/folder.png"),
-}
 -- How strongly an entry's icon and label show, by state.
-local DIM = { shown = 255, minimized = 165, hidden = 105, waiting = 105, closed = 105 }
+local DIM = { shown = 255, minimized = 165, hidden = 105, waiting = 105 }
 local ALIGN = { start = 0, center = 0.5, ["end"] = 1 }
-
-local function kindOf(rec)
-	if #rec.tabs > 1 then return "group" end
-	return rec.tabs[1] and rec.tabs[1].src:match("^(%a+):") or "tool"
-end
 
 local function horizontal()
 	local side = Settings.Get("taskbarSide")
 	return side == "bottom" or side == "top"
 end
 
--- One character less, whole: a title cut in the middle of an accented letter draws as a box.
-local function chop(s)
-	s = s:sub(1, -2)
-	while #s > 0 and s:byte(-1) >= 0x80 and s:byte(-1) < 0xC0 do s = s:sub(1, -2) end
-	if #s > 0 and s:byte(-1) >= 0xC0 then s = s:sub(1, -2) end
-	return s
-end
+local chop = Theme.Chop
 
 -- Two characters for an entry without room for its label, so that sixty tool windows aren't sixty
 -- wrenches: the first letters of its first two words that count ("Data - Plug/Socket" is DP,
@@ -96,13 +75,14 @@ end
 -- that aren't on screen as windows (the same tables, so the ring is drawn where the entry is).
 function BAR:Rebuild()
 	local items, entries = {}, {}
-	local all = Settings.Get("taskbarShow") == "all"
+	-- Switched off, the bar is still there for minimized windows (Desktop.UpdateTaskbar), and only those.
+	local all = Settings.Get("taskbar") and Settings.Get("taskbarShow") == "all"
 	for _, rec in ipairs(Layout.Windows()) do
 		local state = stateOf(rec)
-		local away = state == "minimized" or state == "closed"
+		local away = state == "minimized"
 		if state and (all or away) then
 			local title = Layout.Title(rec)
-			local item = { id = rec.id, title = title, state = state, icon = ICONS[kindOf(rec)] or ICONS.tool, sort = PP.Util.SortKey(title), short = initials(title) }
+			local item = { id = rec.id, title = title, state = state, icon = Theme.Icon((Theme.KIND[Layout.Kind(rec)] or Theme.KIND.tool).icon), sort = PP.Util.SortKey(title), short = initials(title) }
 			items[#items + 1] = item
 			if away then entries[#entries + 1] = item end
 		end
@@ -229,7 +209,12 @@ function BAR:Think()
 	local interactive = Input.Interactive()
 	local target = wanted(self) and 1 or 0
 	self.fade = math.Approach(self.fade, target, FADE_SPEED * dt)
-	self:SetAlpha(math.Round(self.fade * 255))
+	-- Told to the engine when they change, not sixty times a second.
+	local alpha = math.Round(self.fade * 255)
+	if alpha ~= self.alphaSet then
+		self.alphaSet = alpha
+		self:SetAlpha(alpha)
+	end
 
 	local collapse = Settings.Get("taskbarAutoHide") and PP.Nav.state ~= "taskbar" and not (interactive and cursorNearEdge())
 	local slide = math.Approach(self.slide, collapse and 1 or 0, SLIDE_SPEED * dt)
@@ -238,7 +223,11 @@ function BAR:Think()
 		self:Place()
 	end
 
-	self:SetMouseInputEnabled(interactive and self.fade > 0.05)
+	local mouse = interactive and self.fade > 0.05
+	if mouse ~= self.mouseSet then
+		self.mouseSet = mouse
+		self:SetMouseInputEnabled(mouse)
+	end
 	if self.fade == 0 and target == 0 then
 		self:SetHover(nil)
 		self:SetVisible(false)
@@ -269,8 +258,13 @@ function BAR:SetHover(i)
 		return
 	end
 	local text = e.title
-	if e.state ~= "shown" then text = text .. "  ·  " .. PP.L("tb.state." .. e.state) end
-	text = text .. "  ·  " .. PP.L("tb.click." .. actionOf(e))
+	-- One phrase of two or three parts, so a translation can order them: name, state, what a click does.
+	local click = PP.L("tb.click." .. actionOf(e))
+	if e.state ~= "shown" then
+		text = PP.L("tb.tip_state", text, PP.L("tb.state." .. e.state), click)
+	else
+		text = PP.L("tb.tip", text, click)
+	end
 	surface.SetFont(Theme.FONT_TASKBAR)
 	self.tip = text
 	self.tipW, self.tipH = surface.GetTextSize(text)

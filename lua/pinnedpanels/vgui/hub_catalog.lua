@@ -226,7 +226,7 @@ function CATALOG:Filter()
 	self.empty:SetVisible(shown == 0)
 
 	if self.countLabel then
-		self.countLabel:SetText(query == "" and PP.L(self.searchable.count, #self.rows) or (shown .. " / " .. #self.rows))
+		self.countLabel:SetText(query == "" and PP.LN(self.searchable.count, #self.rows) or (shown .. " / " .. #self.rows))
 	end
 	self.list:GetCanvas():InvalidateLayout()
 	self.list:InvalidateLayout()

@@ -241,15 +241,25 @@ end
 -- ── Global ──────────────────────────────────────────────────
 
 -- F-keys can't be blocked (G6): where the gamemode opens its own menu with F4, the cursor key starts
--- unbound and the player is told at each join until one is chosen (D37).
+-- unbound (D37). The player used to be told at each join to choose one (Z7): now the first key of a short
+-- list that nothing uses is bound, once, and the player is told which. If they unbind it, it stays unbound.
 local function cursorKey()
 	if engine.ActiveGamemode() ~= "sandbox" and input.LookupKeyBinding(KEY_F4) == "gm_showspare2" then return KEY_NONE end
 	return KEY_F4
 end
 
+local CURSOR_KEYS = { KEY_F6, KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_HOME, KEY_INSERT, KEY_PAUSE }
+local CURSOR_CHOSEN = "pinnedpanels_cursor_key_chosen"
+
 hook.Add("InitPostEntity", "PinnedPanels.Actions", function()
-	if cursorKey() == KEY_NONE and Settings.Get("keyCursor") == KEY_NONE then
-		notification.AddLegacy(PP.L("notify.cursor_unbound"), NOTIFY_HINT, 10)
+	if cursorKey() ~= KEY_NONE or Settings.Get("keyCursor") ~= KEY_NONE or cookie.GetNumber(CURSOR_CHOSEN, 0) == 1 then return end
+	cookie.Set(CURSOR_CHOSEN, "1")
+	for _, key in ipairs(CURSOR_KEYS) do
+		if #Actions.Conflicts(key) == 0 then
+			Settings.Set("keyCursor", key)
+			notification.AddLegacy(PP.L("notify.cursor_bound", string.upper(input.GetKeyName(key) or "?")), NOTIFY_HINT, 10)
+			return
+		end
 	end
 end)
 
@@ -279,7 +289,7 @@ Actions.Add({
 		local how, minimized = Layout.Arrange(function(win) return Desktop.held[win.id] or Desktop.IsDormant(win) end)
 		-- Said when windows were changed to make them fit, since nothing else tells why they shrank.
 		if minimized > 0 then
-			notification.AddLegacy(PP.L("arrange.minimized", minimized), NOTIFY_HINT, 8)
+			notification.AddLegacy(PP.LN("arrange.minimized", minimized), NOTIFY_HINT, 8)
 		elseif how == "grid" then
 			notification.AddLegacy(PP.L("arrange.grid"), NOTIFY_HINT, 6)
 		end
@@ -333,12 +343,6 @@ Actions.Add({
 	id = "pick", scope = "global", icon = "icon16/application_form_add.png", label = "act.pick",
 	sub = "sub.pick", palette = true, bindable = true,
 	run = function() PP.Picker.Open() end,
-})
-
-Actions.Add({
-	id = "record", scope = "global", icon = "icon16/bullet_red.png", label = "act.record",
-	sub = "sub.record", palette = true, bindable = true,
-	run = function() PP.Record.Toggle() end,
 })
 
 Actions.Add({
@@ -515,8 +519,8 @@ Actions.Add({
 
 -- ── Window: groups (F15) ────────────────────────────────────
 
--- Merges every tab of fromId into toId, in order; fromId disappears unless it is a named group.
-local function mergeInto(fromId, toId)
+-- Moves every tab of fromId into toId, in order; fromId disappears unless it is a named group.
+local function moveAll(fromId, toId)
 	local from = Layout.Get(fromId)
 	while from and #from.tabs > 0 and Layout.Get(fromId) do
 		if not Layout.MoveTab(fromId, 1, toId) then break end
@@ -532,15 +536,15 @@ Actions.Add({
 		for _, rec in ipairs(Layout.Windows()) do
 			if rec.id ~= ctx.id and (rec.title or #rec.tabs > 1) then
 				local id = rec.id
-				items[#items + 1] = { text = PP.L("group.row_count", Layout.Title(rec), #rec.tabs), icon = "icon16/folder_go.png",
-					run = function() mergeInto(ctx.id, id) end }
+				items[#items + 1] = { text = PP.LN("group.row", #rec.tabs, Layout.Title(rec)), icon = "icon16/folder_go.png",
+					run = function() moveAll(ctx.id, id) end }
 			end
 		end
 		if #items > 0 then items[#items + 1] = { spacer = true } end
 		items[#items + 1] = { text = PP.L("ctx.new_group"), icon = "icon16/folder_add.png", run = function()
 			PP.Dialogs.Text(PP.L("new.group_title"), PP.L("new.group_desc"), "", function(name)
 				local g = Layout.NewGroup(name)
-				if g then mergeInto(ctx.id, g) end
+				if g then moveAll(ctx.id, g) end
 			end, "btn.create")
 		end }
 		return items
@@ -551,7 +555,7 @@ Actions.Add({
 	id = "move_out", scope = "tab", icon = "icon16/folder_go.png",
 	label = function(ctx)
 		if ctx.menu == "tab" then return PP.L("tab.move_out") end
-		return PP.L("ctx.ungroup_active") .. " (" .. tabTitle(ctx) .. ")"
+		return PP.L("ctx.ungroup_named", tabTitle(ctx))
 	end,
 	name = "tab.move_out", menu = { group = "group", window = 51, tab = 51 },
 	visible = isMulti,
@@ -579,7 +583,7 @@ Actions.Add({
 	id = "unpin_tab", scope = "tab", icon = "icon16/tab_delete.png",
 	label = function(ctx)
 		if ctx.menu == "tab" then return PP.L("ctx.unpin") end
-		return PP.L("ctx.unpin_active") .. " (" .. tabTitle(ctx) .. ")"
+		return PP.L("ctx.unpin_named", tabTitle(ctx))
 	end,
 	name = "ctx.unpin_active", menu = { group = "group", window = 54, tab = 90 },
 	visible = isMulti,
@@ -602,6 +606,8 @@ Actions.Add({
 
 -- ── Window: opacity, position ───────────────────────────────
 
+local OPACITY_STEPS = { 100, 75, 50, 25, 0 } -- per cent, in the window's menu and the menu for several
+
 Actions.Add({
 	id = "opacity", scope = "window", icon = "icon16/contrast.png", label = "ctx.idle_opacity",
 	menu = { group = "opacity", window = 60 },
@@ -611,7 +617,7 @@ Actions.Add({
 		local items = {
 			{ text = PP.L("ctx.use_global", Settings.Get("idleOpacity")), icon = tick(current == nil), run = function() Layout.SetOpacity(ctx.id, nil) end },
 		}
-		for _, pct in ipairs({ 100, 75, 50, 25, 0 }) do
+		for _, pct in ipairs(OPACITY_STEPS) do
 			items[#items + 1] = { text = pct .. "%", icon = tick(current == pct / 100), run = function() Layout.SetOpacity(ctx.id, pct / 100) end }
 		end
 		items[#items + 1] = { spacer = true }
@@ -686,8 +692,8 @@ end, "Pin a tool or content tab, e.g. pinnedpanels_pin tool:weld")
 
 concommand.Add("pinnedpanels_list", function()
 	for _, w in ipairs(Layout.Windows()) do
-		print(string.format("%-5s %-9s %5d,%-5d %5dx%-5d %s%s%s", w.id, w.state, w.x, w.y, w.w, w.h,
-			Layout.Title(w), "", Desktop.held[w.id] and "  (hidden)" or ""))
+		print(string.format("%-5s %-9s %5d,%-5d %5dx%-5d %s%s", w.id, w.state, w.x, w.y, w.w, w.h,
+			Layout.Title(w), Desktop.held[w.id] and "  (hidden)" or ""))
 		for i, t in ipairs(w.tabs) do
 			local here = Sources.Get(t.src) or (t.adopt and PP.Recipes.IsLive(w, t))
 			print(string.format("      %s %s%s", i == w.active and "*" or " ", t.src, here and "" or (t.adopt and "  (waiting)" or "  (unavailable)")))
@@ -761,10 +767,12 @@ function Batch.Clear()
 	selectionChanged()
 end
 
+-- Each title's sort key is worked out once, not at every comparison.
 local function byTitle(ids)
+	local keys = {}
+	for _, id in ipairs(ids) do keys[id] = PP.Util.SortKey(Layout.Title(Layout.Get(id))) end
 	table.sort(ids, function(a, b)
-		local ta, tb = PP.Util.SortKey(Layout.Title(Layout.Get(a))), PP.Util.SortKey(Layout.Title(Layout.Get(b)))
-		if ta ~= tb then return ta < tb end
+		if keys[a] ~= keys[b] then return keys[a] < keys[b] end
 		return a < b
 	end)
 	return ids
@@ -779,8 +787,13 @@ function Batch.Ids()
 	return byTitle(ids)
 end
 
+-- Asked every frame by the Pinned page while it is open: counted, not listed and sorted.
 function Batch.Count()
-	return #Batch.Ids()
+	local n = 0
+	for id in pairs(Batch.selected) do
+		if Layout.Get(id) then n = n + 1 end
+	end
+	return n
 end
 
 -- Every window, by title.
@@ -842,13 +855,6 @@ function Batch.Unpin(ids, sure)
 	return #list
 end
 
-local function moveAll(fromId, toId)
-	local from = Layout.Get(fromId)
-	while from and #from.tabs > 0 and Layout.Get(fromId) do
-		if not Layout.MoveTab(fromId, 1, toId) then break end
-	end
-end
-
 local function tabCount(ids)
 	local n = 0
 	for _, id in ipairs(ids) do
@@ -860,8 +866,7 @@ end
 
 -- Puts the windows' tabs together in tabbed windows: one, or as many as it takes at MAX_GROUP_TABS
 -- tabs each. Named title if given (a second one is "title (2)"), else the first window takes the
--- others. Managed windows are other addons' and stay as they are. Returns the ids of the windows
--- that hold them now.
+-- others. Returns the ids of the windows that hold them now.
 function Batch.Group(ids, title)
 	local sources = {}
 	for _, id in ipairs(ids) do
@@ -990,7 +995,7 @@ function Actions.OpenBatchMenu(ids)
 	local sub, option = menu:AddSubMenu(PP.L("ctx.idle_opacity"))
 	option:SetIcon("icon16/contrast.png")
 	sub:AddOption(PP.L("ctx.use_global", Settings.Get("idleOpacity")), function() Batch.Opacity(ids, nil) end)
-	for _, pct in ipairs({ 100, 75, 50, 25, 0 }) do
+	for _, pct in ipairs(OPACITY_STEPS) do
 		sub:AddOption(pct .. "%", function() Batch.Opacity(ids, pct / 100) end)
 	end
 	menu:AddSpacer()

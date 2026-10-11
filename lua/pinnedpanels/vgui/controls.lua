@@ -14,10 +14,37 @@ function BUTTON:Init()
 	self.on = false
 end
 
-function BUTTON:SetLabel(text) self.label = text end
+-- The width a button is given is the least it has: it grows to hold its label, which is longer in
+-- other languages than in the one the width was chosen for (a third longer in French or German). A
+-- button whose width is someone else's to give (docked to fill) cuts its label instead.
+local META = FindMetaTable("Panel")
+local ICON_W, PAD_W = 20, 14
+
+function BUTTON:Needed()
+	surface.SetFont("DermaDefault")
+	local text = self.label ~= "" and surface.GetTextSize(self.label) or 0
+	return text + (self.icon and ICON_W or 0) + PAD_W
+end
+
+function BUTTON:FitWidth()
+	if self.leastWide then META.SetWide(self, math.max(self.leastWide, self:Needed())) end
+end
+
+function BUTTON:SetWide(w)
+	self.leastWide = w
+	self:FitWidth()
+end
+
+function BUTTON:SetLabel(text)
+	self.label = text
+	self:FitWidth()
+end
 function BUTTON:SetOn(on) self.on = on end
 function BUTTON:SetDanger(on) self.danger = on end
-function BUTTON:SetIcon(path) self.icon = path and PP.Theme.Icon(path) end
+function BUTTON:SetIcon(path)
+	self.icon = path and PP.Theme.Icon(path)
+	self:FitWidth()
+end
 
 function BUTTON:Paint(w, h)
 	local hovered = self:IsHovered()
@@ -33,16 +60,17 @@ function BUTTON:Paint(w, h)
 	surface.SetDrawColor(outline)
 	surface.DrawOutlinedRect(0, 0, w, h, 1)
 	local x = w / 2
+	local label = T.Fit(self.label, "DermaDefault", math.max(w - (self.icon and ICON_W or 0) - 6, 0))
 	if self.icon then
 		surface.SetFont("DermaDefault")
-		local tw = self.label ~= "" and surface.GetTextSize(self.label) + 4 or 0
+		local tw = label ~= "" and surface.GetTextSize(label) + 4 or 0
 		local ix = math.floor((w - 16 - tw) / 2)
 		surface.SetMaterial(self.icon)
 		surface.SetDrawColor(255, 255, 255, 255)
 		surface.DrawTexturedRect(ix, math.floor((h - 16) / 2), 16, 16)
 		x = ix + 20 + (tw - 4) / 2
 	end
-	draw.SimpleText(self.label, "DermaDefault", x, h / 2, text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	draw.SimpleText(label, "DermaDefault", x, h / 2, text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end
 
 vgui.Register("PinnedPanelsButton", BUTTON, "DButton")

@@ -73,6 +73,18 @@ function T.Icon(path)
 	return icons[path]
 end
 
+-- What kind of thing a pin is, said the same way everywhere it is listed (the Pinned and Seen pages, the
+-- taskbar): a word, an icon and a colour. Keyed by Layout.Kind.
+T.KIND = {
+	group = { label = "kind.group", icon = "icon16/folder.png", color = T.success },
+	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
+	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
+	active = { label = "kind.tool", icon = "icon16/wrench_orange.png", color = T.accent },
+	adopt = { label = "kind.embedded", icon = "icon16/application_add.png", color = T.warning },
+	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
+	quick = { label = "kind.quick", icon = "icon16/lightning.png", color = T.accent },
+}
+
 -- ── Text that fits ──────────────────────────────────────────
 -- Nothing we draw runs past the box it is in: a line is cut with "…" or wrapped, by these two. Both
 -- are asked every frame from Paint, so their answers are kept.
@@ -84,6 +96,7 @@ local function chop(s)
 	if #s > 0 and s:byte(-1) >= 0xC0 then s = s:sub(1, -2) end
 	return s
 end
+T.Chop = chop
 
 local fitted, fittedCount = {}, 0
 local function kept(key)

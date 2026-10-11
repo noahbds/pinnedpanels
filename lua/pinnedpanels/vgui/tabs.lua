@@ -68,7 +68,7 @@ function STRIP:PerformLayout(w)
 		it.x, it.w = x, math.max(TAB_MIN, math.floor(it.natural * scale))
 		local room, label = it.w - TAB_PAD * 2, it.title
 		if surface.GetTextSize(label) > room then
-			while #label > 1 and surface.GetTextSize(label .. "..") > room do label = label:sub(1, -2) end
+			while #label > 1 and surface.GetTextSize(label .. "..") > room do label = Theme.Chop(label) end
 			label = label .. ".."
 		end
 		it.label = label

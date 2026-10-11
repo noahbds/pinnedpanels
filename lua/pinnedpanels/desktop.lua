@@ -61,6 +61,7 @@ end
 -- Peek shows every window, minimized ones too, at full opacity (F22); so is the window keyboard
 -- navigation just used (L11).
 function Desktop.UpdateStates()
+	Desktop.StaleRects()
 	local interactive = Input.Interactive()
 	local idle = Settings.Get("idleOpacity") / 100
 	for id, win in pairs(Desktop.panels) do
@@ -105,24 +106,12 @@ function Desktop.Reconcile()
 	Desktop.UpdateTaskbar()
 end
 
--- Minimizing with the taskbar off says once where the window went (E23, B15).
-local toldAboutMinimize = false
-local function minimized(id)
-	if toldAboutMinimize or Settings.Get("taskbar") then return end
-	local rec = Layout.Get(id)
-	if rec and rec.state == "minimized" then
-		toldAboutMinimize = true
-		notification.AddLegacy(PP.L("notify.minimized_no_taskbar"), NOTIFY_HINT, 8)
-	end
-end
-
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Desktop", function(kind, id)
 	if kind == "windows" or kind == "tabs" or not id then return Desktop.Reconcile() end
 	local win = Desktop.panels[id]
 	if IsValid(win) then win:Refresh() end
 	if kind == "state" or kind == "style" then
 		Desktop.statesStale = true
-		if kind == "state" then minimized(id) end
 	end
 end)
 
@@ -134,7 +123,8 @@ hook.Add("PinnedPanelsFlushed", "PinnedPanels.Desktop", function()
 	if states then
 		Desktop.statesStale = false
 		Desktop.UpdateStates()
-		if IsValid(Desktop.taskbar) then Desktop.taskbar:Rebuild() end
+		-- Made or removed as well as filled: switched off, it is still there while a window is minimized.
+		Desktop.UpdateTaskbar()
 	end
 	-- After the windows are shown or hidden as they should be, which is what it looks at.
 	if states or PP.Nav.stale then
@@ -190,10 +180,7 @@ if rawRegisterMenu then
 	end
 end
 
-local function at(p, x, y)
-	local px, py = p:LocalToScreen(0, 0)
-	return x >= px and y >= py and x < px + p:GetWide() and y < py + p:GetTall()
-end
+local at = Util.Contains
 
 local function shownToRoot(p)
 	while IsValid(p) do
@@ -230,19 +217,48 @@ local function coveredAt(x, y)
 	return false
 end
 
+-- Where the windows that show are, as plain numbers kept from one change to the next: this is asked
+-- every frame, and asking each window's control (or even the layout, a call apiece) is most of what it
+-- costs. A rolled-up window is its header.
+local ROLLED_H = 24
+local rects, rectsStale = {}, true
+function Desktop.StaleRects() rectsStale = true end
+local staleRects = Desktop.StaleRects
+hook.Add("PinnedPanelsChanged", "PinnedPanels.Desktop.Rects", staleRects)
+hook.Add("PinnedPanelsInputChanged", "PinnedPanels.Desktop.Rects", staleRects)
+
 local function overWindow(x, y)
-	for _, win in pairs(Desktop.panels) do
-		if IsValid(win) and win:IsVisible() and at(win, x, y) then return true end
+	if rectsStale then
+		rectsStale = false
+		rects = {}
+		for id in pairs(Desktop.panels) do
+			local rec = Layout.Get(id)
+			if rec and Desktop.Shown(rec) then
+				local n = #rects
+				rects[n + 1], rects[n + 2], rects[n + 3], rects[n + 4] = rec.x, rec.y, rec.x + rec.w, rec.y + (rec.state == "rolled" and ROLLED_H or rec.h)
+			end
+		end
+	end
+	for i = 1, #rects, 4 do
+		if x >= rects[i] and y >= rects[i + 1] and x < rects[i + 2] and y < rects[i + 3] then return true end
 	end
 	return false
 end
+
+local COVER_LOOK = 0.1
+local lastX, lastY, nextLook = -1, -1, 0
 
 -- Asked every frame while windows take the mouse, and applied only when it changes. Not while a button
 -- is down: a window being dragged over a menu keeps the mouse.
 Input.EachFrame("covered", function()
 	if not next(Desktop.panels) or not Input.Interactive() or input.IsMouseDown(MOUSE_LEFT) or input.IsMouseDown(MOUSE_RIGHT) then return end
 	local x, y = input.GetCursorPos()
-	local covered = overWindow(x, y) and coveredAt(x, y)
+	-- What is drawn over a window is looked for when the cursor is on one and has moved, or ten times a
+	-- second while it rests (a menu can open under a cursor that doesn't move): it is the costly half.
+	local over, now = overWindow(x, y), RealTime()
+	if over and x == lastX and y == lastY and now < nextLook then return end
+	lastX, lastY, nextLook = x, y, now + COVER_LOOK
+	local covered = over and coveredAt(x, y)
 	if covered == Desktop.covered then return end
 	Desktop.covered = covered
 	for _, win in pairs(Desktop.panels) do
@@ -280,6 +296,16 @@ hook.Add("PinnedPanelsAdoptChanged", "PinnedPanels.Desktop", function() Desktop.
 
 function Desktop.UpdateTaskbar()
 	local want = Desktop.ready and Settings.Get("taskbar")
+	-- Switched off, it still shows while a window is minimized (and only those): told to look for it
+	-- "in the Pinned tab or the command palette", the player had the addon's work to do (Z7).
+	if Desktop.ready and not want then
+		for _, rec in ipairs(Layout.Windows()) do
+			if rec.state == "minimized" and #rec.tabs > 0 then
+				want = true
+				break
+			end
+		end
+	end
 	if want and not IsValid(Desktop.taskbar) then
 		Desktop.taskbar = vgui.Create("PinnedPanelsTaskbar")
 		Desktop.taskbar:MakePopup()
@@ -384,6 +410,10 @@ end
 function Desktop.PinSource(src)
 	local widget = src:match("^desktop:(.+)$")
 	if widget then return PP.Openers.PinDesktop(widget) end
+	if Sources.single[src] then
+		local own = Sources.PinOwn(src)
+		if own then return own end
+	end
 	local id = Layout.Pin(src, Sources.DefaultSize(src))
 	Desktop.Show(id)
 	Desktop.Front(id)
@@ -448,7 +478,6 @@ function Desktop.Teardown()
 	Desktop.panels = {}
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Remove() end
 	Desktop.taskbar = nil
-	PP.Record.Stop()
 	if IsValid(PP.Picker.panel) then PP.Picker.panel:Remove() end
 end
 

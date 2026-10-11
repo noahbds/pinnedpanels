@@ -163,7 +163,7 @@ function PALETTE:Rebuild()
 	self.guardX, self.guardY = input.GetCursorPos()
 
 	local shown, total = filter(self.entries, self.search:GetValue())
-	self.countText = #shown >= total and PP.L("palette.results", #shown) or PP.L("palette.results_of", #shown, total)
+	self.countText = #shown >= total and PP.LN("palette.results", #shown) or PP.L("palette.results_of", #shown, total)
 	if #shown == 0 then
 		local empty = self.list:Add("DLabel")
 		empty:Dock(TOP)

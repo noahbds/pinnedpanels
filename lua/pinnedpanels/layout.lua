@@ -110,6 +110,13 @@ function Layout.TabTitle(tab)
 	return tab.title or (tab.adopt and PP.Recipes.Title(tab.adopt)) or PP.Sources.Title(tab.src)
 end
 
+-- What a window is, for an icon and a word: "group" (named, or several tabs), else its one tab's kind
+-- ("tool", "creation", "adopt", …).
+function Layout.Kind(w)
+	if w.title or #w.tabs > 1 then return "group" end
+	return w.tabs[1] and w.tabs[1].src:match("^(%a+):") or "tool"
+end
+
 function Layout.Title(w)
 	if w.title then return w.title end
 	local tab = w.tabs[w.active] or w.tabs[1]
@@ -134,14 +141,6 @@ local function quietly(fn, ...)
 	local ok, err = pcall(fn, ...)
 	quiet = quiet - 1
 	if not ok then error(err, 0) end
-end
-
-local function others(except)
-	local rects = {}
-	for _, w in ipairs(doc.windows) do
-		if w ~= except and w.state ~= "minimized" and #w.tabs > 0 then rects[#rects + 1] = w end
-	end
-	return rects
 end
 
 -- Every window that has a place, minimized ones too: a new window keeps off where they come back.

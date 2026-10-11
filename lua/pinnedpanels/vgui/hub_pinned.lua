@@ -7,20 +7,7 @@ local Layout, Sources, Desktop, T = PP.Layout, PP.Sources, PP.Desktop, PP.Theme
 
 local ROW_H, TAB_ROW_H = 40, 30
 
-local function kindOf(rec)
-	if rec.title or #rec.tabs > 1 then return "group" end
-	return rec.tabs[1].src:match("^(%a+):") or "tool"
-end
-
-local KIND = {
-	group = { label = "kind.group", icon = "icon16/folder.png", color = T.success },
-	creation = { label = "kind.content", icon = "icon16/application_view_list.png", color = T.success },
-	tool = { label = "kind.tool", icon = "icon16/wrench.png", color = T.accent },
-	adopt = { label = "kind.embedded", icon = "icon16/application_add.png", color = T.warning },
-	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png", color = T.accent },
-	active = { label = "kind.tool", icon = "icon16/wrench_orange.png", color = T.accent },
-	quick = { label = "kind.quick", icon = "icon16/lightning.png", color = T.accent },
-}
+local kindOf, KIND = Layout.Kind, T.KIND
 
 -- Rows read whether they are selected when they paint, never from a snapshot (L1).
 local function paintRow(row, w, h)
@@ -72,14 +59,6 @@ function PAGE:Init()
 	pick:SetIcon("icon16/application_form_add.png")
 	pick:SetTooltip(PP.L("tip.pick"))
 	pick.DoClick = function() PP.Picker.Open() end
-	local record = self.bar:Add("PinnedPanelsButton")
-	record:Dock(LEFT)
-	record:DockMargin(6, 0, 0, 0)
-	record:SetWide(220)
-	record:SetLabel(PP.L("btn.record"))
-	record:SetIcon("icon16/bullet_red.png")
-	record:SetTooltip(PP.L("tip.record"))
-	record.DoClick = function() PP.Record.Toggle() end
 
 	-- Several windows at once: tick rows (Shift-click for a range), then one menu for all of them.
 	-- With nothing ticked, the same menu is about every window.
@@ -209,25 +188,23 @@ function PAGE:AddWindowRow(rec)
 	icon:Dock(LEFT)
 	icon:DockMargin(4, 13, 6, 13)
 
+	-- The name, then what there is to know about it now: each a whole phrase with the name in it, so a
+	-- translation can put the words in its own order.
 	local title = Layout.Title(rec)
-	if kind == "group" then title = title .. " " .. PP.L("group.panels", #rec.tabs) end
-	if rec.state == "minimized" then title = title .. " " .. PP.L("tag.minimized") end
-	if Desktop.held[id] then title = title .. " " .. PP.L("tag.hidden") end
-	if adopt then title = title .. "  ·  " .. PP.Recipes.AddonName(adopt.signature) .. "  ·  " .. PP.Recipes.Describe(adopt) end
+	if kind == "group" then title = PP.LN("row.group", #rec.tabs, title) end
+	if rec.state == "minimized" then title = PP.L("row.minimized", title) end
+	if Desktop.held[id] then title = PP.L("row.held", title) end
+	if adopt then
+		-- Its addon, unless that is what it is called already; and when its window isn't open, how it
+		-- comes back (Z10), not the machinery behind that.
+		local addon = PP.Recipes.AddonName(adopt.signature)
+		if addon:lower() ~= Layout.Title(rec):lower() then title = title .. "  ·  " .. addon end
+		if dormant then title = title .. "  ·  " .. PP.Recipes.Status(adopt) end
+	end
 
 	if dormant then
 		button(row, PP.L("btn.remove"), "icon16/cross.png", 80, adopt and "tip.remove_waiting" or "tip.remove_dormant", function() Layout.Unpin(id) end, true)
-		-- A command from an imported layout runs only once the player allows it (R16).
-		local r = adopt and adopt.recipe
-		if r and r.kind == "command" and not r.confirmed then
-			button(row, PP.L("btn.allow"), "icon16/accept.png", 70, "tip.allow", function()
-				Derma_Query(PP.L("allow.query", r.args and r.command .. " " .. r.args or r.command), PP.L("allow.title"),
-					PP.L("btn.allow"), function()
-						Layout.SetAdopt(id, 1, { recipe = { kind = "command", command = r.command, args = r.args, confirmed = true } })
-					end,
-					PP.L("btn.cancel"), function() end)
-			end)
-		elseif adopt and PP.Recipes.CanOpen(adopt) then
+		if adopt and PP.Recipes.CanOpen(adopt) then
 			button(row, PP.L("btn.open"), "icon16/application_go.png", 70, "tip.open_adopted", function() PP.Recipes.Open(rec, rec.tabs[1]) end)
 		end
 	elseif #rec.tabs == 0 then

@@ -158,8 +158,8 @@ local function fromDesktop(t, id)
 	}
 end
 
--- The Seen list keeps the same records in its own file (seen.lua).
-Storage.SanitizeAdopt, Storage.SanitizeControls = sanitizeAdopt, sanitizeControls
+-- The Seen list keeps the same records in its own file (seen.lua), checked the same way.
+Storage.SanitizeAdopt, Storage.SanitizeControls, Storage.Int, Storage.Text = sanitizeAdopt, sanitizeControls, int, text
 
 local function sanitizeTab(t, seen, summary)
 	if not istable(t) then return nil end
@@ -295,7 +295,7 @@ function Storage.Encode(doc)
 		end
 		if #tabs > 0 or w.title then
 			out.windows[#out.windows + 1] = {
-				id = w.id, kind = w.kind, tabs = tabs, active = math.min(w.active, math.max(#tabs, 1)),
+				id = w.id, tabs = tabs, active = math.min(w.active, math.max(#tabs, 1)),
 				x = w.x, y = w.y, w = w.w, h = w.h, state = w.state, restore = w.restore,
 				title = w.title, accent = colorOrNil(w.accent),
 				locked = w.locked, filterBar = w.filterBar,
@@ -401,17 +401,38 @@ function Storage.Import(s)
 
 	local doc, summary = Storage.Sanitize(raw)
 	if #doc.windows == 0 then return nil, "import.invalid" end
-	-- A shared layout never runs a command by itself: each one waits for the player to allow it (R16).
-	-- Nor does it choose a panel class to create: those wait for their addon to open them.
+	-- A shared layout never runs a command by itself (R16): its commands are listed for the player, who
+	-- allows them all or none where the layout is imported (Storage.AllowCommands, Z6). Nor does it
+	-- choose a panel class to create: those wait for their addon to open them.
+	local commands, listed = {}, {}
 	for _, w in ipairs(doc.windows) do
 		for _, t in ipairs(w.tabs) do
-			local kind = t.adopt and t.adopt.recipe.kind
-			if kind == "command" then
-				t.adopt.recipe.confirmed = false
-			elseif kind == "class" then
+			local r = t.adopt and t.adopt.recipe
+			if r and r.kind == "command" then
+				r.confirmed = false
+				local line = r.args and r.command .. " " .. r.args or r.command
+				if not listed[line] then
+					listed[line] = true
+					commands[#commands + 1] = line
+				end
+			elseif r and r.kind == "class" then
 				t.adopt.recipe = { kind = "watch" }
 			end
 		end
 	end
+	summary.commands = commands
 	return doc, summary
+end
+
+-- An imported layout's commands, allowed or not, all at once: allowed, each pin opens with its command;
+-- not allowed, each waits for its addon to show its window.
+function Storage.AllowCommands(doc, allow)
+	for _, w in ipairs(doc.windows) do
+		for _, t in ipairs(w.tabs) do
+			local r = t.adopt and t.adopt.recipe
+			if r and r.kind == "command" and not r.confirmed then
+				if allow then r.confirmed = true else t.adopt.recipe = { kind = "watch" } end
+			end
+		end
+	end
 end

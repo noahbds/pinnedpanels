@@ -6,14 +6,7 @@ local PP = PinnedPanels
 local Seen, T = PP.Seen, PP.Theme
 
 local ROW_H = 40
-local KIND = {
-	tool = { label = "kind.tool", icon = "icon16/wrench.png" },
-	active = { label = "kind.tool", icon = "icon16/wrench_orange.png" },
-	creation = { label = "kind.content", icon = "icon16/application_view_list.png" },
-	postprocess = { label = "kind.widget", icon = "icon16/application_view_tile.png" },
-	adopt = { label = "kind.embedded", icon = "icon16/application_add.png" },
-	quick = { label = "kind.quick", icon = "icon16/lightning.png" },
-}
+local KIND = T.KIND
 
 -- ── PinnedPanelsSeenRow ─────────────────────────────────────
 
@@ -153,7 +146,7 @@ function PAGE:Filter()
 		if visible then shown = shown + 1 end
 	end
 	self.empty:SetVisible(shown == 0)
-	self.countLabel:SetText(query == "" and PP.L("count.seen", #self.rows) or (shown .. " / " .. #self.rows))
+	self.countLabel:SetText(query == "" and PP.LN("count.seen", #self.rows) or (shown .. " / " .. #self.rows))
 	self.list:GetCanvas():InvalidateLayout()
 	self.list:InvalidateLayout()
 end

@@ -11,8 +11,6 @@ local Input = PP.Input
 Input.reasons = Input.reasons or {}
 Input.clickerOn = Input.clickerOn or false
 Input.cursorMode = Input.cursorMode or false
--- Other addons' windows under management take the keyboard like ours (§33.5); keyed by panel.
-Input.keyboardOwners = Input.keyboardOwners or setmetatable({}, { __mode = "k" })
 
 -- Key bindings and per-frame work survive a reload of this file too: whoever registered them isn't
 -- reloaded with it.
@@ -133,14 +131,17 @@ local function think()
 	end
 
 	-- Other addons turn the screen clicker off as well (D31): ours comes back while a reason wants it.
-	if Input.clickerOn and not vgui.CursorVisible() then rawClicker(true) end
+	local visible = vgui.CursorVisible()
+	if Input.clickerOn and not visible then
+		rawClicker(true)
+		visible = vgui.CursorVisible()
+	end
 
 	-- No hook says a cursor appeared (X48), but asking whether one shows is a single cheap call, so it
 	-- is asked every frame: the frame it appears, what shows it is looked for, and windows take the
 	-- mouse at once. Once they do, they keep a cursor on screen themselves, so whether the other one
 	-- has gone has to be looked for now and then; being a moment late there costs nothing.
 	local now = RealTime()
-	local visible = vgui.CursorVisible()
 	if visible ~= cursorSeen or (cursorShown and now >= nextCursorLook) then
 		cursorSeen = visible
 		nextCursorLook = now + CURSOR_LOOK
@@ -213,7 +214,7 @@ function Input.CtrlHeld()
 end
 
 -- The game bind of a key we act on doesn't run too (R7). F1-F12 never reach this hook (G6). The last bind
--- pressed is kept for Record mode, which reports how a window was opened (§33.9).
+-- pressed is kept for a waiting pin to learn its opener from (Openers.FromBind, §33.9).
 hook.Add("PlayerBindPress", "PinnedPanels.Input", function(_, bind, pressed, code)
 	if pressed then Input.lastBind, Input.lastBindTime = bind, RealTime() end
 	if pressed and code and watched[code] and not gated() then return true end
@@ -320,7 +321,7 @@ hook.Add("FinishChat", "PinnedPanels.Input", function() chatOpen = false end)
 
 local function windowOf(p)
 	while IsValid(p) do
-		if p.ppTakesKeyboard or Input.keyboardOwners[p] then return p end
+		if p.ppTakesKeyboard then return p end
 		p = p:GetParent()
 	end
 end

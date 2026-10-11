@@ -184,12 +184,7 @@ end
 
 -- ── The file ────────────────────────────────────────────────
 
-local function text(v, max)
-	return isstring(v) and v ~= "" and v:sub(1, max) or nil
-end
-local function int(v, lo, hi)
-	return isnumber(v) and v == v and math.Clamp(math.floor(v), lo, hi) or nil
-end
+local text, int = Storage.Text, Storage.Int
 
 -- One entry read from the file, checked like a layout's tab is (another addon's panel and quick controls
 -- go through the layout's own checks), or nil.

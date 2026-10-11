@@ -57,7 +57,7 @@ function CANVAS:PerformLayout(w, h)
 	self.scale = math.min((w - PADDING) / sw, (h - PADDING) / sh)
 	self.ox = math.floor((w - sw * self.scale) / 2)
 	self.oy = math.floor((h - sh * self.scale) / 2)
-	self.screenText = PP.L("layout.screen") .. "  " .. sw .. "×" .. sh
+	self.screenText = PP.L("layout.screen", sw, sh)
 	self:Prepare()
 end
 
@@ -96,7 +96,7 @@ function CANVAS:Prepare()
 				id = rec.id, x = rec.x, y = rec.y, w = rec.w, h = rec.h,
 				title = Layout.Title(rec), color = rec.accent or COLORS[(i - 1) % #COLORS + 1],
 				locked = rec.locked, cropped = tab and tab.crop ~= nil and rec.state ~= "maximized",
-				badge = #rec.tabs > 1 and PP.L("layout.badge", #rec.tabs) or nil,
+				badge = #rec.tabs > 1 and PP.LN("layout.badge", #rec.tabs) or nil,
 			}
 			if #rec.tabs > 1 then
 				box.tabNames = {}

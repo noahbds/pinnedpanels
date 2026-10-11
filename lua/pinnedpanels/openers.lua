@@ -285,6 +285,8 @@ function Openers.FindDesktop(id)
 	end
 end
 
+local LAUNCH_TIMER, LAUNCH_LOOK, LAUNCH_LOOKS = "PinnedPanels.Launch.", 0.15, 14 -- two seconds in all
+
 -- Pins a widget from the hub or the palette: its window again if it is pinned, else a new one embedded.
 -- A window the widget launched is pinned waiting and caught once it has settled (R20). Returns the
 -- window id.
@@ -296,10 +298,31 @@ function Openers.PinDesktop(id)
 		Layout.Activate(rec.id, i)
 		return rec.id
 	end
+	local before = {}
+	for _, p in ipairs(tops()) do before[p] = true end
 	local frame, launched = Openers.OpenDesktop(id)
-	if not frame then
-		notification.AddLegacy(PP.L("desktop.launcher", PP.Sources.Title("desktop:" .. id)), NOTIFY_HINT, 8)
-		return nil
-	end
-	return PP.Recipes.Take(frame, frame, "embed", { kind = "desktop", id = id }, launched)
+	if frame then return PP.Recipes.Take(frame, frame, "embed", { kind = "desktop", id = id }, launched) end
+	-- Nothing to take yet: the widget opens its window a moment later (through a command, say), or it
+	-- opened several. Telling the player to "pin that window with the picker" handed them our work (Z7):
+	-- the window is waited for a little, and the newest one that came is pinned in the widget's place.
+	local tries = 0
+	timer.Create(LAUNCH_TIMER .. id, LAUNCH_LOOK, LAUNCH_LOOKS, function()
+		tries = tries + 1
+		local found
+		for _, p in ipairs(tops()) do
+			if not before[p] and PP.Util.Drawn(p) and not PP.Recipes.Refusal(p, p) then found = p end
+		end
+		-- Taken on the look after it is first seen, so it has stopped opening (R20).
+		if found and found == Openers.launching then
+			timer.Remove(LAUNCH_TIMER .. id)
+			Openers.launching = nil
+			if not Openers.FindDesktop(id) then PP.Recipes.Take(found, found, "embed", { kind = "desktop", id = id }) end
+		elseif found then
+			Openers.launching = found
+		elseif tries >= LAUNCH_LOOKS then
+			Openers.launching = nil
+			notification.AddLegacy(PP.L("desktop.nothing", PP.Sources.Title("desktop:" .. id)), NOTIFY_HINT, 6)
+		end
+	end)
+	return nil
 end

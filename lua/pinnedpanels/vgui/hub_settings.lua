@@ -111,13 +111,20 @@ function ROWS.int(page, parent, def)
 	slider.Label:SetTextColor(T.text)
 end
 
-function ROWS.enum(page, parent, def)
-	local r = row(parent)
+-- A label in a row's first column: at least as wide as the column, wider when its text is.
+local function columnLabel(r, text, least)
 	local label = r:Add("DLabel")
 	label:Dock(LEFT)
-	label:SetWide(120)
+	label:SetText(text)
+	surface.SetFont(label:GetFont() or "DermaDefault")
+	label:SetWide(math.max(least, surface.GetTextSize(text) + 12))
+	return label
+end
+
+function ROWS.enum(page, parent, def)
+	local r = row(parent)
+	local label = columnLabel(r, PP.L(def.label), 120)
 	label:SetTextColor(T.textLabel)
-	label:SetText(PP.L(def.label))
 	local combo = r:Add("DComboBox")
 	combo:Dock(FILL)
 	for _, v in ipairs(def.values) do combo:AddChoice(PP.L(def.choices[v]), v, Settings.Get(def.key) == v) end
@@ -127,11 +134,8 @@ end
 -- A swatch that opens a colour mixer beside it; the value text follows the setting.
 function ROWS.color(page, parent, def)
 	local r = row(parent)
-	local label = r:Add("DLabel")
-	label:Dock(LEFT)
-	label:SetWide(120)
+	local label = columnLabel(r, PP.L(def.label), 120)
 	label:SetTextColor(T.textLabel)
-	label:SetText(PP.L(def.label))
 
 	local swatch = r:Add("DButton")
 	swatch:Dock(LEFT)
@@ -183,12 +187,9 @@ function ROWS.key(page, parent, def)
 	local r = row(parent, 26)
 	r.Paint = function(_, w, h) draw.RoundedBox(4, 0, 0, w, h, T.cardHeader) end
 
-	local name = r:Add("DLabel")
-	name:Dock(LEFT)
+	local name = columnLabel(r, title, 220)
 	name:DockMargin(8, 0, 0, 0)
-	name:SetWide(220)
 	name:SetTextColor(T.text)
-	name:SetText(title)
 
 	local key = r:Add("DLabel")
 	key:Dock(LEFT)
@@ -366,7 +367,7 @@ PAGES[#PAGES + 1] = { id = "groups", label = "page.groups", icon = "icon16/folde
 				label:Dock(FILL)
 				label:DockMargin(10, 0, 0, 0)
 				label:SetTextColor(T.text)
-				label:SetText(PP.L("group.row_count", rec.title, #rec.tabs))
+				label:SetText(PP.LN("group.row", #rec.tabs, rec.title))
 			end
 		end
 		if n == 0 then
@@ -427,7 +428,7 @@ local function openExport()
 	local hint = bar:Add("DLabel")
 	hint:Dock(FILL)
 	hint:SetTextColor(T.textMuted)
-	hint:SetText(PP.L("export.copied") .. "  " .. PP.L("code.hint"))
+	hint:SetText(PP.L("export.done"))
 	return frame
 end
 
@@ -457,11 +458,29 @@ local function openImport(page)
 	preview:DockMargin(0, 0, 6, 0)
 	preview:SetLabel(PP.L("import.preview"))
 
+	-- The commands the layout would run to reopen its windows, and one tick box for all of them (Z6):
+	-- shown with the preview when it has any.
+	local allow = frame:Add("Panel")
+	allow:Dock(BOTTOM)
+	allow:SetTall(54)
+	allow:DockMargin(0, 6, 0, 0)
+	allow:SetVisible(false)
+	local commands = allow:Add("DLabel")
+	commands:Dock(FILL)
+	commands:SetWrap(true)
+	commands:SetContentAlignment(7)
+	local tick = allow:Add("DCheckBoxLabel")
+	tick:Dock(BOTTOM)
+	tick:SetText(PP.L("import.allow"))
+	local height = frame:GetTall()
+
 	local doc
 	entry.OnChange = function()
 		doc = nil
 		confirm:SetEnabled(false)
 		summary:SetText("")
+		allow:SetVisible(false)
+		frame:SetTall(height)
 	end
 	preview.DoClick = function()
 		local result, info = Storage.Import(entry:GetValue())
@@ -480,9 +499,17 @@ local function openImport(page)
 		summary:SetTextColor(T.success)
 		summary:SetText(PP.L("import.summary", info.windows, info.tabs, unavailable))
 		confirm:SetEnabled(true)
+		local has = #info.commands > 0
+		allow:SetVisible(has)
+		frame:SetTall(height + (has and 60 or 0))
+		if has then
+			commands:SetText(PP.L("import.commands", table.concat(info.commands, ", ")))
+			tick:SetValue(false)
+		end
 	end
 	confirm.DoClick = function()
 		if not doc then return end
+		Storage.AllowCommands(doc, tick:GetChecked() == true)
 		frame:Close()
 		applyImport(doc, page)
 	end
@@ -532,6 +559,11 @@ function SETTINGS:Init()
 	self.content = self:Add("PinnedPanelsScroll")
 	self.content:Dock(FILL)
 	self.content:DockMargin(16, 16, 16, 16)
+
+	surface.SetFont("DermaDefault")
+	local widest = 0
+	for _, p in ipairs(PAGES) do widest = math.max(widest, (surface.GetTextSize(PP.L(p.label)))) end
+	self.nav:SetWide(math.max(150, widest + 64))
 
 	for _, p in ipairs(PAGES) do
 		local b = self.nav:Add("DButton")

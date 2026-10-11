@@ -94,7 +94,7 @@ function HUB:UpdateCount()
 	for _, w in ipairs(Layout.Windows()) do
 		if #w.tabs > 0 then n = n + 1 end
 	end
-	self.count:SetText(PP.L(n == 1 and "pin.count_one" or "pin.count_many", n))
+	self.count:SetText(PP.LN("pin.count", n))
 end
 
 function HUB:Paint(w, h)

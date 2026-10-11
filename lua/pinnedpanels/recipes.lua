@@ -1,6 +1,6 @@
 -- Adopted panels' identity and return (§33.8, §33.9): a panel's signature, the refusals (R11), how a pinned
 -- panel comes back (its recipe) and catching it when it appears. Taking and releasing a panel is Embed's
--- job; this file decides which panel and when. Record mode is record.lua.
+-- job; this file decides which panel and when. What opened a window is trace.lua.
 
 local PP = PinnedPanels
 PP.Recipes = PP.Recipes or {}
@@ -170,16 +170,27 @@ local function phrase(text)
 end
 
 -- A name for lists: the window title, else its class, else its addon.
+-- Parts everyone knows by another name than their class.
+local NAMES = { CreationMenu = "name.creation_menu", ToolMenu = "name.tool_menu" }
+
+-- A class as words: "ContentContainer" → "Content Container", "xlib_Panel" → "xlib Panel".
+local function spaced(class)
+	return (class:gsub("_", " "):gsub("(%l)(%u)", "%1 %2"))
+end
+
 function Recipes.Title(adopt)
 	local s = adopt.signature
 	-- A part is named after itself, not after the window it came from: two parts of the spawn menu are
-	-- "CreationMenu" and "ToolMenu", not twice "sandbox". A stock class says nothing, so then the window does.
+	-- the creation menu and the tool menu, not twice "sandbox". A stock class says nothing, so then the
+	-- window does.
 	local last = s.path and s.path[#s.path]
-	if last and isstring(last.class) and not isStockClass(last.class) then return last.class end
+	if last and isstring(last.class) and not isStockClass(last.class) then
+		return NAMES[last.class] and PP.L(NAMES[last.class]) or spaced(last.class)
+	end
 	if s.title then return phrase(s.title) end
 	if s.desktop then return PP.Sources.Title("desktop:" .. s.desktop) end
 	-- Its addon says more than a class like "xlib_Panel" does.
-	return s.addon or s.class or PP.L("adopt.window")
+	return s.addon or (s.class and spaced(s.class)) or PP.L("adopt.window")
 end
 
 -- A live panel's name, for the picker: its title, else its class or base.
@@ -252,7 +263,8 @@ local function menuRootClass(class)
 	return (IsValid(g_SpawnMenu) and g_SpawnMenu.ClassName == class) or (IsValid(g_ContextMenu) and g_ContextMenu.ClassName == class)
 end
 
--- Why panel (root's window, or root itself) can't be pinned: a localization key, or nil.
+-- Why panel (root's window, or root itself) can't be pinned: a code ("refuse.root", …), or nil. The
+-- codes were once shown to the player; the picker now passes over what can't be pinned (X55).
 function Recipes.Refusal(panel, root)
 	if not IsValid(panel) or panel:IsMarkedForDeletion() then return "refuse.gone" end
 	if ours(panel) then return "refuse.ours" end
@@ -345,9 +357,7 @@ local function kindOf(p)
 	return k
 end
 
-local function shown(p)
-	return p:IsVisible() and p:GetAlpha() > 0 and p:GetWide() > 0 and p:GetTall() > 0
-end
+local shown = PP.Util.Drawn
 
 -- Whether an addon gave p something to do when clicked: a label or a bare panel used as a button.
 local HANDLERS = { "DoClick", "DoRightClick", "DoDoubleClick", "OnMousePressed", "OnMouseReleased" }
@@ -586,11 +596,18 @@ function Recipes.Describe(adopt)
 	local r = adopt.recipe
 	if r.kind == "class" then return PP.L("recipe.class", r.class) end
 	if r.kind == "desktop" then return PP.L("recipe.desktop", PP.Sources.Title("desktop:" .. r.id)) end
-	if r.kind == "command" then
-		local command = r.args and r.command .. " " .. r.args or r.command
-		return PP.L(r.confirmed and "recipe.command" or "recipe.command_ask", command)
+	-- A command nobody allowed (a layout imported before commands were asked about at import, Z6) isn't
+	-- run: the pin waits for its addon like one without a command.
+	if r.kind == "command" and r.confirmed then
+		return PP.L("recipe.command", r.args and r.command .. " " .. r.args or r.command)
 	end
-	return PP.L("recipe." .. r.kind)
+	return PP.L(r.kind == "session" and "recipe.session" or "recipe.watch")
+end
+
+-- What to say about a pin whose window isn't open, in a list: that it isn't, and how it comes back.
+function Recipes.Status(adopt)
+	if Recipes.CanOpen(adopt) then return PP.L("status.reopens") end
+	return PP.L("status.waits", Recipes.AddonName(adopt.signature))
 end
 
 -- ── Waiting and catching (§33.9) ────────────────────────────
@@ -704,27 +721,26 @@ local ticks = 0
 -- Window id -> RealTime until which a window appearing for it is the one we opened (not the player).
 local expecting = {}
 
--- Questions put this session: tab src -> { the candidate's identity -> true }. An open question isn't
--- asked twice, and "no" stays no for every window that looks the same.
-local asked = {}
-
--- "Yes" also teaches the pin what its window looks like now, so the question doesn't come back.
-local function ask(w, panel, sig)
-	local src = w.tab.src
-	local key = table.concat({ sig.src or "", sig.src2 or "", sig.class or "", sig.title or "" }, "\n")
-	asked[src] = asked[src] or {}
-	if asked[src][key] then return end
-	asked[src][key] = true
-	Derma_Query(PP.L("adopt.confirm", sig.title and phrase(sig.title) or Recipes.Title(w.tab.adopt)), PP.L("adopt.confirm_title"),
-		PP.L("btn.yes"), function()
-			asked[src][key] = nil
-			if IsValid(panel) and not Recipes.Owner(panel) and not Recipes.IsLive(w.rec, w.tab) then
-				sig.path = w.tab.adopt.signature.path
-				Layout.SetAdopt(w.rec.id, w.index, { signature = sig })
-				Recipes.Attach(w, panel, true)
-			end
-		end,
-		PP.L("btn.no"), function() end)
+-- A window that looks like a pin's but not surely (its file agrees, its title or what is in it
+-- doesn't) used to be a question, "Is this the window you pinned?" (D42, Z5: the addon decides). It is
+-- taken when it is the only window on screen that could be that pin's, and the pin learns what it
+-- looks like now, so it is sure next time; with two candidates it is left for its addon to settle.
+-- Said in one line, since a wrong take is undone by unpinning.
+local function takeIfOnly(w, panel, sig, tops, opened)
+	local a = w.tab.adopt
+	for _, other in ipairs(tops) do
+		if other ~= panel and IsValid(other) and other:IsVisible() and not Recipes.Refusal(other, other)
+			and Recipes.Match(a.signature, Recipes.Signature(other)) then
+			return false
+		end
+	end
+	local was = Recipes.Title(a)
+	sig.path = a.signature.path
+	Layout.SetAdopt(w.rec.id, w.index, { signature = sig })
+	if not Recipes.Attach(w, panel, opened) then return false end
+	local now = Recipes.Title(w.tab.adopt)
+	if now ~= was then notification.AddLegacy(PP.L("adopt.took", now, was), NOTIFY_GENERIC, 8) end
+	return true
 end
 
 -- A waiting window the player just opened teaches its pin the command that opened it (§33.9, Z3), so we
@@ -735,7 +751,7 @@ local function learn(w, panel)
 	local recipe = PP.Trace.Of(panel) or PP.Openers.FromBind() or PP.Trace.Recent(w.tab.adopt.signature)
 	if not recipe then return end
 	Layout.SetAdopt(w.rec.id, w.index, { recipe = recipe })
-	notification.AddLegacy(PP.L("record.updated", Recipes.Title(w.tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_GENERIC, 6)
+	notification.AddLegacy(PP.L("adopt.learned", Recipes.Title(w.tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_GENERIC, 6)
 end
 
 -- Looks at top-level panels not seen yet and gives each one to the waiting tab it matches best.
@@ -807,7 +823,7 @@ function Recipes.Catch()
 							Recipes.Attach(m.w, p, opened)
 							if opened then learn(m.w, p) end
 						else
-							ask(m.w, p, cand)
+							takeIfOnly(m.w, p, cand, list, opened)
 						end
 					end
 					waiting = Recipes.Waiting()
@@ -862,6 +878,13 @@ function Recipes.Open(rec, tab)
 	if Recipes.IsLive(rec, tab) or not Recipes.CanOpen(tab.adopt) then return end
 	local r = tab.adopt.recipe
 	Recipes.Wake()
+	-- Its window may be open already and only not taken yet (a pin made a moment ago, from the Seen
+	-- page say): it is taken, not opened, since many commands close the window when it is open ("xgui").
+	-- Two looks, because a window is taken on the second one that finds it unchanged (R20).
+	Recipes.Catch()
+	Recipes.Catch()
+	rec = Layout.Get(rec.id)
+	if not rec or Recipes.IsLive(rec, tab) then return end
 	expecting[rec.id] = RealTime() + OPEN_GRACE
 	if r.kind == "desktop" then
 		-- A window the widget launched is caught like any other, once it has settled.
@@ -910,7 +933,9 @@ hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Recipes", Recipes.Wake)
 
 -- ── Reopening at join (D41) ─────────────────────────────────
 
-local AUTO_TIMER, AUTO_DELAY, AUTO_GRACE, AUTO_RETRY, AUTO_STRIKES = "PinnedPanels.AutoOpen", 2, 6, 2, 2
+-- Five seconds, not sooner: tried at two (X59), XGUI wasn't ready for its own command on a real join. It
+-- showed nothing, and left the screen clicker it turns on for its window switched on.
+local AUTO_TIMER, AUTO_DELAY, AUTO_GRACE, AUTO_RETRY, AUTO_STRIKES = "PinnedPanels.AutoOpen", 5, 6, 2, 2
 -- Whether a pin is reopened at join: one that comes back with a command the player allowed, unless
 -- the player turned that off (or it stopped working).
 function Recipes.AutoOpens(adopt)
@@ -940,6 +965,9 @@ local function autoOpen()
 			local rec = Layout.Get(w.rec.id)
 			if rec and rec.tabs[w.index] == w.tab then
 				local back = Recipes.IsLive(rec, w.tab)
+				-- A command that opened nothing may still have turned the screen clicker on for the window
+				-- it meant to show: that cursor is nobody's now, and goes.
+				if not back then Recipes.TakeClicker(w.tab.adopt.signature) end
 				local fails = not back and (w.tab.adopt.autoFails or 0) + 1 or nil
 				if fails and fails >= AUTO_STRIKES then
 					Layout.SetAdopt(rec.id, w.index, { autoOpen = false, autoFails = 0 })

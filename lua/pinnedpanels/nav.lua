@@ -187,7 +187,7 @@ local bindKeys
 local function updateHint()
 	if Nav.state == "taskbar" then
 		local e = taskbarEntries()[Nav.taskIndex or 1]
-		Nav.hint = (e and e.title or "") .. "   ·   " .. PP.L("tb.enter_restore")
+		Nav.hint = PP.L("tb.enter_restore", e and e.title or "")
 		surface.SetFont(PP.Theme.FONT_TASKBAR)
 	else
 		local key = "nav.hint_panel"

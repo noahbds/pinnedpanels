@@ -255,7 +255,8 @@ end
 
 local function probe(src)
 	local e, win = Embed.live[src], Layout.Find(src)
-	local s = e and e.shell	if not (e and win and e.mode == "embed" and IsValid(s) and isfunction(s.Paint)) then return end
+	local s = e and e.shell
+	if not (e and win and e.mode == "embed" and IsValid(s) and isfunction(s.Paint)) then return end
 	if #win.tabs ~= 1 or next(win.colors) ~= nil then return end
 	local w, h = s:GetSize()
 	w, h = math.min(w, ScrW() - 2), math.min(h, ScrH() - 2)
@@ -808,8 +809,7 @@ end)
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Embed", function(kind)
 	if kind ~= "windows" and kind ~= "tabs" then return end
 	for src in pairs(Embed.live) do
-		local win, i = Layout.Find(src)
-		if not win then Embed.Release(src, true) end
+		if not Layout.Find(src) then Embed.Release(src, true) end
 	end
 end)
 

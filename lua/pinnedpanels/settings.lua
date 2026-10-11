@@ -94,6 +94,7 @@ end
 Settings.Add("autoRestore", { type = "bool", default = true, page = "general", section = "behavior", label = "opt.autorestore" })
 Settings.Add("idleOpacity", { type = "int", min = 0, max = 100, default = 100, page = "general", section = "behavior", label = "opt.idle_alpha" })
 Settings.Add("navEverywhere", { type = "bool", default = false, page = "general", section = "behavior", label = "opt.kbnav_outside" })
+Settings.Add("pinButton", { type = "bool", default = true, page = "general", section = "behavior", label = "opt.pin_button" })
 Settings.Add("snap", { type = "bool", default = true, page = "general", section = "snapping", label = "opt.snap" })
 Settings.Add("snapDistance", { type = "int", min = 0, max = 40, default = 12, page = "general", section = "snapping", label = "opt.snap_dist" })
 Settings.Add("colorBg", { type = "color", default = Color(235, 238, 242, 250), page = "appearance", section = "colors", label = "color.panel_bg" })

@@ -33,6 +33,7 @@ local FILES = {
 	"vgui/hub_settings.lua",
 	"vgui/palette.lua",
 	"vgui/picker.lua",
+	"vgui/pinbutton.lua",
 }
 
 if SERVER then

@@ -507,7 +507,15 @@ end
 -- (Recipes.Choices): most windows need what their opener does around the panel (D26).
 function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
-	local info = { mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, commands = PP.Openers.Commands(sig) }
+	local info = { mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig }
+	-- A part of the spawn menu or the C menu: nothing opens those, they are made once and kept. A
+	-- command from the gamemode's files was once guessed for them (a tool panel that "reopened" with
+	-- the player model window's command).
+	if Recipes.IsMenuRoot(root) then
+		info.commands, info.always, info.recipe = {}, true, { kind = "watch" }
+		return info
+	end
+	info.commands = PP.Openers.Commands(sig)
 	local best = PP.Openers.Best(info.commands)
 	-- The command it was seen being opened by is no guess (Trace, Z3): it comes before the best guess.
 	local seen = PP.Trace and PP.Trace.Of(root)
@@ -555,6 +563,33 @@ end
 
 Recipes.SheetTabName = sheetTabName
 
+-- What is written at the top of a category ("Construction", in the tool list).
+local function headerName(panel)
+	local header = panel.Header
+	if ispanel(header) and IsValid(header) and isfunction(header.GetText) then
+		local text = phrase(header:GetText():Trim())
+		if text ~= "" then return text:sub(1, MAX_TITLE) end
+	end
+end
+
+-- What a live panel is called where the player chooses one (the picker's card and list, the pin
+-- button's): what is written on a control, the tab that shows a page, what is written at the top of a
+-- category, the name everyone knows it by, its title, else its own class ("DColorMixer" says more
+-- than the "DPanel" a signature keeps for it).
+function Recipes.PartName(panel)
+	local control = Recipes.ControlName(panel)
+	if control then return control end
+	local tab = sheetTabName(panel)
+	if tab then return tab end
+	local header = headerName(panel)
+	if header then return header end
+	local class = Recipes.Lineage(panel)[1]
+	if NAMES[class] then return PP.L(NAMES[class]) end
+	local title = titleOf(panel)
+	if title then return phrase(title) end
+	return class or PP.L("adopt.window")
+end
+
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 -- waiting: the pinned window is made now and takes the panel when it is caught.
 function Recipes.Take(panel, root, mode, recipe, waiting)
@@ -585,7 +620,7 @@ function Recipes.Take(panel, root, mode, recipe, waiting)
 	-- A page of a tab sheet is called what its tab is called ("Weapons"), which its class never says.
 	local name = mode == "part" and sheetTabName(panel)
 	-- One control is called what is written on it ("Weld"), not what its window is.
-	if mode == "part" and not name then name = Recipes.ControlName(panel) end
+	if mode == "part" and not name then name = Recipes.ControlName(panel) or headerName(panel) end
 	local id = PP.Embed.Take(mode == "part" and panel or root, adopt, waiting)
 	if id and name then Layout.Rename(id, 1, name) end
 	return id
@@ -594,6 +629,7 @@ end
 -- A line saying how a pinned panel comes back.
 function Recipes.Describe(adopt)
 	local r = adopt.recipe
+	if adopt.always then return PP.L("recipe.always") end
 	if r.kind == "class" then return PP.L("recipe.class", r.class) end
 	if r.kind == "desktop" then return PP.L("recipe.desktop", PP.Sources.Title("desktop:" .. r.id)) end
 	-- A command nobody allowed (a layout imported before commands were asked about at import, Z6) isn't

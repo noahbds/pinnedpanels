@@ -146,8 +146,9 @@ function PICKER:Select(panel)
 	end
 	local sig = Recipes.Signature(panel)
 	local lines = self.lines
-	-- A control by what is on it ("Weld", a prop's name), anything else by its title or class.
-	lines[1] = Recipes.ControlName(panel) or Recipes.SigTitle(sig)
+	-- A control by what is on it ("Weld", a prop's name), a page by its tab, anything else by its title
+	-- or class.
+	lines[1] = Recipes.PartName(panel)
 	lines[2] = PP.L("picker.addon", Recipes.AddonName(Recipes.Signature(root)))
 	-- Its class and everything that one is based on, an addon's or not: "ContentIcon (based on DButton <
 	-- DLabel < Label)".
@@ -168,6 +169,15 @@ function PICKER:Select(panel)
 		surface.SetFont(i == 1 and "DermaDefaultBold" or "DermaDefault")
 		widest = math.max(widest, (surface.GetTextSize(line)))
 	end
+	-- The window and its parts under the cursor, listed: what says there is a wheel to turn.
+	local names = {}
+	if #self.chain > 1 and not self.fromList then
+		for i, p in ipairs(self.chain) do
+			names[i] = IsValid(p) and Recipes.PartName(p) or "?"
+		end
+		widest = math.max(widest, (T.ChoicesSize(names, PP.L("picker.wheel"))))
+	end
+	self.names = names
 	self.cardW = math.Clamp(widest + CARD_PAD * 2, CARD_W, CARD_MAX_W)
 end
 
@@ -198,7 +208,7 @@ function PICKER:OpenMenu()
 	local menu = DermaMenu()
 	self.menu = menu
 	for _, r in ipairs(Recipes.Choices(info)) do
-		menu:AddOption(Recipes.Describe({ recipe = r }), function() self:Pin(r) end)
+		menu:AddOption(Recipes.Describe({ recipe = r, always = info.always and r == info.recipe }), function() self:Pin(r) end)
 			:SetIcon(r == info.recipe and "icon16/tick.png" or "icon16/bullet_white.png")
 	end
 	menu:Open()
@@ -373,6 +383,9 @@ function PICKER:Paint(w, h)
 		local lines = self.lines
 		local cw = self.cardW or CARD_W
 		local ch = CARD_PAD * 2 + #lines * LINE_H
+		local names, header = self.names or {}, PP.L("picker.wheel")
+		local listY = ch - CARD_PAD + 6
+		if #names > 1 then ch = ch + select(2, T.ChoicesSize(names, header)) + 6 end
 		local mx, my = input.GetCursorPos()
 		local cx = math.Clamp(mx + 18, 8, w - cw - 8)
 		local cy = math.Clamp(my + 18, 8, h - ch - FOOTER_H - 16)
@@ -394,6 +407,7 @@ function PICKER:Paint(w, h)
 			local room = cw - CARD_PAD * 2 - (i == 1 and taken or 0)
 			draw.SimpleText(T.Fit(line, font, room), font, cx + CARD_PAD, cy + CARD_PAD + (i - 1) * LINE_H, tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 		end
+		if #names > 1 then T.DrawChoices(cx + CARD_PAD, cy + listY, cw - CARD_PAD * 2, names, self.depth, header) end
 	end
 	draw.RoundedBox(6, (w - self.hintW) / 2, h - FOOTER_H - 10, self.hintW, FOOTER_H, T.popupBg)
 	draw.SimpleText(self.hint, "DermaDefault", w / 2, h - FOOTER_H / 2 - 10, T.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)

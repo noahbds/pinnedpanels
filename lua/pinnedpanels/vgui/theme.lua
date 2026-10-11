@@ -174,6 +174,38 @@ T.noteTint, T.notePlate, T.noteText = Color(0, 0, 0, 40), Color(18, 20, 26, 215)
 -- Command palette
 T.paletteSelected, T.paletteFooter = Color(42, 72, 116), Color(16, 18, 24)
 
+-- What the mouse wheel chooses from, on the picker's card and the pin button's: a mouse, "Scroll to
+-- choose", "3 / 15", then the choices themselves with the one a click would pin lit. A line of text
+-- saying the wheel did something was read by nobody; a list with one row lit asks to be scrolled.
+local CHOICE_ROWS, CHOICE_H, CHOICE_HEAD = 7, 18, 24
+
+function T.ChoicesSize(names, header)
+	surface.SetFont("DermaDefaultBold")
+	local widest = surface.GetTextSize(header) + 22 + surface.GetTextSize(#names .. " / " .. #names) + 16
+	for _, name in ipairs(names) do widest = math.max(widest, surface.GetTextSize(name) + 16) end
+	return widest, CHOICE_HEAD + math.min(#names, CHOICE_ROWS) * CHOICE_H + 2
+end
+
+function T.DrawChoices(x, y, w, names, index, header)
+	surface.SetDrawColor(T.popupBorder)
+	surface.DrawRect(x, y, w, 1)
+	surface.SetMaterial(T.Icon("icon16/mouse.png"))
+	surface.SetDrawColor(255, 255, 255, 255)
+	surface.DrawTexturedRect(x, y + 5, 16, 16)
+	draw.SimpleText(header, "DermaDefaultBold", x + 22, y + 13, T.cardAction, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	draw.SimpleText(index .. " / " .. #names, "DermaDefault", x + w, y + 13, T.textSubtle, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+	-- The rows around the lit one, when there are more than fit.
+	local first = math.Clamp(index - math.floor(CHOICE_ROWS / 2), 1, math.max(1, #names - CHOICE_ROWS + 1))
+	for row = 0, math.min(#names, CHOICE_ROWS) - 1 do
+		local i = first + row
+		local ry = y + CHOICE_HEAD + row * CHOICE_H
+		local lit = i == index
+		if lit then draw.RoundedBox(3, x, ry, w, CHOICE_H, T.paletteSelected) end
+		local font = lit and "DermaDefaultBold" or "DermaDefault"
+		draw.SimpleText(T.Fit(names[i], font, w - 16), font, x + 8, ry + CHOICE_H / 2, lit and T.textBright or T.textSubtle, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	end
+end
+
 T.FONT_BANNER = "PinnedPanels.Banner"
 T.FONT_TASKBAR = "PinnedPanels.Taskbar"
 T.FONT_PALETTE_ITEM = "PinnedPanels.PaletteItem"

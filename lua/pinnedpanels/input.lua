@@ -34,8 +34,35 @@ local CURSOR_LOOK = 0.2
 Input.rawClicker = Input.rawClicker or gui.EnableScreenClicker
 local rawClicker = Input.rawClicker
 function gui.EnableScreenClicker(on)
-	Input.foreignClicker = on == true
+	on = on == true
+	local info = debug.getinfo(2, "S")
+	local by = info and info.short_src
+	-- From an addon whose window is pinned (XGUI turns it on when it shows and off only when it hides):
+	-- its window is ours to show a cursor for, so the call turns cursor mode on or off instead, and the
+	-- cursor key still decides (X51).
+	if by and Input.clickerHeld and Input.clickerHeld(by) then
+		if on and not Input.cursorMode then
+			Input.SetCursorMode(true)
+			Input.broughtClicker = true
+		elseif not on and Input.broughtClicker then
+			Input.SetCursorMode(false)
+		end
+		return
+	end
+	Input.foreignClicker, Input.foreignClickerBy = on, on and by or nil
 	return rawClicker(on)
+end
+
+-- The screen clicker someone else turned on is no longer theirs: their window was just pinned. It goes
+-- off unless a reason of ours wants it.
+function Input.DropForeignClicker()
+	if not Input.foreignClicker then return end
+	Input.foreignClicker, Input.foreignClickerBy = false, nil
+	if not Input.clickerOn then
+		RememberCursorPosition()
+		rawClicker(false)
+	end
+	nextCursorLook = 0
 end
 local frames = Input.frames -- id -> function called every frame (Input.EachFrame)
 
@@ -87,7 +114,6 @@ end
 -- taking it for ever.
 local function ourPanel(p)
 	return p.ppOurs or p.ppTakesKeyboard or (isstring(p.ClassName) and p.ClassName:sub(1, 12) == "PinnedPanels")
-		or (PP.Manage and PP.Manage.byPanel[p] ~= nil)
 end
 
 local function foreignCursor()
@@ -243,6 +269,7 @@ function Input.SetCursorMode(on)
 	on = on == true
 	if Input.cursorMode == on then return end
 	Input.cursorMode = on
+	if not on then Input.broughtClicker = nil end
 	Input.Cursor("cursor", on)
 	hook.Run("PinnedPanelsCursorMode", on)
 	inputChanged()
@@ -288,7 +315,7 @@ hook.Add("StartChat", "PinnedPanels.Input", function() chatOpen = true end)
 hook.Add("FinishChat", "PinnedPanels.Input", function() chatOpen = false end)
 
 -- ── Text focus ──────────────────────────────────────────────
--- Our windows and dialogs (marked ppTakesKeyboard) and managed windows take the keyboard only while a
+-- Our windows and dialogs (marked ppTakesKeyboard) take the keyboard only while a
 -- text entry inside them has focus, never on hover (R8, B32, E14).
 
 local function windowOf(p)

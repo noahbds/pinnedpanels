@@ -56,6 +56,8 @@ T.taskbarBorder, T.taskbarEntry, T.taskbarEntryHover = Color(50, 55, 75, 180), C
 T.popupBg, T.popupHeader, T.popupBorder = Color(22, 24, 32), Color(28, 30, 40), Color(60, 140, 255, 100)
 T.card, T.cardHeader, T.rowHover = Color(40, 44, 52), Color(25, 28, 34), Color(50, 55, 65)
 T.dangerBg, T.dangerHover, T.dangerText = Color(140, 35, 35), Color(180, 50, 50), Color(240, 200, 200)
+-- The accent as text on a dark card: the accent itself is a fill colour and too dark to read there.
+T.cardAction = Color(120, 185, 255)
 
 -- Crop editor
 T.cropShade = Color(0, 0, 0, 160)
@@ -70,6 +72,91 @@ function T.Icon(path)
 	icons[path] = icons[path] or Material(path)
 	return icons[path]
 end
+
+-- ── Text that fits ──────────────────────────────────────────
+-- Nothing we draw runs past the box it is in: a line is cut with "…" or wrapped, by these two. Both
+-- are asked every frame from Paint, so their answers are kept.
+
+-- One character less, whole: text cut in the middle of an accented letter draws as a box.
+local function chop(s)
+	s = s:sub(1, -2)
+	while #s > 0 and s:byte(-1) >= 0x80 and s:byte(-1) < 0xC0 do s = s:sub(1, -2) end
+	if #s > 0 and s:byte(-1) >= 0xC0 then s = s:sub(1, -2) end
+	return s
+end
+
+local fitted, fittedCount = {}, 0
+local function kept(key)
+	if fittedCount > 600 then fitted, fittedCount = {}, 0 end
+	return fitted[key]
+end
+local function keep(key, value)
+	fitted[key] = value
+	fittedCount = fittedCount + 1
+	return value
+end
+
+-- text, cut to room pixels in font with "…" when it is longer. "" when not even that fits.
+function T.Fit(text, font, room)
+	room = math.floor(room)
+	local key = font .. "\1" .. room .. "\1" .. text
+	local out = kept(key)
+	if out then return out end
+	surface.SetFont(font)
+	if surface.GetTextSize(text) <= room then return keep(key, text) end
+	local cut = text
+	while #cut > 0 and surface.GetTextSize(cut .. "…") > room do cut = chop(cut) end
+	cut = cut:gsub("%s+$", "")
+	return keep(key, #cut > 0 and cut .. "…" or "")
+end
+
+-- text as lines no wider than room pixels in font, broken at spaces (a word longer than a line is cut).
+function T.Wrap(text, font, room)
+	room = math.floor(room)
+	local key = "w" .. font .. "\1" .. room .. "\1" .. text
+	local out = kept(key)
+	if out then return out end
+	surface.SetFont(font)
+	local lines, line = {}, ""
+	for word in text:gmatch("%S+") do
+		local try = line == "" and word or (line .. " " .. word)
+		if surface.GetTextSize(try) <= room then
+			line = try
+		else
+			if line ~= "" then lines[#lines + 1] = line end
+			line = surface.GetTextSize(word) <= room and word or T.Fit(word, font, room)
+		end
+	end
+	if line ~= "" then lines[#lines + 1] = line end
+	return keep(key, lines)
+end
+
+-- A note in the middle of a box of w by h, on a quiet plate so it reads over anything: the long text
+-- wrapped if it fits, else the short one, else nothing but the plate's tint.
+function T.Note(w, h, long, short)
+	local font, lh, pad = "DermaDefault", 15, 6
+	surface.SetDrawColor(T.noteTint)
+	surface.DrawRect(0, 0, w, h)
+	local lines = w > pad * 4 and T.Wrap(long, font, w - pad * 4) or {}
+	if #lines == 0 or #lines * lh + pad * 2 > h or #lines > 4 then
+		lines = {}
+		if short and h >= lh + 2 then
+			surface.SetFont(font)
+			if surface.GetTextSize(short) + pad * 2 <= w then lines[1] = short end
+		end
+	end
+	if #lines == 0 then return end
+	surface.SetFont(font)
+	local widest = 0
+	for _, l in ipairs(lines) do widest = math.max(widest, (surface.GetTextSize(l))) end
+	local bw, bh = math.min(widest + pad * 2, w), math.min(#lines * lh + pad, h)
+	draw.RoundedBox(4, math.floor((w - bw) / 2), math.floor((h - bh) / 2), bw, bh, T.notePlate)
+	local y = math.floor((h - #lines * lh) / 2)
+	for i, l in ipairs(lines) do
+		draw.SimpleText(l, font, w / 2, y + (i - 1) * lh + lh / 2, T.noteText, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	end
+end
+T.noteTint, T.notePlate, T.noteText = Color(0, 0, 0, 40), Color(18, 20, 26, 215), Color(205, 212, 226)
 
 -- Command palette
 T.paletteSelected, T.paletteFooter = Color(42, 72, 116), Color(16, 18, 24)

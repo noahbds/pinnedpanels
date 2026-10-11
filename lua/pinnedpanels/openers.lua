@@ -160,11 +160,21 @@ function Openers.Commands(sig)
 	return out
 end
 
--- The command to suggest, if one stands out: the only safe command in the window's own file, or the best
--- one tied to the window, scoring at least AUTO_SCORE and clearly ahead of the next. Being in the same
--- addon is never enough (an addon's "open the sound browser" isn't how its editor opens), and risky
--- commands never qualify (D26).
+-- The command to suggest: the only safe command in the window's own file, or the best one tied to the
+-- window, scoring at least AUTO_SCORE and clearly ahead of the next. When none stands out like that, the
+-- best safe command there is: a pin that can be opened with a command is, by default (the owner,
+-- 2026-10-11; D26 held it back to "when its addon opens it" unless the command was a sure thing, and
+-- the player had to find the right-click menu to get it). Risky commands never qualify.
 function Openers.Best(commands)
+	local sure = Openers.Sure(commands)
+	if sure then return sure end
+	for _, c in ipairs(commands) do
+		if not c.risky then return c.name end
+	end
+end
+
+-- The command that stands out, or nil.
+function Openers.Sure(commands)
 	local inFile, only = 0, nil
 	local first, second
 	for _, c in ipairs(commands) do

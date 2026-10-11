@@ -1,6 +1,6 @@
 -- Adopted panels' identity and return (§33.8, §33.9): a panel's signature, the refusals (R11), how a pinned
--- panel comes back (its recipe) and catching it when it appears. Taking and releasing a panel is Manage's
--- job (and Embed's); this file decides which panel and when. Record mode is record.lua.
+-- panel comes back (its recipe) and catching it when it appears. Taking and releasing a panel is Embed's
+-- job; this file decides which panel and when. Record mode is record.lua.
 
 local PP = PinnedPanels
 PP.Recipes = PP.Recipes or {}
@@ -219,9 +219,9 @@ local function ours(p)
 	return false
 end
 
--- Whether a panel is already pinned: a managed window, an embedded window's shell or an embedded panel.
+-- Whether a panel is already pinned: an embedded window's shell or an embedded panel.
 function Recipes.Owner(p)
-	return PP.Manage.byPanel[p] or PP.Embed.shells[p] or PP.Embed.byPanel[p]
+	return PP.Embed.shells[p] or PP.Embed.byPanel[p]
 end
 
 -- A menu of any class: addons with their own menu controls still mark them as Derma's do. The option
@@ -269,6 +269,158 @@ end
 
 local function classOf(p)
 	return p.ClassName or p:GetClassName()
+end
+
+-- ── What is worth pinning (X55) ─────────────────────────────
+-- A player pins something to keep using or watching it while playing: a window, a page, a list, a
+-- group of settings, a preview, a map, and also one thing to click out of any of those: a button, a
+-- spawn icon, a tick box, a slider, a row of a list. What is never offered is what nobody would use
+-- alone: the pieces a control is built from (a scroll bar, a divider's bar, a sheet's strip of tabs),
+-- plain text and pictures that take no click, and holders with nothing in them. The picker offers only
+-- what passes here.
+
+-- A panel is known by its class or any class that one is based on (an addon's "ContentIcon" is a
+-- DButton), down to the engine's own. The nearest one that says something decides.
+
+-- Something by itself, however little is in it. A model preview is a DButton, but not one to click.
+local WHOLE = {}
+for _, c in ipairs({
+	"DModelPanel", "DHTML", "HTML", "HtmlPanel", "Awesomium", "Chromium", "RichText", "DListView", "DTree", "DProperties",
+	"DColorMixer", "DFileBrowser", "DIconBrowser",
+}) do WHOLE[c] = true end
+
+-- A piece of a control: no use without the rest of it.
+local PIECE = {}
+for _, c in ipairs({
+	"DScrollBarGrip", "DVScrollBar", "DHScrollBar", "DHorizontalScroller", "DHorizontalDividerBar", "DVerticalDividerBar",
+	"DListView_Column", "DListView_DraggerBar", "DListViewLabel", "DListViewHeaderLabel", "DTree_Node_Button",
+	"DCategoryHeader", "DExpandButton", "DMenuOption", "DMenuBar", "DTooltip", "DBubbleContainer", "DPanelOverlay", "DNotify",
+	"ScrollBar", "ScrollBarSlider", "MenuItem",
+}) do PIECE[c] = true end
+
+-- One thing to click, drag or type in.
+local CLICK = {}
+for _, c in ipairs({
+	"DButton", "DCheckBoxLabel", "DNumSlider", "DNumberScratch", "DSlider", "DTextEntry", "DNumPad", "DRGBPicker", "DAlphaBar",
+	"DListViewLine", "DListView_Line", "DListBoxItem", "DTree_Node", "DProperty_Generic", "ImageCheckBox", "DLabelURL",
+	"Button", "CheckButton", "RadioButton", "ToggleButton", "Slider", "TextEntry", "URLLabel",
+}) do CLICK[c] = true end
+
+-- Text or a picture: only something to pin when an addon made it take clicks.
+local SHOWN = {}
+for _, c in ipairs({
+	"DLabel", "DImage", "DSprite", "DShape", "DKillIcon", "DProgress", "ModelImage", "Label", "ImagePanel", "Material",
+}) do SHOWN[c] = true end
+
+local MIN_PART_W, MIN_PART_H = 80, 40   -- a holder smaller than this is a row
+local MIN_CLICK_W, MIN_CLICK_H = 12, 12 -- one control can be as small as a tick box
+
+-- A class and the ones it is based on, nearest first, ending with the engine's.
+function Recipes.Lineage(p)
+	local out, seen = {}, {}
+	local c = isstring(p.ClassName) and p.ClassName or (isstring(p.Base) and p.Base) or nil
+	while isstring(c) and not seen[c] and #out < 24 do
+		seen[c] = true
+		out[#out + 1] = c
+		local t = vgui.GetControlTable(c)
+		c = t and t.Base
+	end
+	local engine = p:GetClassName()
+	if not seen[engine] then out[#out + 1] = engine end
+	return out
+end
+
+local kinds = {} -- nearest Lua class -> "whole", "piece", "click", "shown" or false (a holder)
+local function kindOf(p)
+	local key = isstring(p.ClassName) and p.ClassName or (isstring(p.Base) and p.Base) or p:GetClassName()
+	local k = kinds[key]
+	if k == nil then
+		k = false
+		for _, c in ipairs(Recipes.Lineage(p)) do
+			k = WHOLE[c] and "whole" or PIECE[c] and "piece" or CLICK[c] and "click" or SHOWN[c] and "shown"
+			if k then break end
+		end
+		kinds[key] = k or false
+	end
+	return k
+end
+
+local function shown(p)
+	return p:IsVisible() and p:GetAlpha() > 0 and p:GetWide() > 0 and p:GetTall() > 0
+end
+
+-- Whether an addon gave p something to do when clicked: a label or a bare panel used as a button.
+local HANDLERS = { "DoClick", "DoRightClick", "DoDoubleClick", "OnMousePressed", "OnMouseReleased" }
+local function handlesClicks(p)
+	for _, name in ipairs(HANDLERS) do
+		local fn = p[name]
+		if isfunction(fn) and not isStock(fileOf(fn)) then return true end
+	end
+	return false
+end
+
+-- Whether p is one thing to click.
+local function clickable(p, k)
+	if not p:IsMouseInputEnabled() then return false end
+	return k == "click" or ((k == "shown" or k == false) and handlesClicks(p))
+end
+
+-- Whether there is something in a holder: it holds at least two things, the one thing it holds has
+-- something in it, or it is empty but draws itself with an addon's code (a map, a graph).
+local function substance(p, depth)
+	local k = kindOf(p)
+	if k == "whole" then return true end
+	if k then return clickable(p, k) end
+	local n, only = 0, nil
+	for _, c in ipairs(p:GetChildren()) do
+		if shown(c) then
+			n, only = n + 1, c
+			if n > 1 then return true end
+		end
+	end
+	if n == 0 then return (isfunction(p.Paint) and not isStock(fileOf(p.Paint))) or clickable(p, k) end
+	return depth < 6 and substance(only, depth + 1)
+end
+
+-- What one control is called: what is written on it, else what a spawn icon is of, else its class.
+-- nil for anything that isn't one control.
+function Recipes.ControlName(p)
+	if kindOf(p) ~= "click" then return nil end
+	local tries = {
+		function() return p:GetText() end,
+		function() return p.m_NiceName end,
+		function() return p:GetTooltip() end,
+		function() return string.StripExtension(string.GetFileFromFilename(p:GetModelName())) end,
+	}
+	for _, try in ipairs(tries) do
+		local ok, text = pcall(try)
+		if ok and isstring(text) and text:Trim() ~= "" then
+			text = text:Trim()
+			if text:sub(1, 1) == "#" then text = language.GetPhrase(text:sub(2)) end
+			return text:sub(1, MAX_TITLE)
+		end
+	end
+	return Recipes.Lineage(p)[1]
+end
+
+-- Whether a part is worth a window of its own.
+function Recipes.Worth(panel)
+	local w, h = panel:GetSize()
+	local k = kindOf(panel)
+	if k == "piece" then return false end
+	if clickable(panel, k) then return w >= MIN_CLICK_W and h >= MIN_CLICK_H end
+	if w < MIN_PART_W or h < MIN_PART_H then return false end
+	-- A scroll panel's canvas is the scroll panel (Recipes.Take).
+	local parent = panel:GetParent()
+	local ok, canvas = pcall(function() return isfunction(parent.GetCanvas) and parent:GetCanvas() end)
+	if ok and canvas == panel then return false end
+	return substance(panel, 0)
+end
+
+-- Whether the picker offers panel: nothing refuses it, and a part of a window is worth pinning.
+function Recipes.Pickable(panel, root)
+	if Recipes.Refusal(panel, root) then return false end
+	return panel == root or Recipes.Worth(panel)
 end
 
 -- A part's place in its window, from the root down (§33.8): at each step the child's class, which one of
@@ -347,8 +499,12 @@ function Recipes.Suggest(panel, root)
 	local sig = Recipes.Signature(root)
 	local info = { mode = panel ~= root and "part" or "embed", part = panel ~= root, signature = sig, commands = PP.Openers.Commands(sig) }
 	local best = PP.Openers.Best(info.commands)
+	-- The command it was seen being opened by is no guess (Trace, Z3): it comes before the best guess.
+	local seen = PP.Trace and PP.Trace.Of(root)
 	if sig.desktop then
 		info.recipe = { kind = "desktop", id = sig.desktop }
+	elseif seen then
+		info.recipe = seen
 	elseif best then
 		info.recipe = { kind = "command", command = best, confirmed = true }
 	else
@@ -387,6 +543,8 @@ function sheetTabName(panel)
 	end
 end
 
+Recipes.SheetTabName = sheetTabName
+
 -- Pins panel (root, or a part of root) in the given mode with the given recipe. Returns the window id.
 -- waiting: the pinned window is made now and takes the panel when it is caught.
 function Recipes.Take(panel, root, mode, recipe, waiting)
@@ -413,42 +571,14 @@ function Recipes.Take(panel, root, mode, recipe, waiting)
 		while not Recipes.IsWindow(root) do root = root:GetParent() end
 	end
 	local adopt = { mode = mode, recipe = recipe, signature = Recipes.Signature(root), needsKeyboard = root:IsKeyboardInputEnabled() }
-	if mode == "manage" then return PP.Manage.Take(root, adopt) end
 	if mode == "part" then adopt.signature.path = Recipes.Path(root, panel) end
 	-- A page of a tab sheet is called what its tab is called ("Weapons"), which its class never says.
 	local name = mode == "part" and sheetTabName(panel)
+	-- One control is called what is written on it ("Weld"), not what its window is.
+	if mode == "part" and not name then name = Recipes.ControlName(panel) end
 	local id = PP.Embed.Take(mode == "part" and panel or root, adopt, waiting)
 	if id and name then Layout.Rename(id, 1, name) end
 	return id
-end
-
--- Moves an adopted panel between Manage and Embed (§33.6): "Embed for full features" on a managed window,
--- "Return to managed mode" on an embedded one, which then gets a window of its own.
-function Recipes.SwitchMode(id, index, mode)
-	local rec = Layout.Get(id)
-	local tab = rec and rec.tabs[index]
-	if not (tab and tab.adopt) then return end
-	if mode == "embed" then
-		local panel = PP.Manage.Panel(id)
-		if not IsValid(panel) then return end
-		PP.Manage.Release(id)
-		Layout.SetAdopt(id, index, { mode = "embed" })
-		local top = PP.Embed.Strip(panel)
-		if top > 0 then Layout.SetCrop(id, index, { l = 0, t = top, r = 0, b = 0 }) end
-		PP.Embed.Attach(tab.src, panel, "embed")
-		Desktop.Front(id)
-		return
-	end
-	local e = PP.Embed.live[tab.src]
-	if not e or e.mode ~= "embed" then return end
-	local shell = e.shell
-	PP.Embed.Release(tab.src)
-	if #rec.tabs > 1 then id = Layout.MoveTab(id, index, nil) end
-	Layout.SetCrop(id, 1, nil)
-	local x, y = shell:GetPos()
-	Layout.SetGeometry(id, x, y, shell:GetWide(), shell:GetTall(), true)
-	Layout.SetAdopt(id, 1, { mode = "manage" })
-	PP.Manage.Attach(id, shell)
 end
 
 -- A line saying how a pinned panel comes back.
@@ -467,7 +597,6 @@ end
 
 -- Whether tab (of window rec) has its panel now.
 function Recipes.IsLive(rec, tab)
-	if tab.adopt.mode == "manage" then return PP.Manage.live[rec.id] ~= nil end
 	return PP.Embed.live[tab.src] ~= nil
 end
 
@@ -486,15 +615,42 @@ function Recipes.Waiting()
 	return out
 end
 
+-- Whether file is of the window signed sig, or of the same addon.
+local function sameMaker(sig, file)
+	if sig.src == file or sig.src2 == file then return true end
+	return sig.addon ~= nil and Recipes.Addon(file) == sig.addon
+end
+
+Recipes.SameMaker = sameMaker
+
+-- Whether a window we hold now was made by file or by its addon: a screen clicker asked for from there
+-- is asked for one of our windows (Input, X51).
+function PP.Input.clickerHeld(file)
+	for _, rec in ipairs(Layout.Windows()) do
+		for _, tab in ipairs(rec.tabs) do
+			if tab.adopt and Recipes.IsLive(rec, tab) and sameMaker(tab.adopt.signature, file) then return true end
+		end
+	end
+	return false
+end
+
+-- The window signed sig is being taken. If it is its addon that turned the screen clicker on, to show a
+-- cursor for it, the clicker stops being someone else's: left on, it would keep every window taking
+-- the mouse with cursor mode off, for as long as the window is pinned. Returns whether it was.
+function Recipes.TakeClicker(sig)
+	local by = PP.Input.foreignClicker and PP.Input.foreignClickerBy
+	if not by or not sameMaker(sig, by) then return false end
+	PP.Input.DropForeignClicker()
+	return true
+end
+
 -- Gives a caught window to its waiting tab, which takes it whole or the part at its path; opened means
--- the player just opened it. Only a popup brings the cursor: a frame that is always there doesn't.
+-- the player just opened it. Only a window that showed a cursor brings it (a popup, or one whose addon
+-- turned the screen clicker on): a frame that is always there doesn't.
 function Recipes.Attach(w, panel, opened)
 	local mode = w.tab.adopt.mode
-	if mode == "manage" then
-		PP.Manage.Attach(w.rec.id, panel, opened)
-		return true
-	end
-	local cursor = opened and panel:IsVisible() and panel:IsPopup() and panel:IsMouseInputEnabled() and not PP.Input.cursorMode
+	local clicker = Recipes.TakeClicker(w.tab.adopt.signature)
+	local cursor = opened and panel:IsVisible() and (clicker or (panel:IsPopup() and panel:IsMouseInputEnabled())) and not PP.Input.cursorMode
 	if cursor then PP.Input.SetCursorMode(true) end
 	if mode == "part" then
 		local root = panel
@@ -571,11 +727,12 @@ local function ask(w, panel, sig)
 		PP.L("btn.no"), function() end)
 end
 
--- A waiting window the player just opened with a bind teaches its pin that command (§33.9), so we can open
--- it ourselves next time. Only pins that had no opener learn; a known one is kept.
-local function learn(w)
+-- A waiting window the player just opened teaches its pin the command that opened it (§33.9, Z3), so we
+-- can open it ourselves next time: the command it was seen being opened by, else the bind just pressed,
+-- else a command of its addon run a moment ago. Only pins that had no opener learn; a known one is kept.
+local function learn(w, panel)
 	if w.tab.adopt.recipe.kind ~= "watch" then return end
-	local recipe = PP.Openers.FromBind()
+	local recipe = PP.Trace.Of(panel) or PP.Openers.FromBind() or PP.Trace.Recent(w.tab.adopt.signature)
 	if not recipe then return end
 	Layout.SetAdopt(w.rec.id, w.index, { recipe = recipe })
 	notification.AddLegacy(PP.L("record.updated", Recipes.Title(w.tab.adopt), Recipes.Describe({ recipe = recipe })), NOTIFY_GENERIC, 6)
@@ -642,9 +799,13 @@ function Recipes.Catch()
 						if r.kind == "class" and menuRootClass(r.class) then
 							Layout.SetAdopt(m.w.rec.id, m.w.index, { recipe = { kind = "watch" } })
 						end
-						if m.strong then
+						-- A part of the spawn menu or the C menu is never a question: there is one of each,
+						-- its file agreed and the part's path leads somewhere. What else is in the menu
+						-- says nothing (pinned while another part was out, it "looks different" once
+						-- both are back, and asked whether the creation menu was the creation menu).
+						if m.strong or (menu and m.w.tab.adopt.mode == "part") then
 							Recipes.Attach(m.w, p, opened)
-							if opened then learn(m.w) end
+							if opened then learn(m.w, p) end
 						else
 							ask(m.w, p, cand)
 						end
@@ -728,6 +889,18 @@ function Recipes.Open(rec, tab)
 	else
 		ProtectedCall(function() concommand.Run(LocalPlayer(), r.command, r.args and string.Explode(" ", r.args) or {}, r.args or "") end)
 	end
+	Recipes.Hurry()
+end
+
+-- A window we just asked for is looked for twenty times a second for as long as it is expected, not
+-- twice: caught on the half second, and then only once it had looked the same on two looks running
+-- (R20), it sat on screen for up to a second and a half before it went into its pin.
+local FAST_TIMER, FAST_INTERVAL = "PinnedPanels.CatchFast", 0.05
+function Recipes.Hurry()
+	timer.Create(FAST_TIMER, FAST_INTERVAL, math.ceil(OPEN_GRACE / FAST_INTERVAL), function()
+		if #Recipes.Waiting() == 0 then return timer.Remove(FAST_TIMER) end
+		Recipes.Catch()
+	end)
 end
 
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Recipes", function(kind)
@@ -737,7 +910,7 @@ hook.Add("PinnedPanelsHeldChanged", "PinnedPanels.Recipes", Recipes.Wake)
 
 -- ── Reopening at join (D41) ─────────────────────────────────
 
-local AUTO_TIMER, AUTO_DELAY, AUTO_GRACE, AUTO_RETRY, AUTO_STRIKES = "PinnedPanels.AutoOpen", 5, 6, 2, 2
+local AUTO_TIMER, AUTO_DELAY, AUTO_GRACE, AUTO_RETRY, AUTO_STRIKES = "PinnedPanels.AutoOpen", 2, 6, 2, 2
 -- Whether a pin is reopened at join: one that comes back with a command the player allowed, unless
 -- the player turned that off (or it stopped working).
 function Recipes.AutoOpens(adopt)

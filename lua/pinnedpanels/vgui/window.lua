@@ -399,7 +399,9 @@ function PANEL:Paint(w, h)
 	draw.RoundedBox(6, 0, 0, w, h, bg)
 	local rolled = rec.state == "rolled"
 	draw.RoundedBoxEx(6, 0, 0, w, HEADER, header, true, true, rolled, rolled)
-	draw.SimpleText(self.titleText, "DermaDefaultBold", 10, HEADER / 2, text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+	-- Up to the buttons (and the lock mark), not under them.
+	local room = w - 10 - BTN_W * #BUTTONS - (rec.locked and 22 or 8)
+	draw.SimpleText(Theme.Fit(self.titleText, "DermaDefaultBold", math.max(room, 0)), "DermaDefaultBold", 10, HEADER / 2, text, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
 	if rec.locked then
 		surface.SetDrawColor(Theme.warning)

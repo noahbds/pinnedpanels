@@ -24,14 +24,12 @@ local ICONS = {
 	adopt = Material("icon16/application.png"),
 	desktop = Material("icon16/application_double.png"),
 	group = Material("icon16/folder.png"),
-	managed = Material("icon16/application_link.png"),
 }
 -- How strongly an entry's icon and label show, by state.
 local DIM = { shown = 255, minimized = 165, hidden = 105, waiting = 105, closed = 105 }
 local ALIGN = { start = 0, center = 0.5, ["end"] = 1 }
 
 local function kindOf(rec)
-	if rec.kind == "managed" then return "managed" end
 	if #rec.tabs > 1 then return "group" end
 	return rec.tabs[1] and rec.tabs[1].src:match("^(%a+):") or "tool"
 end
@@ -72,13 +70,11 @@ local function initials(title)
 end
 
 -- What a window's entry says about it, or nil when it has none: "shown", "minimized", "hidden" (held
--- back or hidden by the player), "waiting" (a pin whose addon's window isn't open) or "closed" (a
--- managed window its addon closed).
+-- back or hidden by the player) or "waiting" (a pin whose addon's window isn't open).
 local function stateOf(rec)
 	local Desktop = PP.Desktop
 	if #rec.tabs == 0 then return nil end
 	if Desktop.held[rec.id] then return "hidden" end
-	if PP.Manage.OwnerHidden(rec.id) then return "closed" end
 	if not IsValid(Desktop.PanelOf(rec.id)) then
 		for _, tab in ipairs(rec.tabs) do
 			if tab.adopt then return "waiting" end

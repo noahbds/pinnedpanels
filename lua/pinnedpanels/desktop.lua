@@ -1,6 +1,6 @@
 -- Records → window controls (§16): creates, refreshes and removes PinnedPanelsWindows as the document
--- changes, rations tab builds to one per frame, applies interactivity, idle opacity and peek (Manage does
--- the same for managed windows, §33.5), and owns the taskbar control.
+-- changes, rations tab builds to one per frame, applies interactivity, idle opacity and peek, and owns the
+-- taskbar control.
 
 local PP = PinnedPanels
 PP.Desktop = PP.Desktop or {}
@@ -25,23 +25,20 @@ local function hasAvailableTab(rec)
 end
 
 -- A window gets a control once the catalogue is known, unless it is held, empty (a named group) or
--- only has unavailable tabs, which stay dormant in the document (E1, B1). A managed window is another
--- addon's window and never gets one.
+-- only has unavailable tabs, which stay dormant in the document (E1, B1).
 local function wanted(rec)
-	return Desktop.ready and rec.kind ~= "managed" and not Desktop.held[rec.id] and hasAvailableTab(rec)
+	return Desktop.ready and not Desktop.held[rec.id] and hasAvailableTab(rec)
 end
 
 -- Dormant: nothing to show now. For adopted panels that means waiting for the panel (§33.9).
 function Desktop.IsDormant(rec)
-	if rec.kind == "managed" then return not PP.Manage.IsLive(rec.id) end
 	return #rec.tabs > 0 and not hasAvailableTab(rec)
 end
 
--- Our window control, or the other addon's panel for a managed window.
+-- Our window control for a window, or nil.
 function Desktop.PanelOf(id)
 	local win = Desktop.panels[id]
 	if IsValid(win) then return win end
-	return PP.Manage.Panel(id)
 end
 
 local function create(rec)
@@ -70,13 +67,12 @@ function Desktop.UpdateStates()
 		local rec = Layout.Get(id)
 		if IsValid(win) and rec then
 			win:SetVisible(Desktop.Shown(rec))
-			win:SetMouseInputEnabled(interactive)
+			win:SetMouseInputEnabled(interactive and not Desktop.covered)
 			if not interactive then win:SetKeyboardInputEnabled(false) end
 			local alpha = (interactive or Desktop.peeking or PP.Nav.Opaque(id)) and 1 or (rec.opacity or idle)
 			win:SetAlpha(math.Round(alpha * 255))
 		end
 	end
-	PP.Manage.UpdateStates()
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:Wake() end
 end
 
@@ -160,11 +156,99 @@ function Desktop.Raise()
 	table.sort(wins, function(a, b) return a.at < b.at end)
 	for _, w in ipairs(wins) do w.win:MoveToFront() end
 	if IsValid(Desktop.taskbar) then Desktop.taskbar:MoveToFront() end
-	-- A menu that is open belongs above everything, as it was.
+	-- A menu that is open belongs above everything, as it was: a menu bar's on the world panel, and
+	-- every drop-down, a combo box's too (its parent is the box), in the order they opened.
 	for _, p in ipairs(vgui.GetWorldPanel():GetChildren()) do
 		if p.m_bIsMenuComponent and p:IsVisible() then p:MoveToFront() end
 	end
+	local menus = {}
+	for menu, at in pairs(Desktop.menus) do
+		if IsValid(menu) and menu:IsVisible() then menus[#menus + 1] = { menu = menu, at = at } end
+	end
+	table.sort(menus, function(a, b) return a.at < b.at end)
+	for _, m in ipairs(menus) do m.menu:MoveToFront() end
 end
+
+-- ── What is in front ────────────────────────────────────────
+-- Our windows are drawn with the HUD, under everything on the world panel, but as popups they are asked
+-- for the mouse in popup order, and Desktop.Raise and a click put them first in it. So a window lying
+-- behind another addon's menu took the clicks meant for that menu (X50). While the cursor is on
+-- something that is drawn over them, our windows leave the mouse alone.
+
+Desktop.covered = Desktop.covered or false
+-- Drop-down menus that were opened, and when. Nothing lists the open ones, so they are noted as they
+-- register for closing (the real function is kept across reloads, so it is never wrapped twice).
+Desktop.menus = Desktop.menus or setmetatable({}, { __mode = "k" })
+Desktop.menuCount = Desktop.menuCount or 0
+Desktop.rawRegisterMenu = Desktop.rawRegisterMenu or RegisterDermaMenuForClose
+local rawRegisterMenu = Desktop.rawRegisterMenu
+if rawRegisterMenu then
+	function RegisterDermaMenuForClose(menu)
+		Desktop.menuCount = Desktop.menuCount + 1
+		Desktop.menus[menu] = Desktop.menuCount
+		return rawRegisterMenu(menu)
+	end
+end
+
+local function at(p, x, y)
+	local px, py = p:LocalToScreen(0, 0)
+	return x >= px and y >= py and x < px + p:GetWide() and y < py + p:GetTall()
+end
+
+local function shownToRoot(p)
+	while IsValid(p) do
+		if not p:IsVisible() then return false end
+		p = p:GetParent()
+	end
+	return true
+end
+
+-- Whether the point is on the place a pinned part left in root: nothing is drawn there but a line of
+-- text, and the part may well be in a window right behind it.
+local function onPlaceholder(root, x, y)
+	for _, e in pairs(PP.Embed.live) do
+		local ph = e.placeholder
+		if IsValid(ph) and at(ph, x, y) and ph:HasParent(root) and shownToRoot(ph) then return true end
+	end
+	return false
+end
+
+-- Whether something on the world panel is drawn at the point and takes the mouse there. The spawn menu
+-- and the C menu fill the screen and are empty around what they hold: only what they hold counts.
+local function coveredAt(x, y)
+	for menu in pairs(Desktop.menus) do
+		if IsValid(menu) and menu:IsVisible() and at(menu, x, y) then return true end
+	end
+	for _, p in ipairs(vgui.GetWorldPanel():GetChildren()) do
+		if p:IsVisible() and p:IsMouseInputEnabled() and p:IsPopup() and at(p, x, y) and not onPlaceholder(p, x, y) then
+			if p ~= g_SpawnMenu and p ~= g_ContextMenu then return true end
+			for _, c in ipairs(p:GetChildren()) do
+				if c:IsVisible() and c:IsMouseInputEnabled() and at(c, x, y) then return true end
+			end
+		end
+	end
+	return false
+end
+
+local function overWindow(x, y)
+	for _, win in pairs(Desktop.panels) do
+		if IsValid(win) and win:IsVisible() and at(win, x, y) then return true end
+	end
+	return false
+end
+
+-- Asked every frame while windows take the mouse, and applied only when it changes. Not while a button
+-- is down: a window being dragged over a menu keeps the mouse.
+Input.EachFrame("covered", function()
+	if not next(Desktop.panels) or not Input.Interactive() or input.IsMouseDown(MOUSE_LEFT) or input.IsMouseDown(MOUSE_RIGHT) then return end
+	local x, y = input.GetCursorPos()
+	local covered = overWindow(x, y) and coveredAt(x, y)
+	if covered == Desktop.covered then return end
+	Desktop.covered = covered
+	for _, win in pairs(Desktop.panels) do
+		if IsValid(win) then win:SetMouseInputEnabled(not covered) end
+	end
+end)
 
 -- The menu is made a popup after the hook, so a frame later.
 local function raiseSoon()
@@ -289,8 +373,6 @@ function Desktop.Front(id)
 	local win = Desktop.panels[id]
 	if IsValid(win) then
 		win:MoveToFront()
-	elseif PP.Manage.IsLive(id) then
-		PP.Manage.Front(id)
 	else
 		Desktop.pendingFront = id
 	end
@@ -356,7 +438,6 @@ end
 
 function Desktop.Teardown()
 	-- First, while the windows still exist: each release reconciles, which would otherwise make new ones.
-	PP.Manage.ReleaseAll()
 	PP.Embed.ReleaseAll()
 	for _, win in pairs(Desktop.panels) do
 		if IsValid(win) then

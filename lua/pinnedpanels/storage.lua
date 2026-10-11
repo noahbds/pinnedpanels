@@ -24,6 +24,7 @@ local MAX_COORD = 32768
 local KINDS = { tool = true, creation = true, postprocess = true, adopt = true, active = true, quick = true }
 local DFRAME_STRIP = 29 -- DFrame's top dock padding, cropped away when its contents are embedded (§33.6)
 local STATES = { normal = true, minimized = true, maximized = true, rolled = true }
+-- "manage" is read from layouts saved before it was removed (X60), and becomes "embed".
 local ADOPT_MODES = { manage = true, embed = true, part = true }
 local MAX_PATH = 16
 local CONTROL_KINDS = { slider = true, check = true, combo = true }
@@ -108,7 +109,7 @@ local function sanitizeAdopt(a)
 	-- Reopening at join (D41) is on unless turned off; autoFails counts joins it didn't come back on.
 	local autoOpen
 	if a.autoOpen == false then autoOpen = false end
-	return { mode = a.mode, signature = sig, recipe = recipe, needsKeyboard = a.needsKeyboard == true, noGeometry = a.noGeometry == true,
+	return { mode = a.mode == "manage" and "embed" or a.mode, signature = sig, recipe = recipe, needsKeyboard = a.needsKeyboard == true,
 		autoOpen = autoOpen, autoFails = int(a.autoFails, 1, 9) }
 end
 
@@ -157,6 +158,9 @@ local function fromDesktop(t, id)
 	}
 end
 
+-- The Seen list keeps the same records in its own file (seen.lua).
+Storage.SanitizeAdopt, Storage.SanitizeControls = sanitizeAdopt, sanitizeControls
+
 local function sanitizeTab(t, seen, summary)
 	if not istable(t) then return nil end
 	local widget = isstring(t.src) and t.src:match("^desktop:(.+)$")
@@ -195,24 +199,13 @@ local function sanitizeWindow(w, seen, summary)
 			end
 		end
 	end
-	-- A managed window is exactly one managed tab (§33.10); a managed tab anywhere else is dropped.
-	local managed = #tabs == 1 and tabs[1].adopt and tabs[1].adopt.mode == "manage"
-	if not managed then
-		for i = #tabs, 1, -1 do
-			if tabs[i].adopt and tabs[i].adopt.mode == "manage" then
-				table.remove(tabs, i)
-				summary.dropped = summary.dropped + 1
-			end
-		end
-	end
-	local title = not managed and text(w.title, MAX_TITLE) or nil
+	local title = text(w.title, MAX_TITLE)
 	-- A window without tabs is only kept as a named group (§13.1).
 	if #tabs == 0 and not title then return nil end
 
 	local x, y, width, height = rectFields(w, 20)
 	local win = {
 		id = isstring(w.id) and w.id:match("^w%d+$") and w.id or nil,
-		kind = managed and "managed" or nil,
 		tabs = tabs,
 		active = int(w.active, 1, math.max(#tabs, 1)) or 1,
 		x = x or 120, y = y or 120, w = width or 280, h = height or 400,
@@ -232,7 +225,7 @@ local function sanitizeWindow(w, seen, summary)
 		win.colors.header = Util.ArrayToColor(w.colors.header)
 		win.colors.text = Util.ArrayToColor(w.colors.text)
 	end
-	if win.state == "maximized" and not managed then
+	if win.state == "maximized" then
 		local rx, ry, rw, rh = rectFields(w.restore, 20)
 		if rx and ry then win.restore = { x = rx, y = ry, w = rw, h = rh } end
 	end

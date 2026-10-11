@@ -69,11 +69,14 @@ local function paintShell(self, name, w, h)
 end
 
 function BOX:Paint(w, h)
+	-- Until PaintOver, which comes after the children: what is being drawn is this tab's (seenShell).
+	Embed.painting = Embed.live[self.src]
 	paintShell(self, "Paint", w, h)
-	if self.notice then draw.SimpleText(self.notice, "DermaDefault", w / 2, h / 2, PP.Theme.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER) end
+	if self.notice then PP.Theme.Note(w, h, self.notice, PP.L("embed.closed_short")) end
 end
 
 function BOX:PaintOver(w, h)
+	Embed.painting = nil
 	paintShell(self, "PaintOver", w, h)
 end
 
@@ -127,10 +130,21 @@ local function remember(p)
 	return { panel = p, parent = p:GetParent(), dock = p:GetDock(), margin = { p:GetDockMargin() }, x = x, y = y, w = p:GetWide(), h = p:GetTall(), z = p:GetZPos() }
 end
 
+-- A panel given a parent takes that parent's mouse and keyboard input, whatever its own was (seen in
+-- game: a button put under a panel that takes no mouse stops taking it, and doesn't get it back when
+-- the parent does). An emptied window takes neither while it is pinned, so what went back into it came
+-- back dead: XGUI, unpinned, could no longer be clicked (X56). So a panel keeps its own through the move.
+local function reparent(p, parent)
+	local mouse, keyboard = p:IsMouseInputEnabled(), p:IsKeyboardInputEnabled()
+	p:SetParent(parent)
+	if p:IsMouseInputEnabled() ~= mouse then p:SetMouseInputEnabled(mouse) end
+	if p:IsKeyboardInputEnabled() ~= keyboard then p:SetKeyboardInputEnabled(keyboard) end
+end
+
 local function adopt(e, p)
 	e.moved[#e.moved + 1] = remember(p)
 	Embed.byPanel[p] = e
-	p:SetParent(e.box.inner)
+	reparent(p, e.box.inner)
 end
 
 -- The shell's children, in order, from a snapshot (G56): not its chrome, never a popup.
@@ -305,15 +319,68 @@ local giveKeyboard
 -- owner says to it about its place goes to the placeholder, which is what stands in that place; the
 -- part stays shown and filling its tab. The engine's own functions are kept to act on the part itself.
 local META = FindMetaTable("Panel")
-local PLACE = { "SetVisible", "SetPos", "SetSize", "SetWide", "SetTall", "Dock", "DockMargin", "SetZPos" }
+-- StretchToParent is among them because it doesn't go through SetPos: it assigns the panel's x and y,
+-- which moves it at once. The spawn menu's divider lays its right side out that way every time the menu
+-- opens, and the pinned tool menu went a screen to the right inside its window, which showed empty (X52).
+local PLACE = { "SetVisible", "SetPos", "SetX", "SetY", "SetSize", "SetWide", "SetTall", "SetWidth", "SetHeight",
+	"StretchToParent", "Dock", "DockMargin", "SetZPos" }
+
+-- What its owner asks a part about its place is answered by the placeholder too. A sheet's strip of
+-- tabs lays the tabs out by each one's width: a tab pinned and made 460 wide in our window pushed its
+-- neighbours 460 along the strip, in the real menu (X57). The part's own code has to get the truth,
+-- though, to lay itself out in the window it is in. The two are told apart by who asks: the first
+-- local of the calling function is its "self" (or the panel it was handed); the part or something
+-- inside it gets the part's own answer, any other panel the placeholder's. A caller that can't be
+-- told (no panel there) gets the part's own, as before.
+local READ = { "GetWide", "GetTall", "GetSize", "GetPos", "GetX", "GetY", "GetBounds", "IsVisible", "GetDock", "GetDockMargin", "GetZPos" }
+
+-- The part's own code sizing or moving the part (a tab that fits itself to its text, a control that
+-- sets its width to the width it has) has nothing to say while it is pinned: here it fills its tab, and
+-- the place it left isn't its own to size (it copied its 490 pixels in our window onto its
+-- placeholder). So that is dropped. What it says about showing, docking and order still goes to the
+-- placeholder, as everyone's does.
+local OWN_DROPPED = { SetPos = true, SetX = true, SetY = true, SetSize = true, SetWide = true, SetTall = true, SetWidth = true,
+	SetHeight = true, StretchToParent = true }
 
 local function shield(e)
-	local t, ph = e.target:GetTable(), e.placeholder
+	local target, ph = e.target, e.placeholder
+	local t = target:GetTable()
+	-- Whether the panel that calls (two levels up from here) is the part or inside it.
+	local function own(who)
+		return ispanel(who) and IsValid(who) and (who == target or who:HasParent(target))
+	end
+	-- The placeholder stands in for the part (standIn): asked for something it hasn't, it passes the
+	-- part's on. These it has to answer for itself, or it would give the part's place for its own.
+	local pt = ph:GetTable()
+	for _, names in ipairs({ PLACE, READ }) do
+		for _, name in ipairs(names) do
+			if META[name] then pt[name] = META[name] end
+		end
+	end
 	e.shielded = {}
 	for _, name in ipairs(PLACE) do
 		e.shielded[name] = rawget(t, name) or false
+		local dropped = OWN_DROPPED[name]
 		t[name] = function(_, ...)
+			if dropped then
+				local _, who = debug.getlocal(2, 1)
+				if own(who) then return end
+			end
 			if IsValid(ph) then return META[name](ph, ...) end
+		end
+	end
+	for _, name in ipairs(READ) do
+		local real = META[name]
+		if real then
+			e.shielded[name] = rawget(t, name) or false
+			t[name] = function(self, ...)
+				local _, who = debug.getlocal(2, 1)
+				-- Nor what the part is in now (our tab and window), which asks about it as it is.
+				if ispanel(who) and who ~= target and IsValid(who) and IsValid(ph) and not who:HasParent(target) and not target:HasParent(who) then
+					return real(ph, ...)
+				end
+				return real(self, ...)
+			end
 		end
 	end
 end
@@ -325,9 +392,45 @@ local function unshield(e)
 	e.shielded = nil
 end
 
+-- A part's controls can ask whether the window they came from is open before they draw: Magic Align
+-- blanks its row in the tool list and writes the name itself, but only "while the spawn menu is
+-- visible", so in a pinned tool menu the row was empty until Q was held (X54). The part is on screen
+-- in our window, so while it is being drawn there its window answers that it is visible. Only then:
+-- everything else, the menu's own code included, gets the truth. Several parts can share a window.
+local seen = setmetatable({}, { __mode = "k" }) -- shell -> { n, was }
+
+local function seenShell(e)
+	local s = e.shell
+	if not IsValid(s) then return end
+	local entry = seen[s]
+	if not entry then
+		local t = s:GetTable()
+		entry = { n = 0, was = rawget(t, "IsVisible") or false }
+		seen[s] = entry
+		t.IsVisible = function(self)
+			local p = Embed.painting
+			if p and p.shell == self then return true end
+			return META.IsVisible(self)
+		end
+	end
+	entry.n = entry.n + 1
+	e.seen = s
+end
+
+local function unseenShell(e)
+	local s, entry = e.seen, e.seen and seen[e.seen]
+	e.seen = nil
+	if not entry then return end
+	entry.n = entry.n - 1
+	if entry.n > 0 then return end
+	seen[s] = nil
+	if IsValid(s) then s:GetTable().IsVisible = entry.was or nil end
+end
+
 -- Says where the part went, in the place it left (its sheet still has a tab for it).
+-- Kept inside the place: a spawn icon's is 128 wide, and the sentence ran over its neighbours.
 local function paintPlaceholder(_, w, h)
-	draw.SimpleText(PP.L("embed.elsewhere"), "DermaDefault", w / 2, h / 2, PP.Theme.textMuted, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+	PP.Theme.Note(w, h, PP.L("embed.elsewhere"), PP.L("embed.elsewhere_short"))
 end
 
 -- Moves target into tab src: a window's contents (mode "embed") or the one panel (mode "part").
@@ -364,6 +467,7 @@ function Embed.Attach(src, target, mode)
 		target:DockMargin(0, 0, 0, 0)
 		target:SetVisible(true)
 		shield(e)
+		seenShell(e)
 	else
 		local s = target
 		e.shell = s
@@ -420,7 +524,10 @@ function Embed.Take(target, adoptRec, waiting)
 	local strip = adoptRec.mode == "embed" and Embed.Strip(target) or 0
 	local id, src = Layout.PinAdopted(adoptRec, x - CHROME_W / 2, y - CHROME_H, w + CHROME_W, h - strip + CHROME_HEADER + CHROME_H)
 	if strip > 0 then Layout.SetCrop(id, 1, { l = 0, t = strip, r = 0, b = 0 }) end
-	if not waiting then Embed.Attach(src, target, adoptRec.mode) end
+	if not waiting then
+		PP.Recipes.TakeClicker(adoptRec.signature)
+		Embed.Attach(src, target, adoptRec.mode)
+	end
 	Embed.Front(id)
 	return id
 end
@@ -450,12 +557,13 @@ function Embed.Release(src, close)
 		Input.EachFrame("embed", nil)
 	end
 	unshield(e)
+	unseenShell(e)
 	for _, m in ipairs(e.moved) do
 		local p, parent = m.panel, m.parent
 		Embed.byPanel[p] = nil
 		if IsValid(p) and not p:IsMarkedForDeletion() and p:GetParent() == e.box.inner then
 			if not e.orphaned and IsValid(parent) and not parent:IsMarkedForDeletion() and IsValid(e.shell) and not e.shell:IsMarkedForDeletion() then
-				p:SetParent(parent)
+				reparent(p, parent)
 				local ph = e.placeholder
 				if IsValid(ph) then
 					-- A part goes back as its owner has its place now, which the placeholder kept.
@@ -478,7 +586,17 @@ function Embed.Release(src, close)
 			end
 		end
 	end
-	if IsValid(e.placeholder) then e.placeholder:Remove() end
+	-- What held the part lays itself out again, now that the part is back in it (a strip of tabs is
+	-- only laid out when something tells it to).
+	if IsValid(e.placeholder) then
+		local up = e.placeholder:GetParent()
+		for _ = 1, 6 do
+			if not IsValid(up) or up == e.shell then break end
+			up:InvalidateLayout()
+			up = up:GetParent()
+		end
+		e.placeholder:Remove()
+	end
 	local s, o = e.shell, e.original
 	if o then Embed.shells[s] = nil end
 	local alive = IsValid(s) and not s:IsMarkedForDeletion()
@@ -649,6 +767,11 @@ local function check(src, e)
 		e.orphaned = not IsValid(e.placeholder)
 		tookBack = not e.orphaned and e.target:GetParent() ~= e.box.inner
 		gone = e.orphaned or tookBack
+		-- Moved inside its tab by something the shield doesn't cover: it fills the tab again.
+		if not gone then
+			local x, y = e.target:GetPos()
+			if x ~= 0 or y ~= 0 then e.box.inner:InvalidateLayout() end
+		end
 	end
 	if gone then
 		Embed.Release(src)
@@ -669,16 +792,24 @@ function Embed.Check()
 	for src, e in pairs(Embed.live) do check(src, e) end
 end
 
--- Tabs that were unpinned, or moved to managed mode, let go of their panels at once.
+-- The C menu takes the active tool's settings out of the tool menu to show them in its corner, and
+-- puts them back when it closes. With the tool menu pinned (or the part of it that holds them), that
+-- left a blank in the pinned window for as long as the C menu was open (X52): they stay where they
+-- are, on screen already, and the C menu shows no copy.
+hook.Add("ContextMenuShowTool", "PinnedPanels.Embed", function()
+	local p = spawnmenu.ActiveControlPanel()
+	while IsValid(p) do
+		if p.ClassName == "PinnedPanelsEmbedBox" then return false end
+		p = p:GetParent()
+	end
+end)
+
+-- Tabs that were unpinned let go of their panels at once.
 hook.Add("PinnedPanelsChanged", "PinnedPanels.Embed", function(kind)
 	if kind ~= "windows" and kind ~= "tabs" then return end
 	for src in pairs(Embed.live) do
 		local win, i = Layout.Find(src)
-		if not win then
-			Embed.Release(src, true)
-		elseif win.tabs[i].adopt.mode == "manage" then
-			Embed.Release(src)
-		end
+		if not win then Embed.Release(src, true) end
 	end
 end)
 

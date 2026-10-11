@@ -1,5 +1,7 @@
 -- PinnedPanelsPicker (§33.7): a full-screen overlay for pinning another addon's panel. It outlines the
--- window under the cursor, or a part of it, with a card saying what it is and what pinning would do. It
+-- window under the cursor, or a part of it, with a card saying what it is and what pinning would do.
+-- Only what can be pinned and is worth pinning is ever outlined (Recipes.Pickable): the rest is passed
+-- over as if it weren't there. It
 -- holds the "picker" cursor reason while open. The overlay takes the clicks, so what is under the cursor
 -- is found by walking the panels, not with vgui.GetHoveredPanel().
 
@@ -9,12 +11,12 @@ local Recipes, Input, T = PP.Recipes, PP.Input, PP.Theme
 PP.Picker = PP.Picker or {}
 
 local REFRESH = 0.5
-local CARD_W, CARD_PAD, LINE_H = 300, 10, 16
+local CARD_W, CARD_MAX_W, CARD_PAD, LINE_H = 300, 520, 10, 16
 local LIST_W, ROW_H = 320, 36
 local FOOTER_H = 26
 local MAX_DEPTH = 40
 local LIST_DEPTH = 3
-local OUTLINE, OUTLINE_REFUSED, FILL = Color(60, 200, 255), Color(230, 80, 80), Color(60, 200, 255, 30)
+local OUTLINE, FILL = Color(60, 200, 255), Color(60, 200, 255, 30)
 
 local function contains(p, x, y)
 	local px, py = p:LocalToScreen(0, 0)
@@ -41,6 +43,29 @@ local function chainAt(root, x, y)
 		p = found
 	end
 	return chain
+end
+
+-- What of a chain can be picked, outermost first. Nothing of a window that is ours, a menu or a dialog;
+-- of one that can't be pinned whole (the spawn menu, a scene), its parts. A panel that covers nearly
+-- all of the one before it is the same thing to the eye (a list in its holder, the layout inside a
+-- scroll panel): the outer one stands for both. Not a page of a tab sheet, which is the sheet without
+-- its tabs but something else to pin.
+local SAME = 0.9
+local WHOLE_ONLY = { ["refuse.root"] = true, ["refuse.scene"] = true }
+local function pickable(chain, root)
+	local refusal = Recipes.Refusal(root, root)
+	if refusal and not WHOLE_ONLY[refusal] then return {} end
+	local out, lw, lh = {}, nil, nil
+	for _, p in ipairs(chain) do
+		if Recipes.Pickable(p, Recipes.RootFor(p, root)) then
+			local w, h = p:GetSize()
+			if not (lw and w * h >= lw * lh * SAME) or Recipes.SheetTabName(p) then
+				out[#out + 1] = p
+				lw, lh = w, h
+			end
+		end
+	end
+	return out
 end
 
 local PICKER = {}
@@ -98,13 +123,17 @@ function PICKER:Hit()
 	local x, y = input.GetCursorPos()
 	local under = {}
 	for _, p in ipairs(self.tops) do
-		if drawn(p) and contains(p, x, y) then under[#under + 1] = p end
+		if drawn(p) and contains(p, x, y) then
+			local chain = pickable(chainAt(p, x, y), p)
+			if #chain > 0 then under[#under + 1] = { root = p, chain = chain } end
+		end
 	end
 	self.overlaps = #under
-	local root = under[(self.cycle - 1) % math.max(#under, 1) + 1]
+	local hit = under[(self.cycle - 1) % math.max(#under, 1) + 1]
+	local root = hit and hit.root
 	if root ~= self.root then self.depth = 1 end
 	self.root = root
-	self.chain = root and chainAt(root, x, y) or {}
+	self.chain = hit and hit.chain or {}
 	self.depth = math.Clamp(self.depth, 1, math.max(#self.chain, 1))
 	self:Select(self.chain[self.depth])
 end
@@ -113,24 +142,40 @@ end
 function PICKER:Select(panel)
 	if panel == self.selected and not self.dirty then return end
 	self.selected, self.dirty = panel, nil
-	self.lines, self.refusal, self.info = {}, nil, nil
+	self.lines, self.info = {}, nil
 	if not IsValid(panel) then return end
 	local root = Recipes.RootFor(panel, self.root)
 	self.pickRoot = root
-	self.refusal = Recipes.Refusal(panel, root)
+	-- From the list, or gone or pinned since the cursor last moved: nothing is shown for it.
+	if not Recipes.Pickable(panel, root) then
+		self.selected = nil
+		return
+	end
 	local sig = Recipes.Signature(panel)
 	local lines = self.lines
-	lines[1] = Recipes.SigTitle(sig)
+	-- A control by what is on it ("Weld", a prop's name), anything else by its title or class.
+	lines[1] = Recipes.ControlName(panel) or Recipes.SigTitle(sig)
 	lines[2] = PP.L("picker.addon", Recipes.AddonName(Recipes.Signature(root)))
-	lines[3] = sig.class and PP.L("picker.class", sig.class, sig.base or "?") or PP.L("picker.unnamed", sig.base or "?")
+	-- Its class and everything that one is based on, an addon's or not: "ContentIcon (based on DButton <
+	-- DLabel < Label)".
+	local line = Recipes.Lineage(panel)
+	local class = table.remove(line, 1)
+	lines[3] = #line > 0 and PP.L("picker.class", class, table.concat(line, " < ")) or PP.L("picker.unnamed", class)
 	lines[4] = PP.L("picker.size", sig.w, sig.h) .. (panel ~= root and "  ·  " .. PP.L("picker.part") or "")
-	if self.refusal then
-		lines[5] = PP.L(self.refusal)
-	else
-		local info = Recipes.Suggest(panel, root)
-		self.info = info
-		lines[5] = PP.L("picker.click_" .. info.mode) .. "  ·  " .. Recipes.Describe(info)
+	local info = Recipes.Suggest(panel, root)
+	self.info = info
+	-- Two lines: together they were wider than the card.
+	lines[5] = PP.L("picker.click_" .. info.mode)
+	lines[6] = Recipes.Describe(info)
+	-- The other ways are behind the right button, which nothing on the card said.
+	if #Recipes.Choices(info) > 1 then lines[7] = PP.L("picker.right_click") end
+	-- The card is as wide as its widest line, within limits; a line longer than that is cut.
+	local widest = 0
+	for i, line in ipairs(lines) do
+		surface.SetFont(i == 1 and "DermaDefaultBold" or "DermaDefault")
+		widest = math.max(widest, (surface.GetTextSize(line)))
 	end
+	self.cardW = math.Clamp(widest + CARD_PAD * 2, CARD_W, CARD_MAX_W)
 end
 
 function PICKER:Walk(dir)
@@ -237,8 +282,8 @@ end
 
 function ROW:Paint(w, h)
 	draw.RoundedBox(4, 0, 0, w, h, self:IsHovered() and T.paletteSelected or T.card)
-	draw.SimpleText(self.title, "DermaDefaultBold", 8, 5, T.textBright, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-	draw.SimpleText(self.sub, "DermaDefault", 8, h - 5, T.textMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+	draw.SimpleText(T.Fit(self.title, "DermaDefaultBold", w - 16), "DermaDefaultBold", 8, 5, T.textBright, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+	draw.SimpleText(T.Fit(self.sub, "DermaDefault", w - 16), "DermaDefault", 8, h - 5, T.textSubtle, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
 end
 
 vgui.Register("PinnedPanelsPickerRow", ROW, "DButton")
@@ -248,7 +293,7 @@ vgui.Register("PinnedPanelsPickerRow", ROW, "DButton")
 -- widget's window).
 local function addParts(out, parent, root, depth)
 	for _, kid in ipairs(parent:GetChildren()) do
-		if drawn(kid) and not Recipes.Refusal(kid, root) then
+		if drawn(kid) and Recipes.Pickable(kid, root) then
 			if PP.Openers.DesktopId(kid) or Recipes.Signature(kid).class then
 				out[#out + 1] = { panel = kid, root = root }
 			elseif depth < LIST_DEPTH then
@@ -326,27 +371,35 @@ function PICKER:Paint(w, h)
 	local p = self.selected
 	if IsValid(p) then
 		local x, y = p:LocalToScreen(0, 0)
-		local color = self.refusal and OUTLINE_REFUSED or OUTLINE
+		local color = OUTLINE
 		surface.SetDrawColor(FILL)
 		surface.DrawRect(x, y, p:GetWide(), p:GetTall())
 		surface.SetDrawColor(color)
 		surface.DrawOutlinedRect(x - 2, y - 2, p:GetWide() + 4, p:GetTall() + 4, 2)
 
 		local lines = self.lines
+		local cw = self.cardW or CARD_W
 		local ch = CARD_PAD * 2 + #lines * LINE_H
 		local mx, my = input.GetCursorPos()
-		local cx = math.Clamp(mx + 18, 8, w - CARD_W - 8)
+		local cx = math.Clamp(mx + 18, 8, w - cw - 8)
 		local cy = math.Clamp(my + 18, 8, h - ch - FOOTER_H - 16)
-		draw.RoundedBox(6, cx, cy, CARD_W, ch, T.popupBg)
+		draw.RoundedBox(6, cx, cy, cw, ch, T.popupBg)
 		surface.SetDrawColor(color)
-		surface.DrawOutlinedRect(cx, cy, CARD_W, ch, 1)
+		surface.DrawOutlinedRect(cx, cy, cw, ch, 1)
+		-- "2 here" shares the first line with the title, which gives way to it.
+		local overlaps = (self.overlaps or 0) > 1 and PP.L("picker.overlaps", self.overlaps) or nil
+		local taken = 0
+		if overlaps then
+			surface.SetFont("DermaDefault")
+			taken = surface.GetTextSize(overlaps) + CARD_PAD
+			draw.SimpleText(overlaps, "DermaDefault", cx + cw - CARD_PAD, cy + CARD_PAD, T.textSubtle, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+		end
 		for i, line in ipairs(lines) do
 			local font = i == 1 and "DermaDefaultBold" or "DermaDefault"
-			local tint = i == 1 and T.textBright or (i == #lines and (self.refusal and T.danger or T.accent) or T.text)
-			draw.SimpleText(line, font, cx + CARD_PAD, cy + CARD_PAD + (i - 1) * LINE_H, tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-		end
-		if (self.overlaps or 0) > 1 then
-			draw.SimpleText(PP.L("picker.overlaps", self.overlaps), "DermaDefault", cx + CARD_W - CARD_PAD, cy + CARD_PAD, T.textMuted, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+			-- What a click does, then how it comes back.
+			local tint = i == 1 and T.textBright or (i == 5 and T.cardAction or (i == 6 and T.textLabel or (i == 7 and T.textSubtle or T.text)))
+			local room = cw - CARD_PAD * 2 - (i == 1 and taken or 0)
+			draw.SimpleText(T.Fit(line, font, room), font, cx + CARD_PAD, cy + CARD_PAD + (i - 1) * LINE_H, tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 		end
 	end
 	draw.RoundedBox(6, (w - self.hintW) / 2, h - FOOTER_H - 10, self.hintW, FOOTER_H, T.popupBg)
@@ -364,7 +417,11 @@ vgui.Register("PinnedPanelsPicker", PICKER, "EditablePanel")
 function PP.Picker.Open()
 	if IsValid(PP.Picker.panel) then return end
 	Input.Cursor("picker", true)
+	-- The hint is one long line: on a narrow screen it is cut, not run off both sides.
 	local p = vgui.Create("PinnedPanelsPicker")
+	p.hint = T.Fit(p.hint, "DermaDefault", ScrW() - 64)
+	surface.SetFont("DermaDefault")
+	p.hintW = surface.GetTextSize(p.hint) + 32
 	p:MakePopup()
 	PP.Picker.panel = p
 end

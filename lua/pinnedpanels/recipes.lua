@@ -587,6 +587,9 @@ function Recipes.PartName(panel)
 	if NAMES[class] then return PP.L(NAMES[class]) end
 	local title = titleOf(panel)
 	if title then return phrase(title) end
+	-- A window without a title of its own is called what its pin will be: after its addon ("ULX" says
+	-- more than "xlib_Panel", "Rareload" more than "DFrame").
+	if Recipes.IsWindow(panel) then return Recipes.Title({ signature = Recipes.Signature(panel) }) end
 	return class or PP.L("adopt.window")
 end
 

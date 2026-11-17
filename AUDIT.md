@@ -476,3 +476,214 @@ Ordered by payoff. Each step is a separate change you can verify on its own.
   - Whether GLuaTest can run client-realm tests was not confirmed.
   - Whether `ParentToHUD` panels are direct children of `GetHUDPanel()` was not confirmed. Check it in game.
   - No existing Workshop addon that does tool-panel pinning was found to compare against.
+
+---
+
+# Part 3: What popular addons do, and in-game improvements
+
+This part comes from reading source code (2026-11-17) from popular, actively maintained GMod addons on GitHub, fetched with `gh api`, plus the stock Derma code in local `garrysmod/lua`. Stars and last-push dates are from the GitHub API on the same day.
+
+| Repo | ★ | Last push | Files read |
+|---|---|---|---|
+| [wiremod/wire](https://github.com/wiremod/wire) | 602 | 2026-11-17 | `lua/wire/client/text_editor/wire_expression2_editor.lua` |
+| [CapsAdmin/pac3](https://github.com/CapsAdmin/pac3) | 232 | 2026-11-01 | `lua/pac3/editor/client/panels/editor.lua`, `lua/pac3/editor/client/view.lua` |
+| [thegrb93/StarfallEx](https://github.com/thegrb93/StarfallEx) | 214 | 2026-11-15 | `lua/starfall/editor/sfframe.lua`, `sfderma.lua` |
+| [TeamUlysses/ulx](https://github.com/TeamUlysses/ulx) | 193 | 2026-04-26 | `lua/ulx/modules/cl/xgui_client.lua` |
+| [Earu/EasyChat](https://github.com/Earu/EasyChat) | 110 | 2026-10-24 | `lua/easychat/easychat.lua` |
+| [TomDotBat/pixel-ui](https://github.com/TomDotBat/pixel-ui) | 65 | 2026-06-29 | `core/cl_scaling.lua`, `core/cl_fonts.lua`, `elements/cl_frame.lua` |
+| Facepunch/garrysmod (local copy) | 1327 | n/a | `vgui/dframe.lua`, `includes/extensions/client/panel/{dragdrop,animation}.lua`, `derma/init.lua` |
+
+## What each addon does well, and how it applies here
+
+| Pattern | Seen in | How it applies to Pinned Panels |
+|---|---|---|
+| **Scaled constants and a font registry.** `PIXEL.Scale(v) = max(v * ScrH()/1080, 1)`. Constants and fonts are registered once by alias, and recomputed or re-created in `OnScreenSizeChanged`. Fonts are shared by `font..size..weight` and always made with `extended = true`. | pixel-ui `cl_scaling.lua:20-48`, `cl_fonts.lua:20-80` | The exact shape for R1/R2: `Theme.S()`, `Theme.RegisterFont(alias, face, size, weight)`, and a `Theme.SetFont(alias)` wrapper. It also gives the U11 fix. |
+| **Focus by click, with a fade and a debounce.** `GainFocus` calls `MakePopup` and `AlphaTo(255, 0.1)`. `KillFocus` turns off mouse and keyboard and the screen clicker, then `AlphaTo(0)`. A 0.2 s `allowclick` guard stops a double toggle. | pac3 `editor.lua:450-508` | Our idle-opacity and minimize changes are instant `SetAlpha` jumps (`desktop.lua:74`). A 0.1 s `AlphaTo` makes the change between interactive and idle readable. The debounce idea also fits the cursor-key toggle. |
+| **Click outside to close.** A `VGUIMousePressed` hook closes a popup when `not popup:IsOurChild(pnl)`. | pac3 `view.lua:1088-1100` | The palette and the Settings colour popups (U2) never close on an outside click. Use the same 6 lines. |
+| **Clicking the world behind an editor.** `GetParent():SetWorldClicker(true)` is set on the world panel while the editor is open, behind a client convar, "so we can update E2's without closing the editor". | wire `wire_expression2_editor.lua:1787-1789`, StarfallEx `sfframe.lua:1096,1453`, [wiki](https://wiki.facepunch.com/gmod/Panel:SetWorldClicker) ("weapon aim follows the cursor") | **The biggest gain in game** (F1 below): in cursor mode, a click on empty screen uses the tool gun on what is under the cursor. You could change a pinned tool's settings and click the prop without toggling. |
+| **Remembered divider and window bounds.** `DHorizontalDivider:SetCookieName("sf_editor_divider")`. E2 stores its size and position in convars and **resets a window that is off-screen** when it loads. | StarfallEx `sfframe.lua:868`, wire `:200-224` | We already refit on load. Cookies are a cheap way to remember splitter and filter state inside our hub and tabs. |
+| **Type to focus, and focus memory per tab.** Each tab remembers its `FocusOn` text entry and re-focuses it on `OnActiveTabChanged`. A key pressed while no entry has focus is put into it (`OnKeyCodePressed` → `RequestFocus` + append). | EasyChat `easychat.lua:2268-2278, 2902-2916` | Gives F4 (search the focused window) and F5 (each tab gets its focused field back). |
+| **A shortcut registry for other addons.** `EasyChat.RegisterCTRLShortcut(key, fn)` refuses Enter, Esc and Tab. | EasyChat `:1828-1846` | The model for the public API in R4 §4 (`PinnedPanels.SetPanelKind`, `SetOpener`), and for refusing keys we must never take. |
+| **Configurable binds by key name.** `input.IsButtonDown(input.GetKeyCode(cvar:GetString()))`, so the convar stores `"w"`, not a number. | pac3 `view.lua:281` | Our key convars store numbers (`KEY_*` codes), which are unreadable in the console and in `config.cfg`. Storing names makes `pinnedpanels_key_cursor F6` work. |
+| **One long-lived window, shown and hidden with an animation.** `xgui.anchor` is never removed. `show` and `hide` toggle the screen clicker and `animOpen`/`animClose`. | ulx `xgui_client.lua:346-421` | **Supports B5:** a window that was present at a Wake stays present forever, so XGUI never counts as "opened" again. It also confirms the "wait until settled" rule (R20) is needed. XGUI animates. |
+| **What not to copy.** E2's `Editor:Think` clamps and calls `SetPos`/`SetSize` every frame, even when nothing moved. | wire `:300-370` | We already only clamp on change (`Layout.Refit`). Keep it that way. |
+| **Stock Derma drag and drop.** `Panel:Droppable(name)`, `Panel:Receiver(name, fn(receiver, panels, dropped, menuIndex, x, y))` and `SetDragParent`, used by `DIconLayout`, `DTileLayout`, `DTree_Node` and `DHorizontalScroller`. | local `includes/extensions/client/panel/dragdrop.lua:306-330` | Gives F2 (drag tabs). Using the same system as the spawn menu makes it feel native. |
+| **DFrame's own limits.** `m_iMinWidth`/`m_iMinHeight` (`GetMinWidth/GetMinHeight`), `m_bScreenLock`, `m_bSizable`. | local `vgui/dframe.lua:4-14,137-170` | Gives F8: an embedded DFrame says how small it can go. Use that instead of our fixed 150×100. |
+
+## In-game improvements, by priority
+
+Effort: **S** < 1 day, **M** = 1–3 days, **L** = more. Each one says how to build it and how to check it.
+
+### Interactivity
+
+- **F1 · High · M · Click through to the world in cursor mode.**
+  - **What:** set `vgui.GetWorldPanel():SetWorldClicker(true)` while `Input.cursorMode` is on, behind a setting that is on by default, as E2 and Starfall do. Turn it off when cursor mode ends and on `ShutDown`.
+  - **Why:** clicks on empty screen then go to the world, with weapon aim following the cursor, as in the C menu. The player changes a weld setting in a pinned window and clicks the prop straight away.
+  - **Check in game:** turn on cursor mode, equip the tool gun, click a prop with the cursor, and see the tool fire.
+  - **Risk:** our windows must still eat their own clicks. They are popups above the world panel, so they should, but check it.
+  - **Shared state:** other addons switch the world clicker on and off too. Wire's sound browser turns it on while open and off when done, with the comment "Not allow the breakage of other addons installed" (`wire/lua/wire/client/sound_browser.lua:997,1018`). pac3 forces it off when its editor opens (`pac3/lua/pac3/editor/client/init.lua:159`). So only turn it off if we turned it on, the same ownership rule `Input.Cursor` follows for the screen clicker, and turn it on again when another addon's window closes.
+- **F2 · High · M · Drag tabs between windows.**
+  - **Today:** merging, splitting and reordering are only in right-click menus.
+  - **What:** each tab-strip item becomes `Droppable("PinnedPanels.Tab")` (it is painted, so add a small item panel per tab, or a custom drag start in `STRIP:OnMousePressed` using `dragndrop`). Each window header and strip becomes a `Receiver`:
+    - drop on a strip: `Layout.MoveTab(from, i, to, index)` at the drop x;
+    - drop on empty screen: split at the cursor.
+  - Also let a hub catalog row be dropped on a window, which pins the source as a new tab there.
+  - Enforce `MAX_TABS` here (B1).
+- **F3 · Medium · S · Snap guides on real windows.** The hub Layout page draws guide lines while dragging (`hub_layout.lua:188`), but dragging the real window shows nothing. Reuse `CANVAS:Guides` to draw them in `DrawOverlay` while `win.drag` is set.
+- **F6 · Medium · S · Edge tiling.** Drag a header to a screen edge or corner and a half or quarter of the usable area lights up; release to fill it. A `Geom.Zone(mx, my, Usable())` → rect, reusing `SetGeometry`. It removes much of the need for "Auto-arrange".
+- **F7 · Medium · S · Smooth transitions.**
+  - Change opacity with `AlphaTo(target, 0.1)` (pac3) instead of jumping.
+  - Optionally, `MoveTo`/`SizeTo` a minimizing window toward its taskbar entry.
+  - The stock `animation.lua` is enough. Add an "Animations" setting so people can turn it off.
+- **F9 · Low · S · Outside clicks and the wheel.**
+  - Close the palette and the colour popups on an outside click (the pac3 pattern; this also fixes U2).
+  - The mouse wheel over a window header changes that window's idle opacity.
+
+### Keyboard
+
+- **F4 · High · S · "Search in the focused window."** A new bindable action, default Ctrl+F:
+  - it shows the focused window's filter bar if hidden (`Layout.SetFilterBar`);
+  - it calls `host.filter:RequestFocus()`. The window then takes the keyboard through the existing `OnTextEntryGetFocus` hook.
+  - This is EasyChat's "type to focus", fitted to an addon that must not take the keyboard by default.
+- **F5 · Medium · S · Focus memory per tab, and Esc to let go.**
+  - Remember the last focused text entry per tab (`host.focusOn`) and re-focus it when that tab becomes active from the keyboard (EasyChat `OnActiveTabChanged`).
+  - Esc while a text entry in a pinned window has focus: `KillFocus` + `gui.HideGameUI()` next frame. The picker already does this (`picker.lua:98-101`). Today, Esc opens the game menu while you are typing in a pinned window.
+- **F10 · Medium · S · Tab switching with the keyboard.** While a pinned window has keyboard focus, Ctrl+Tab and Ctrl+Shift+Tab switch its tabs, and Ctrl+1…9 jump to one (`Layout.Activate`).
+- **F11 · Low · S · Readable key convars.**
+  - Store key settings as names, read with `input.GetKeyCode(name)` (pac3's `view.lua:281` pattern), so `pinnedpanels_key_cursor "F6"` works from the console and from `config.cfg`.
+  - Old numeric values still load, and `decode` accepts both.
+- **F12 · Low · S · Hold a quick key to peek.** Holding a window's quick key shows that one window, and releasing hides it (per-window peek). Tapping it still toggles. `Input.SetKey` already has `release`.
+
+### Embedding
+
+- **F8 · High · S · Respect the embedded window's own size limits.**
+  - Read `shell:GetMinWidth()/GetMinHeight()` (DFrame `AccessorFunc`s, `dframe.lua:11-12`) and use them, plus our chrome, as the minimum resize size of the pinned window, instead of `MIN_W/MIN_H = 150/100`.
+  - If `GetSizable()` is false, offer "lock size" by default.
+  - Also add `MIN_W/MIN_H` to `Layout.SetGeometry` (B18).
+- **F13 · High · S · Turn on "needs keyboard" automatically.**
+  - Today the player must find "Takes the keyboard" for editors that are not DTextEntry. E2's custom text editor and Starfall's Monaco DHTML (`tab_monaco.lua`) don't fire `OnTextEntryGetFocus`, so typing into them does nothing.
+  - At take time, set `needsKeyboard` when the subtree has an HTML-family panel (`Nav.IsHTML`), or an addon-made panel with its own `OnKeyCodeTyped`/`OnKeyCodePressed`.
+  - **Check in game:** pin the E2 editor and type.
+- **F14 · Medium · S · Live title.** For an embedded DFrame, read `shell:GetTitle()` (pcall, as `titleOf` does) at the 4 Hz `Embed.Check`, and show it unless the player renamed the tab. Example: E2 shows the open file's name.
+- **F15 · Medium · M · Per-addon embedding profiles.** A data table (R4 §4) keyed by the signature's file or class, with fixes for windows we know:
+  - XGUI: "watch the anchor; its own animation runs on show".
+  - E2 editor: "needs keyboard; recipe `wire_expression2_editor`".
+  - PAC3: "not pinnable; full-screen editor".
+  - Starfall: "needs keyboard".
+
+  Other addons can register their own through the public API. This turns case-by-case fixes like `X51`/`X52`/`X54` into data.
+- **F16 · Medium · S · Fix B5.** Clear `present[p]` when a caught or checked window is seen hidden. Without this, XGUI never teaches its command or comes to the front when reopened.
+
+### Dynamic sizing
+
+- **F17 · High · M · UI scale** (R1/R2, PIXEL's pattern): `Theme.S()`, a font registry and a `uiScale` setting. It covers windows, the taskbar, the palette, the picker cards and the hub.
+- **F18 · Medium · S · "Fit height to content", kept on.**
+  - A per-window toggle. While on, `HOST:Think` looks at the content height about every 0.25 s and calls `AutoSize(true)` when it changed by more than the deadband.
+  - Tool panels that open categories or rebuild (`E10`) then stay fitted without clicking "Auto-size".
+  - It grows down and keeps the top edge, flipping upward near the bottom of the screen.
+- **F19 · Medium · S · Remember screen edges when the resolution changes.**
+  - Today `Layout.RescaleAll` scales everything in proportion, so a window snapped to the right edge drifts off it at another resolution.
+  - Note which screen edges a window touches when it is placed (`setRect` within `snapDistance` of a usable-area edge), and keep those edges on rescale: right stays right, bottom stays bottom.
+- **F20 · Low · S · Auto-size limits from the usable area.** `AUTOSIZE_MAX_W/H` = 0.6/0.92 of `ScrW/ScrH` (`window.lua:15`) ignores the taskbar and side docking. Use `Geom.Usable()` and the config.
+
+### More
+
+- **F21 · High · S · "Show only with the tool gun."**
+  - Add a third `showWith` value, `"toolgun"`, beside `contextmenu`. The window shows while the active weapon is `gmod_tool`, checked on `PlayerSwitchWeapon` and on a slow 0.5 s look, since there is no client hook for every weapon change.
+  - Make it the default for tool and active-tool windows, behind a setting. Pinned tool panels then vanish when you switch to the physgun or a weapon.
+- **F22 · Medium · M · Layout profiles per gamemode or server.**
+  - Several named layouts in `data/pinnedpanels/profiles/`.
+  - Switch automatically on `engine.ActiveGamemode()` (or the server address, read only on the client and never sent anywhere).
+  - Export and import already exist, and `Layout.Replace` already does the swap safely.
+- **F23 · Low · S · `pinnedpanels_debug perf`,** which the code has promised since "Phase 12": print P1–P4 timings, the panel count and the Catch/Seen/Reconcile counts from the last 10 s. It also replaces the manual snippets in Part 1.
+
+**Suggested order:** F16 (bug) → F1 → F4 → F13 → F8 → F21 → F17 → F2 → F18 → the rest. F1, F4, F13, F8 and F21 are each small, can each be tested on their own, and change how the addon feels in daily play the most.
+
+## Research notes (Part 3)
+
+**Queries used:**
+- Wiremod E2 editor keyboard focus
+- pac3 SetKeyboardInputEnabled
+- PIXEL UI scaling
+- Derma dragndrop Droppable/Receiver
+- FreSpawnMenu
+- Then `gh api repos/<r>` and `gh search code "<api>" --repo <r>` across 14 repos, for:
+  - `SetKeyboardInputEnabled`
+  - `IsGameUIVisible`
+  - `PIXEL.Scale`
+  - `ScreenScale`
+  - `EnableScreenClicker`
+  - `pace.KillFocus`
+  - `pace.GainFocus`
+
+**How much to trust it:** all of it is primary source code, read at the HEAD of each repo's default branch on 2026-11-17. The wiki was used for `SetWorldClicker`.
+
+**Gaps:**
+- FreSpawnMenu (6★) was looked at but not read.
+- No repo was found that does tool-panel pinning, so F2 and F18 have no prior art to compare with.
+- Whether `SetWorldClicker` on the world panel still lets our ParentToHUD popups take their own clicks is **untested**. Check F1 before building on it.
+
+## Part 3 addendum: the local repo folder (`/Users/noah/vehicule_addon/`)
+
+I grepped the 29 cloned repos for the APIs behind F1–F23. Usage counts are files per repo.
+
+| API | Used by |
+|---|---|
+| `SetWorldClicker` | wire (4), pac3 (1), StarfallEx (1) |
+| `:Droppable(` / `:Receiver(` | gPhone, helix (inventory), pac3, TTT2, EasyChat |
+| fonts with `extended = true` | TTT2 (7), EasyChat (5), DarkRP (5), helix (3), ACF-3 (2), pixel-ui |
+| `OnScreenSizeChanged` | pixel-ui, melonlib, libnyx, TTT2, wire, helix, gmod-glide |
+| HUD editor (move and resize elements) | TTT2 (34 files), lvs_base (7) |
+
+What it adds:
+
+- **TTT2's HUD editor** (`TTT2/gamemodes/terrortown/gamemode/client/cl_hud_editor.lua:60-174`) is the closest prior art to our window gestures:
+  - **Shift while resizing** keeps the aspect ratio. Elements can also lock it for good (`AspectRatioIsLocked`).
+  - **Shift while moving** keeps the move on one axis.
+  - Each element has its own `GetMinSize()`.
+  - When the minimum is hit, the edge being dragged stops and the other side stays put, instead of the whole rect jumping.
+
+  These go into **F3/F6**, for both the real windows and the hub Layout page. Today `window.lua:ResizeTo` has neither modifier.
+- **TTT2's global scale** (`TTT2/lua/ttt2/libraries/appearance.lua:64-125`) is the model for the `uiScale` setting in **F17**:
+  - one archived convar, defaulting to `math.Round(ScrW()/1920, 1)`, that the player can change;
+  - on a resolution change it is multiplied by `new/old` width, so a scale the player chose survives;
+  - scale changes are announced to a callback list (`appearance.RegisterCallback`).
+
+  Put together with pixel-ui's font registry, this is the whole design.
+- **gPhone and helix drag and drop** (`gPhone/lua/gphone/cl_phone.lua:459-…`, `helix/gamemode/core/derma/cl_inventory.lua:42,288`) show the two ways `Receiver(name, fn(pnl, items, drop, menuIndex, x, y))` is used:
+  - while hovering (`drop == false`), draw where the item would land;
+  - on release (`drop == true`), commit.
+
+  **F2** needs exactly this. Drop on a strip: insert at the x position (preview the gap while hovering). Drop on a header: merge. Release over nothing: split.
+
+Queries used: local `grep -rli --include='*.lua'` for the APIs in the table, then I read the matching files. No network access was needed.
+
+## Part 3 addendum 2: repos cloned for this audit
+
+Cloned shallow into `/Users/noah/vehicule_addon/` on 2026-11-17:
+- `garrysmod` (Facepunch upstream Lua)
+- `Falcos-Prop-protection`
+- `FreSpawnmenu`
+- `gm-mediaplayer` (PurrCoding's maintained fork)
+- `wire-extras`
+- `improved-stacker`
+- `annotations-gmod-glua-ls`, plus its generated output on the `gluals-annotations` branch, cloned as `gmod-annotations`
+- `GLuaFixer`
+- `GLuaTest`
+- `Small-GLua-Things`
+- `cfc_glua_style_guidelines`
+
+Each was picked to test one part of this audit.
+
+- **New compatibility risk C1 · Medium:** `OnSpawnMenuOpen`/`OnSpawnMenuClose` can be taken by another addon.
+  - FreSpawnmenu's hooks `return false` (`FreSpawnmenu/lua/frespawnmenu/core.lua:1022-1048, 1051-1073`), and `hook.Run` stops at the first hook that returns a value.
+  - When its hook runs before ours, `input.lua:294`'s `spawnOpen = true` and `desktop.lua:274`'s `raiseSoon` never run.
+  - Windows still turn interactive through the `foreignCursor()` fallback, since FreSpawnmenu's frame is a popup. But they are **not raised over it**, and none of the "parts of the spawn menu" pins (CreateMenu/ToolMenu) can show, because `g_SpawnMenu` is hidden.
+  - The same happens with any addon that returns from those hooks.
+  - **Fix:** don't rely only on the hooks. Treat "a visible popup that fills the screen" as the spawn menu for raising. Detect `IsValid(FreSpawnMenu)`, or more generally whether `g_SpawnMenu` stays hidden while the spawn menu key is held. Tell the player that spawn-menu parts can't be pinned while a replacement spawn menu is in use.
+- **B3 has a real target.** FPP's admin menu keeps its panel in a file-level upvalue (`Falcos-Prop-protection/lua/fpp/client/menu.lua:1,55`: `local AdminPanel` … `AdminPanel = Panel`), and code run later by FPP fills it. The addon's comment (`sources.lua:199-203`) says `AdminPanel = AdminPanel or Panel`. The real code reassigns on every build, but the result is the same: the last panel built is held. Test B3 with FPP's admin settings pinned through the active-tool window, instead of the made-up tool.
+- **Tools that call `controlpanel.Get` directly** (and so depend on the `WithControlPanelFallback` path in `sources.lua:149`): `advdupe2`, six `VJ-Base` tools, `wire-extras/wire_modular_panel`, `improved-stacker`. They are good targets for checking that a pinned copy of the page fills in, and that "Rebuild" works (E10).
+- **API check against the generated annotations** (160 deprecated functions or methods, from the wiki): Pinned Panels calls **no deprecated function**. The only name that matched was `Player:GetName`, which is a false positive: the code calls `Panel:GetName`.
+  - The comments calling `debug.getupvalue` "deprecated" (`openers.lua:96`, and the reasoning behind `sources.lua:208`) are **out of date**. The current annotation has no `@deprecated` on it. Reword them, but keep the `if not debug.getupvalue` guard.
+- **F1 can check who owns the world clicker:** `Panel:IsWorldClicker()` exists (`gmod-annotations/panel.lua:1342-1347`). Read `vgui.GetWorldPanel():IsWorldClicker()` before turning it on, and only turn it off if it was off before and we turned it on.
+- **Correction to Part 2, R5:** GLuaTest can run client tests. A case with `clientside = true` is sent to clients when its "run clientside" convar is on (`GLuaTest/lua/gluatest/loader.lua:4-15`). The pure-logic split is still worth doing, but client-side GLuaTest cases are now an option for `Layout`, `Storage` and `Nav.Rank`.

@@ -33,3 +33,7 @@
 - No deprecated API is used. The "deprecated getupvalue" comments are out of date.
 - `Panel:IsWorldClicker` exists, which F1 needs.
 - GLuaTest supports `clientside = true` cases.
+
+## 2026-11-18: readability plan
+- Wrote `READABILITY_PLAN.md`, following Rareload's `docs/architecture/READABILITY_AUDIT.md` from `ba4c92dd^`: naming dictionary, names with several meanings (`w`, `win`, `e`), verb clashes, removing spec codes, file splits, a safe order and what must not be renamed.
+- It is meant to be applied after the in-game check and the bug fixes in AUDIT.md. Steps 1–6 can be checked with the linters alone; the file splits (step 7) need a game run.
